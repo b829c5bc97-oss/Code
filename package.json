@@ -1,0 +1,29 @@
+{
+  "name": "brief",
+  "version": "1.0.0",
+  "description": "AI news summarization platform — finds trending stories across reliable sources, groups coverage of the same event, and produces grounded, source-attributed summaries.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "refresh": "node server/cli/refresh.js",
+    "test": "node test/pipeline.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:41729/git/b829c5bc97-oss/Code"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@mozilla/readability": "^0.6.0",
+    "better-sqlite3": "^13.0.2",
+    "express": "^5.2.1",
+    "fast-xml-parser": "^5.10.1",
+    "jsdom": "^30.0.1"
+  }
+}

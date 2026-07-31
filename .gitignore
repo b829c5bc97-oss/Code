@@ -1,2 +1,13 @@
-ai-automation-portfolio.zip
+node_modules/
+
+# SQLite working set — rebuilt by running the pipeline.
+data/
+*.db
+*.db-wal
+*.db-shm
+
+.env
+.env.local
+
 *.zip
+.DS_Store
