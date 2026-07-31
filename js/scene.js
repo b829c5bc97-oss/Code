@@ -1,77 +1,22 @@
-/* WebGL scene: shader aurora background + distorted glowing core */
+/* Hero-only 3D core. Renders into #hero-gl (contained to the hero section),
+   transparent background, positioned to the right so it never overlaps text. */
 (function () {
-  var canvas = document.getElementById('gl');
-  if (!canvas || typeof THREE === 'undefined') { window.__sceneReady = true; return; }
+  var canvas = document.getElementById('hero-gl');
+  var hero = document.querySelector('.hero');
+  if (!canvas || !hero || typeof THREE === 'undefined') return;
 
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var W = window.innerWidth, H = window.innerHeight;
-  var isMobile = W < 760;
 
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+  function size() { return { w: hero.clientWidth, h: hero.clientHeight }; }
+  var s = size();
+  var isNarrow = window.innerWidth < 760;
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(W, H);
-  renderer.autoClear = false;
+  renderer.setSize(s.w, s.h);
 
-  /* ---------- shared uniforms ---------- */
-  var uTime = { value: 0 };
-  var uProg = { value: 0 };
-  var uMouse = { value: new THREE.Vector2(0.5, 0.5) };
-  var uRes = { value: new THREE.Vector2(W, H) };
-
-  /* ================= BACKGROUND (ortho quad) ================= */
-  var bgScene = new THREE.Scene();
-  var bgCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-  var bgMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: uTime, uProg: uProg, uMouse: uMouse, uRes: uRes },
-    vertexShader: [
-      'varying vec2 vUv;',
-      'void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
-    ].join('\n'),
-    fragmentShader: [
-      'precision highp float;',
-      'varying vec2 vUv;',
-      'uniform float uTime; uniform float uProg; uniform vec2 uMouse; uniform vec2 uRes;',
-      'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }',
-      'float noise(vec2 p){',
-      '  vec2 i=floor(p), f=fract(p);',
-      '  float a=hash(i), b=hash(i+vec2(1.,0.)), c=hash(i+vec2(0.,1.)), d=hash(i+vec2(1.,1.));',
-      '  vec2 u=f*f*(3.-2.*f);',
-      '  return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;',
-      '}',
-      'float fbm(vec2 p){',
-      '  float v=0.0, amp=0.5;',
-      '  for(int i=0;i<5;i++){ v+=amp*noise(p); p*=2.02; amp*=0.5; }',
-      '  return v;',
-      '}',
-      'void main(){',
-      '  vec2 uv = vUv;',
-      '  vec2 p = uv * vec2(uRes.x/uRes.y, 1.0) * 2.2;',
-      '  float t = uTime * 0.05;',
-      '  vec2 q = vec2(fbm(p + t), fbm(p + vec2(3.2,1.7) - t));',
-      '  float f = fbm(p + q*1.6 + vec2(uMouse.x, uMouse.y)*0.6);',
-      '  vec3 base = vec3(0.027,0.027,0.031);',
-      '  vec3 lime = vec3(0.847,1.0,0.278);',
-      '  vec3 cyan = vec3(0.435,0.878,1.0);',
-      '  vec3 mag  = vec3(1.0,0.36,0.68);',
-      '  vec3 col = base;',
-      '  float glow = smoothstep(0.35,0.95,f);',
-      '  vec3 tint = mix(lime, cyan, uProg);',
-      '  tint = mix(tint, mag, smoothstep(0.6,1.0,uProg));',
-      '  col += tint * glow * 0.14;',
-      '  col += lime * pow(f,3.0) * 0.05;',
-      '  float vig = smoothstep(1.15,0.25,length(uv-0.5));',
-      '  col *= vig;',
-      '  gl_FragColor = vec4(col, 1.0);',
-      '}'
-    ].join('\n'),
-    depthTest: false, depthWrite: false
-  });
-  bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat));
-
-  /* ================= CORE (perspective) ================= */
-  var mainScene = new THREE.Scene();
-  var cam = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+  var scene = new THREE.Scene();
+  var cam = new THREE.PerspectiveCamera(45, s.w / s.h, 0.1, 100);
   cam.position.z = 6.2;
 
   var snoise = [
@@ -91,8 +36,8 @@
     '  vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);',
     '  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);',
     '  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);',
-    '  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));',
-    '  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;',
+    '  vec4 sg0=floor(b0)*2.0+1.0; vec4 sg1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));',
+    '  vec4 a0=b0.xzyw+sg0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+sg1.xzyw*sh.zzww;',
     '  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);',
     '  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));',
     '  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;',
@@ -101,18 +46,18 @@
     '}'
   ].join('\n');
 
-  var coreUniforms = { uTime: uTime, uAmp: { value: 0.28 }, uProg: uProg };
+  var uniforms = { uTime: { value: 0 }, uAmp: { value: 0.26 } };
 
-  var coreMat = new THREE.ShaderMaterial({
-    uniforms: coreUniforms,
+  var mat = new THREE.ShaderMaterial({
+    uniforms: uniforms,
     transparent: true,
     vertexShader: [
       snoise,
       'uniform float uTime; uniform float uAmp;',
       'varying float vN; varying vec3 vNormalW; varying vec3 vViewDir;',
       'void main(){',
-      '  float n = snoise(normal * 1.3 + uTime * 0.25);',
-      '  float n2 = snoise(position * 2.4 - uTime * 0.15);',
+      '  float n = snoise(normal * 1.3 + uTime * 0.22);',
+      '  float n2 = snoise(position * 2.3 - uTime * 0.14);',
       '  float disp = (n * 0.7 + n2 * 0.3) * uAmp;',
       '  vN = disp;',
       '  vec3 pos = position + normal * disp;',
@@ -124,84 +69,75 @@
     ].join('\n'),
     fragmentShader: [
       'precision highp float;',
-      'uniform float uProg;',
       'varying float vN; varying vec3 vNormalW; varying vec3 vViewDir;',
       'void main(){',
-      '  float fres = pow(1.0 - max(dot(vNormalW, vViewDir), 0.0), 2.4);',
-      '  vec3 lime = vec3(0.847,1.0,0.278);',
-      '  vec3 cyan = vec3(0.435,0.878,1.0);',
-      '  vec3 mag  = vec3(1.0,0.36,0.68);',
-      '  vec3 rim = mix(lime, cyan, clamp(vN*2.0+0.5,0.0,1.0));',
-      '  rim = mix(rim, mag, uProg*0.6);',
-      '  vec3 col = rim * fres * 1.6;',
-      '  col += lime * smoothstep(0.15,0.35,vN) * 0.4;',
-      '  float alpha = clamp(fres*1.4 + smoothstep(0.2,0.4,vN)*0.5, 0.0, 1.0);',
+      '  float fres = pow(1.0 - max(dot(vNormalW, vViewDir), 0.0), 2.3);',
+      '  vec3 indigo = vec3(0.486,0.525,1.0);',
+      '  vec3 cyan   = vec3(0.204,0.839,0.918);',
+      '  vec3 rim = mix(indigo, cyan, clamp(vN*2.0+0.5,0.0,1.0));',
+      '  vec3 col = rim * fres * 1.7;',
+      '  col += cyan * smoothstep(0.16,0.36,vN) * 0.35;',
+      '  float alpha = clamp(fres*1.35 + smoothstep(0.2,0.4,vN)*0.45, 0.0, 1.0);',
       '  gl_FragColor = vec4(col, alpha);',
       '}'
     ].join('\n')
   });
 
-  var geo = new THREE.IcosahedronGeometry(1.7, isMobile ? 12 : 24);
-  var core = new THREE.Mesh(geo, coreMat);
-  mainScene.add(core);
+  var geo = new THREE.IcosahedronGeometry(1.8, isNarrow ? 14 : 26);
+  var core = new THREE.Mesh(geo, mat);
+  scene.add(core);
 
-  // wireframe lattice shell
-  var wireMat = coreMat.clone();
-  wireMat.uniforms = coreUniforms;
-  wireMat.wireframe = true;
-  wireMat.blending = THREE.AdditiveBlending;
-  wireMat.depthWrite = false;
-  var wire = new THREE.Mesh(geo, wireMat);
-  wire.scale.setScalar(1.04);
-  mainScene.add(wire);
+  var wire = new THREE.Mesh(geo, mat.clone());
+  wire.material.uniforms = uniforms;
+  wire.material.wireframe = true;
+  wire.material.blending = THREE.AdditiveBlending;
+  wire.material.depthWrite = false;
+  wire.scale.setScalar(1.05);
+  scene.add(wire);
 
-  /* ---------- interaction ---------- */
-  var mx = 0.5, my = 0.5, tmx = 0.5, tmy = 0.5;
-  window.addEventListener('mousemove', function (e) {
-    tmx = e.clientX / window.innerWidth;
-    tmy = e.clientY / window.innerHeight;
+  function place() {
+    isNarrow = window.innerWidth < 760;
+    // desktop: push core to the right; mobile: center it, smaller, upper area
+    var x = isNarrow ? 0 : 2.15;
+    var y = isNarrow ? 0.4 : 0;
+    var sc = isNarrow ? 0.72 : 1;
+    core.position.set(x, y, 0); wire.position.set(x, y, 0);
+    core.scale.setScalar(sc); wire.scale.setScalar(sc * 1.05);
+  }
+  place();
+
+  var tmx = 0, tmy = 0, mx = 0, my = 0;
+  hero.addEventListener('mousemove', function (e) {
+    var r = hero.getBoundingClientRect();
+    tmx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+    tmy = ((e.clientY - r.top) / r.height - 0.5) * 2;
   }, { passive: true });
 
   window.addEventListener('resize', function () {
-    W = window.innerWidth; H = window.innerHeight;
-    renderer.setSize(W, H);
-    cam.aspect = W / H; cam.updateProjectionMatrix();
-    uRes.value.set(W, H);
+    var d = size();
+    renderer.setSize(d.w, d.h);
+    cam.aspect = d.w / d.h; cam.updateProjectionMatrix();
+    place();
   });
 
   var clock = new THREE.Clock();
+  var running = true;
+  // pause when hero scrolled out of view (perf)
+  var io = new IntersectionObserver(function (e) { running = e[0].isIntersecting; if (running) clock.getDelta(); }, { threshold: 0 });
+  io.observe(hero);
 
-  function render() {
-    requestAnimationFrame(render);
+  function loop() {
+    requestAnimationFrame(loop);
+    if (!running) return;
     var dt = clock.getDelta();
-    uTime.value += reduce ? dt * 0.3 : dt;
-
+    uniforms.uTime.value += reduce ? dt * 0.3 : dt;
     mx += (tmx - mx) * 0.05; my += (tmy - my) * 0.05;
-    uMouse.value.set(mx, my);
-
-    uProg.value = window.__progress || 0;
-
-    // core reacts to mouse proximity to center + scroll
-    var cd = Math.hypot(mx - 0.5, my - 0.5);
-    coreUniforms.uAmp.value += ((0.22 + (0.5 - Math.min(cd, 0.5)) * 0.6 + uProg.value * 0.25) - coreUniforms.uAmp.value) * 0.06;
-
-    core.rotation.y += 0.0016 + (mx - 0.5) * 0.002;
-    core.rotation.x = (my - 0.5) * 0.4 + uProg.value * 0.8;
+    var cd = Math.hypot(mx, my);
+    uniforms.uAmp.value += ((0.22 + (1 - Math.min(cd, 1)) * 0.16) - uniforms.uAmp.value) * 0.05;
+    core.rotation.y += 0.0018 + mx * 0.001;
+    core.rotation.x = my * 0.35;
     wire.rotation.copy(core.rotation);
-
-    // drift core toward side as you scroll / on wide screens keep it right of hero
-    core.position.x = wire.position.x = 1.7 + Math.sin(uTime.value * 0.2) * 0.15;
-    core.position.y = wire.position.y = -uProg.value * 2.0;
-    var s = 1 + (isMobile ? -0.35 : 0);
-    core.scale.setScalar(s); wire.scale.setScalar(s * 1.04);
-
-    renderer.clear();
-    renderer.render(bgScene, bgCam);
-    renderer.clearDepth();
-    renderer.render(mainScene, cam);
+    renderer.render(scene, cam);
   }
-  render();
-
-  // signal that first frame is up
-  requestAnimationFrame(function () { window.__sceneReady = true; });
+  loop();
 })();

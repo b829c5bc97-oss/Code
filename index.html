@@ -3,145 +3,155 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Automation Developer — Portfolio</title>
-<meta name="description" content="Freelance AI Automation Developer building AI-powered tools and browser automations that kill repetitive work. From $10 per automation." />
+<title>Pratham — AI Automation Developer</title>
+<meta name="description" content="Freelance AI Automation Developer building AI-powered tools and browser automations that reduce repetitive work. From $10 per automation." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<!-- WebGL scene (shader bg + 3D core) -->
-<canvas id="gl"></canvas>
-<div class="grain"></div>
-
-<!-- Preloader -->
-<div id="preloader">
-  <div class="pre-count"><span id="pre-num">0</span><em>%</em></div>
-  <div class="pre-word">LOADING&nbsp;THE&nbsp;MACHINE</div>
-</div>
-
-<!-- Custom cursor -->
-<div id="cursor-dot"></div>
-<div id="cursor-ring"></div>
-
 <!-- Nav -->
 <header id="nav">
-  <a href="#top" class="brand" data-cursor="link">PRATHAM<span>®</span></a>
-  <div class="nav-meta">Freelance · AI&nbsp;Automation</div>
-  <button id="menu-btn" data-cursor="link" aria-label="Menu"><span></span><span></span></button>
+  <div class="nav-inner">
+    <a href="#top" class="brand">Pratham<span>.</span></a>
+    <nav class="nav-links">
+      <a href="#about">About</a>
+      <a href="#services">Services</a>
+      <a href="#work">Work</a>
+      <a href="#skills">Skills</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+    <a href="#contact" class="nav-cta">Let's talk</a>
+    <button id="menu-btn" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+  <nav id="mobile-menu">
+    <a href="#about">About</a>
+    <a href="#services">Services</a>
+    <a href="#work">Work</a>
+    <a href="#skills">Skills</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#contact">Contact</a>
+  </nav>
 </header>
 
-<!-- Fullscreen menu -->
-<div id="menu">
-  <nav class="menu-links">
-    <a href="#work" data-cursor="link"><i>01</i>Work</a>
-    <a href="#about" data-cursor="link"><i>02</i>About</a>
-    <a href="#skills" data-cursor="link"><i>03</i>Skills</a>
-    <a href="#services" data-cursor="link"><i>04</i>Services</a>
-    <a href="#pricing" data-cursor="link"><i>05</i>Pricing</a>
-    <a href="#contact" data-cursor="link"><i>06</i>Contact</a>
-  </nav>
-  <div class="menu-foot">
-    <span>Available for projects</span>
-    <a href="mailto:prathambansal15398@gmail.com" data-cursor="link">prathambansal15398@gmail.com</a>
+<!-- HERO (3D lives ONLY here) -->
+<section id="top" class="hero">
+  <canvas id="hero-gl"></canvas>
+  <div class="hero-scrim"></div>
+  <div class="hero-content">
+    <span class="pill"><i class="live"></i> Available for new projects</span>
+    <h1>AI&nbsp;Automation<br><span class="grad">Developer</span></h1>
+    <p class="hero-sub">I turn repetitive workflows into custom AI-powered tools and browser automations — practical, affordable, and built around your actual problem.</p>
+    <div class="hero-actions">
+      <a href="#contact" class="btn btn-primary">Start a project</a>
+      <a href="#work" class="btn btn-ghost">View work</a>
+    </div>
+    <div class="hero-price">
+      <span class="price-num grad">$10–$25</span>
+      <span class="price-lbl">per automation</span>
+    </div>
+  </div>
+  <a href="#about" class="scroll-hint" aria-label="Scroll down"><span>Scroll</span><i></i></a>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee">
+  <div class="marquee-track">
+    <span>AI Workflows • Browser Automation • Custom Tools • Rapid Prototyping • API Integration • Workflow Design •&nbsp;</span>
+    <span>AI Workflows • Browser Automation • Custom Tools • Rapid Prototyping • API Integration • Workflow Design •&nbsp;</span>
   </div>
 </div>
 
-<!-- Smooth-scroll container -->
-<div id="scroll" data-scroll>
-
-  <!-- HERO -->
-  <section id="top" class="hero">
-    <div class="hero-avail">
-      <span class="dot"></span> Available · Booking new automations
-    </div>
-    <h1 class="hero-title split">AI Automation Developer</h1>
-    <div class="hero-row">
-      <p class="hero-sub reveal">I take a repetitive workflow, figure out what can actually be automated, and build a custom AI tool or browser automation around it. No bloated templates — just the thing that saves you time.</p>
-      <div class="hero-side reveal">
-        <div class="price-pill" data-cursor="link">
-          <em>from</em>
-          <strong>$10</strong>
-          <span>per automation</span>
-        </div>
-        <a href="#contact" class="text-link" data-cursor="link">Start a project →</a>
-      </div>
-    </div>
-    <div class="hero-scroll"><span>Scroll to explore</span><i></i></div>
-  </section>
-
-  <!-- MARQUEE -->
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <span>AI Workflows</span><b>◇</b><span>Browser Automation</span><b>◇</b><span>Custom Tools</span><b>◇</b><span>Rapid Prototyping</span><b>◇</b><span>API Integration</span><b>◇</b>
-      <span>AI Workflows</span><b>◇</b><span>Browser Automation</span><b>◇</b><span>Custom Tools</span><b>◇</b><span>Rapid Prototyping</span><b>◇</b><span>API Integration</span><b>◇</b>
-    </div>
-  </div>
+<main>
 
   <!-- ABOUT -->
-  <section id="about" class="section about">
-    <span class="sec-index reveal">01 — About</span>
-    <p class="statement split-lines">
-      Freelance developer focused on building <mark>practical AI-powered tools</mark> and browser
-      automations that reduce repetitive work. I turn ideas into working prototypes fast — keeping
-      solutions <mark>simple, useful, and cost-effective</mark>.
-    </p>
+  <section id="about" class="wrap section">
+    <div class="head reveal">
+      <span class="kicker">01 — About</span>
+      <h2>Practical automation, built around your problem.</h2>
+    </div>
     <div class="about-grid">
-      <div class="reveal">
-        <h4>How I work</h4>
-        <p>Understand the task first, then build the automation around the real workflow — never forcing the problem into a fixed template.</p>
-      </div>
-      <div class="reveal">
-        <h4>Always shipping</h4>
-        <p>Continuously testing new AI development techniques to expand the kinds of workflows that can realistically be automated.</p>
-      </div>
+      <p class="reveal">Freelance AI Automation Developer focused on building practical AI-powered tools and browser automations that reduce repetitive work. I take a problem or workflow, understand what needs to be automated, and build a custom solution using AI and code.</p>
+      <p class="reveal">Comfortable turning ideas into working prototypes fast — with a focus on keeping solutions simple, useful, and cost-effective. I build around the actual workflow rather than forcing it into a pre-made template.</p>
+    </div>
+    <div class="stat-row">
+      <div class="stat reveal"><strong class="grad">$10+</strong><span>Starting price</span></div>
+      <div class="stat reveal"><strong class="grad">Custom</strong><span>Not templated</span></div>
+      <div class="stat reveal"><strong class="grad">Fast</strong><span>Rapid prototyping</span></div>
+      <div class="stat reveal"><strong class="grad">AI-first</strong><span>Modern tooling</span></div>
     </div>
   </section>
 
-  <!-- WORK / horizontal gallery -->
-  <section id="work" class="h-scroll">
-    <div class="h-pin">
-      <div class="h-head">
-        <span class="sec-index">02 — Selected Work</span>
-        <span class="h-hint">scroll ↓ moves →</span>
-      </div>
-      <div class="h-track" id="h-track">
-        <article class="work-card" data-cursor="view">
-          <span class="wc-num">/ 01</span>
-          <h3>AI Automation Applications</h3>
-          <p>Built and experimented with AI-powered applications designed to automate repetitive tasks and simplify workflows.</p>
-          <ul class="chips"><li>AI Integration</li><li>Workflow Automation</li><li>Custom Tools</li><li>Rapid Prototyping</li></ul>
-        </article>
-        <article class="work-card" data-cursor="view">
-          <span class="wc-num">/ 02</span>
-          <h3>AI Browser Automation</h3>
-          <p>Developed browser-based automation concepts that carry out multi-step tasks on websites through programmed workflows.</p>
-          <ul class="chips"><li>Browser Automation</li><li>Task Execution</li><li>Web Workflows</li><li>Automation Logic</li></ul>
-        </article>
-        <article class="work-card" data-cursor="view">
-          <span class="wc-num">/ 03</span>
-          <h3>Custom Automation Solutions</h3>
-          <p>Each project starts by understanding the task, then developing an automation around the actual workflow rather than a fixed solution.</p>
-          <ul class="chips"><li>Problem Solving</li><li>Custom Development</li><li>Workflow Analysis</li></ul>
-        </article>
-        <article class="work-card work-card--cta" data-cursor="link">
-          <h3>Your workflow next.</h3>
-          <p>Got a repetitive task eating your time? Let's turn it into an automation.</p>
-          <a href="#contact" class="text-link">Get in touch →</a>
-        </article>
-      </div>
+  <!-- SERVICES -->
+  <section id="services" class="wrap section">
+    <div class="head reveal">
+      <span class="kicker">02 — Services</span>
+      <h2>How I can help</h2>
+    </div>
+    <div class="bento">
+      <article class="card card-lg reveal">
+        <div class="card-ico">◆</div>
+        <h3>AI Automation Apps</h3>
+        <p>Custom tools designed to automate repetitive workflows end-to-end, built around the exact steps you repeat every day.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-ico">◈</div>
+        <h3>Browser Automation</h3>
+        <p>Automations that handle repetitive browser-based tasks and multi-step web workflows.</p>
+      </article>
+      <article class="card reveal">
+        <div class="card-ico">◇</div>
+        <h3>Custom AI Tools</h3>
+        <p>Small AI-powered applications built around one specific problem.</p>
+      </article>
+      <article class="card card-wide reveal">
+        <div class="card-ico">✦</div>
+        <h3>Workflow Automation</h3>
+        <p>Analyze a repetitive process, identify what can realistically be automated, and build a solution that cuts the manual work.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- WORK -->
+  <section id="work" class="wrap section">
+    <div class="head reveal">
+      <span class="kicker">03 — Selected Work</span>
+      <h2>Project experience</h2>
+    </div>
+    <div class="work-grid">
+      <article class="work reveal">
+        <span class="work-n">01</span>
+        <h3>AI Automation Applications</h3>
+        <p>Built and experimented with AI-powered applications designed to automate repetitive tasks and simplify workflows.</p>
+        <ul class="tags"><li>AI Integration</li><li>Workflow Automation</li><li>Custom Tools</li><li>Rapid Prototyping</li></ul>
+      </article>
+      <article class="work reveal">
+        <span class="work-n">02</span>
+        <h3>AI Browser Automation</h3>
+        <p>Developed browser-based automation concepts that carry out multi-step tasks on websites through programmed workflows.</p>
+        <ul class="tags"><li>Browser Automation</li><li>Task Execution</li><li>Web Workflows</li><li>Automation Logic</li></ul>
+      </article>
+      <article class="work reveal">
+        <span class="work-n">03</span>
+        <h3>Custom Automation Solutions</h3>
+        <p>Approach each project by first understanding the task, then developing an automation around the actual workflow rather than a fixed solution.</p>
+        <ul class="tags"><li>Problem Solving</li><li>Custom Development</li><li>Workflow Analysis</li></ul>
+      </article>
     </div>
   </section>
 
   <!-- EXPERIENCE -->
-  <section id="experience" class="section exp">
-    <span class="sec-index reveal">03 — Experience</span>
-    <div class="exp-row reveal">
-      <div class="exp-left">
+  <section id="experience" class="wrap section">
+    <div class="head reveal">
+      <span class="kicker">04 — Experience</span>
+      <h2>What I do</h2>
+    </div>
+    <div class="exp reveal">
+      <div class="exp-top">
         <h3>Freelance AI Automation Developer</h3>
-        <span class="exp-org">Independent Projects · Present</span>
+        <span class="exp-tag">Independent Projects · Present</span>
       </div>
       <ul class="exp-list">
         <li>Build custom AI automation tools based on individual workflow requirements.</li>
@@ -156,9 +166,12 @@
   </section>
 
   <!-- SKILLS -->
-  <section id="skills" class="section skills">
-    <span class="sec-index reveal">04 — Capabilities</span>
-    <div class="skills-cols">
+  <section id="skills" class="wrap section">
+    <div class="head reveal">
+      <span class="kicker">05 — Capabilities</span>
+      <h2>What I work with</h2>
+    </div>
+    <div class="skills">
       <div class="skill-col reveal">
         <h4>AI &amp; Automation</h4>
         <ul><li>AI-powered workflows</li><li>Task automation</li><li>AI application development</li><li>Workflow design</li><li>Browser automation</li></ul>
@@ -174,40 +187,13 @@
     </div>
   </section>
 
-  <!-- SERVICES -->
-  <section id="services" class="section services">
-    <span class="sec-index reveal">05 — Services</span>
-    <div class="svc-list">
-      <div class="svc reveal" data-cursor="link">
-        <span class="svc-n">01</span>
-        <h3>AI Automation Apps</h3>
-        <p>Custom tools designed to automate repetitive workflows.</p>
-      </div>
-      <div class="svc reveal" data-cursor="link">
-        <span class="svc-n">02</span>
-        <h3>Browser Automation</h3>
-        <p>Automations that handle repetitive browser-based tasks.</p>
-      </div>
-      <div class="svc reveal" data-cursor="link">
-        <span class="svc-n">03</span>
-        <h3>Custom AI Tools</h3>
-        <p>Small AI-powered applications built around a specific problem.</p>
-      </div>
-      <div class="svc reveal" data-cursor="link">
-        <span class="svc-n">04</span>
-        <h3>Workflow Automation</h3>
-        <p>Analyze a repetitive process and build a solution to cut manual work.</p>
-      </div>
-    </div>
-  </section>
-
   <!-- PRICING -->
-  <section id="pricing" class="section pricing">
-    <div class="price-wrap reveal">
-      <span class="sec-index">06 — Pricing</span>
-      <h2 class="price-big">Starting at <span class="grad">$10–$25</span><br>per&nbsp;automation</h2>
+  <section id="pricing" class="wrap section">
+    <div class="price-card reveal">
+      <span class="kicker">06 — Pricing</span>
+      <h2 class="price-head">Starting at <span class="grad">$10–$25</span> per automation</h2>
       <p>Final price depends on workflow complexity, number of steps, integrations, and development time. Small jobs stay small.</p>
-      <div class="why-strip">
+      <div class="why">
         <div><strong>Affordable</strong><span>Projects from $10.</span></div>
         <div><strong>Custom-built</strong><span>Around your workflow.</span></div>
         <div><strong>Practical</strong><span>Automates real time-sinks.</span></div>
@@ -218,24 +204,24 @@
   </section>
 
   <!-- CONTACT -->
-  <section id="contact" class="section contact">
-    <span class="sec-index reveal">07 — Contact</span>
-    <h2 class="contact-big split-lines">Got a repetitive task? Let's automate it.</h2>
-    <a href="mailto:prathambansal15398@gmail.com" class="magnetic" data-cursor="link" id="mail-btn">
-      <span>prathambansal15398@gmail.com</span>
-    </a>
-    <p class="contact-note reveal">Building useful AI automations and browser-based tools for individuals and small businesses looking to reduce repetitive manual work.</p>
-    <footer class="foot">
-      <span>© <span id="year"></span> Pratham — AI Automation Developer</span>
-      <span>Built with code, not templates.</span>
-    </footer>
+  <section id="contact" class="wrap section contact">
+    <div class="reveal">
+      <span class="kicker">07 — Contact</span>
+      <h2 class="contact-head">Got a repetitive task?<br>Let's automate it.</h2>
+      <p class="contact-sub">Building useful AI automations and browser-based tools for individuals and small businesses looking to reduce repetitive manual work.</p>
+      <a href="mailto:prathambansal15398@gmail.com" class="btn btn-primary btn-lg">prathambansal15398@gmail.com</a>
+    </div>
   </section>
 
-</div>
+</main>
+
+<footer>
+  <span>© <span id="year"></span> Pratham — AI Automation Developer</span>
+  <span>Built with code, not templates.</span>
+</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="js/scene.js"></script>
-<script src="js/smooth.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
