@@ -4,6 +4,8 @@ import {loadFonts} from './fonts';
 import {FilmGrade, GrainOverlay} from './components/GrainOverlay';
 import {nations} from './config/nations';
 import {palette} from './config/theme';
+import {FirstTouch} from './scenes/01-FirstTouch';
+import {Centenario1930} from './scenes/02-Centenario1930';
 import {Timeline100} from './scenes/03-Timeline100';
 import {GlobeScene} from './scenes/04-Globe';
 import {NationModule} from './scenes/05-NationModule';
@@ -11,28 +13,6 @@ import {StadiumScene} from './scenes/11-Stadium';
 import {UnityLockup} from './scenes/12-UnityLockup';
 
 loadFonts();
-
-/**
- * Placeholder for shots still in production. Holds correct timing and a
- * neutral graded frame so the master render never contains a blank or a
- * broken import while the sequence is being built out.
- */
-const Slate: React.FC<{label: string}> = ({label}) => (
-  <AbsoluteFill
-    style={{
-      backgroundColor: palette.pitchDeep,
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: palette.bone,
-      fontFamily: 'monospace',
-      fontSize: '2.4vmin',
-      letterSpacing: '0.3em',
-      opacity: 0.35,
-    }}
-  >
-    {label}
-  </AbsoluteFill>
-);
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -53,11 +33,11 @@ export const FIFA2030Intro: React.FC = () => {
       <Series>
         {/* ORIGIN ─────────────────────────────────────────────────────── */}
         <Series.Sequence durationInFrames={180} name="01 · First Touch">
-          <Slate label="SHOT 01 — FIRST TOUCH" />
+          <FirstTouch />
         </Series.Sequence>
 
         <Series.Sequence durationInFrames={240} name="02 · Estadio Centenario 1930">
-          <Slate label="SHOT 02 — CENTENARIO 1930" />
+          <Centenario1930 />
         </Series.Sequence>
 
         {/* JOURNEY ────────────────────────────────────────────────────── */}
