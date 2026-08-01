@@ -1,0 +1,35 @@
+{
+  "name": "fifa2030-intro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FIFA World Cup 2030 broadcast title sequence — 90s, Remotion",
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "tsc --noEmit",
+    "render": "remotion render FIFA2030Intro out/fifa2030.mp4",
+    "render:vertical": "remotion render FIFA2030Intro-Vertical out/fifa2030-vertical.mp4",
+    "render:square": "remotion render FIFA2030Intro-Square out/fifa2030-square.mp4",
+    "preview": "remotion render FIFA2030Intro out/preview.mp4 --jpeg-quality=60 --scale=0.5",
+    "upgrade": "remotion upgrade"
+  },
+  "dependencies": {
+    "@react-three/fiber": "8.18.0",
+    "@remotion/cli": "4.0.503",
+    "@remotion/google-fonts": "4.0.503",
+    "@remotion/media-utils": "4.0.503",
+    "@remotion/paths": "4.0.503",
+    "@remotion/shapes": "4.0.503",
+    "@remotion/three": "4.0.503",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.503",
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@types/three": "0.169.0",
+    "typescript": "5.6.3"
+  }
+}
