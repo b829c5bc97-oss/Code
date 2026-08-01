@@ -226,9 +226,17 @@ export const PitchAction: React.FC<{
   /** Seconds, for gait timing. */
   seconds: number;
   reveal: number;
-}> = ({t, seconds, reveal}) => {
-  const home = useMemo(() => buildTeam(11, palette.bone, '#E4D9C4'), []);
-  const away = useMemo(() => buildTeam(11, palette.terracotta, '#D6BFA8'), []);
+  /**
+   * Real kit colours, not a generic bone-vs-terracotta pair. Uruguay wear
+   * solid sky blue; Argentina wear white with a sky-blue stripe — which,
+   * conveniently, is also the colour pairing with the most contrast for a
+   * shot that has to read at a glance.
+   */
+  homeKit?: string;
+  awayKit?: string;
+}> = ({t, seconds, reveal, homeKit = '#3E86C4', awayKit = '#F4EFE6'}) => {
+  const home = useMemo(() => buildTeam(11, homeKit, '#C99A72'), [homeKit]);
+  const away = useMemo(() => buildTeam(11, awayKit, '#E7C9A8'), [awayKit]);
 
   const ball = ballAt(t);
 

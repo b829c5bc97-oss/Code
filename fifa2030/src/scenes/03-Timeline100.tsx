@@ -136,6 +136,12 @@ const YearCard: React.FC<{
         display: 'flex',
         flexDirection: 'column',
         gap: u(0.7),
+        // A soft wash of the winner's colour behind the card — this is what
+        // turns "grey type on dark green" into a rail that actually looks
+        // like a hundred years of different flags going past.
+        background: entry.cancelled
+          ? undefined
+          : `radial-gradient(ellipse ${u(22)}px ${u(16)}px at ${u(4)}px ${u(3)}px, ${accent}2e 0%, transparent 72%)`,
         // The two rows sit at different depths and therefore different scales.
         opacity: (entry.cancelled ? 0.5 : 1) * (0.12 + proximity * 0.88),
         filter: blur > 0.15 ? `blur(${blur * u(1.1)}px)` : undefined,
@@ -419,22 +425,29 @@ export const Timeline100: React.FC = () => {
             transform: `translateX(${-travelled * u(STRIDE)}px)`,
           }}
         >
-          {worldCups.map((entry, i) =>
-            Math.abs(i - travelled) > 8 ? null : (
+          {worldCups.map((entry, i) => {
+            if (Math.abs(i - travelled) > 8) return null;
+            // Every tick takes its winner's colour — from a distance the rail
+            // itself reads as a run of flags, not a single gold-and-bone line.
+            const tickFlag = entry.winner ? flagByCode(WINNER_FLAG[entry.winner] ?? '') : undefined;
+            const tickColor = entry.hero
+              ? palette.goldTrophy
+              : flagAccent(tickFlag) ?? palette.bone;
+            return (
               <div
                 key={entry.year}
                 style={{
                   position: 'absolute',
                   transform: `translateX(${i * u(STRIDE)}px)`,
-                  width: u(0.3),
+                  width: u(entry.hero ? 0.42 : 0.3),
                   height: u(entry.hero ? 2.4 : 1.2),
                   marginTop: u(-0.6),
-                  backgroundColor: entry.hero ? palette.goldTrophy : palette.bone,
-                  opacity: entry.cancelled ? 0.3 : 0.8,
+                  backgroundColor: tickColor,
+                  opacity: entry.cancelled ? 0.3 : 0.9,
                 }}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       </AbsoluteFill>
 

@@ -150,7 +150,7 @@ export const players: Record<string, PlayerSlot> = {
 
   portugal: {
     nation: 'portugal',
-    jerseyNumber: 10,
+    jerseyNumber: 7,
     signatureAction: 'Struck from thirty metres',
     supportingFigures: 1,
     colorway: {field: '#046A38', figure: '#F4EFE6', mark: '#D4A73C'},
@@ -188,7 +188,7 @@ export const players: Record<string, PlayerSlot> = {
 
   uruguay: {
     nation: 'uruguay',
-    jerseyNumber: 4,
+    jerseyNumber: 9,
     signatureAction: 'Garra charrúa — cleared off the line',
     supportingFigures: 1,
     colorway: {field: '#4C9DD8', figure: '#F4EFE6', mark: '#0A1F14'},

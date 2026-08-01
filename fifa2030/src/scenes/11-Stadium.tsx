@@ -9,10 +9,14 @@ import {
   useVideoConfig,
 } from 'remotion';
 import {useLayout} from '../config/layout';
+import {nationById} from '../config/nations';
+import {flagByCode} from '../config/flags';
+import {Flag} from '../components/Flag';
 import {fontStacks, letterspacing, palette, typeScale} from '../config/theme';
 import {Stadium} from '../three/Stadium';
 import {PitchAction, PitchFurniture} from '../three/PitchAction';
 import {STREET_SCENES, StreetFootball} from '../components/StreetFootball';
+import {LensFlare} from '../components/CameraRealism';
 import {useScoreAmplitude} from '../audio';
 
 /**
@@ -147,8 +151,82 @@ export const StadiumScene: React.FC = () => {
           })}
           seconds={frame / fps}
           reveal={reveal}
+          // Uruguay v Argentina — the two neighbours across the Río de la
+          // Plata, and the fixture the whole film has been building toward
+          // since the opening 1930 return. Real kit colours, drawn from the
+          // same nation config as everything else in the film.
+          homeKit={nationById('uruguay').colors.panel}
+          awayKit="#F4EFE6"
         />
       </ThreeCanvas>
+
+      {/* Broadcast fixture bug — the two flags, up front, in colour. This is
+          the shot's whole "real match" argument made legible at a glance,
+          the way a live broadcast always opens on the teams. */}
+      <AbsoluteFill
+        style={{
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          paddingTop: u(6),
+          opacity: interpolate(frame, [26, 44, 210, 230], [0, 1, 1, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: u(1.4),
+            padding: `${u(0.9)}px ${u(1.8)}px`,
+            borderRadius: u(0.5),
+            backgroundColor: 'rgba(5,11,8,0.68)',
+            border: `${u(0.1)}px solid rgba(212,167,60,0.4)`,
+          }}
+        >
+          <div style={{width: u(3.4), height: u(2.27)}}>
+            <Flag spec={flagByCode('URU')!} bordered={false} wave={frame * 0.04} waveAmount={0.06} />
+          </div>
+          <span
+            style={{
+              fontFamily: fontStacks.display,
+              fontSize: t(typeScale.subtitle),
+              color: palette.bone,
+              letterSpacing: letterspacing.tight,
+              textTransform: 'uppercase',
+            }}
+          >
+            Uruguay
+          </span>
+          <span
+            style={{
+              fontFamily: fontStacks.display,
+              fontSize: t(typeScale.subtitle),
+              color: palette.goldTrophy,
+              opacity: 0.7,
+              margin: `0 ${u(0.3)}px`,
+            }}
+          >
+            v
+          </span>
+          <span
+            style={{
+              fontFamily: fontStacks.display,
+              fontSize: t(typeScale.subtitle),
+              color: palette.bone,
+              letterSpacing: letterspacing.tight,
+              textTransform: 'uppercase',
+            }}
+          >
+            Argentina
+          </span>
+          <div style={{width: u(3.4), height: u(2.27)}}>
+            <Flag spec={flagByCode('ARG')!} bordered={false} wave={frame * 0.04 + 2} waveAmount={0.06} />
+          </div>
+        </div>
+      </AbsoluteFill>
 
       {/* Roof-ring glow bloom, cheaper and more controllable than a postprocess
           pass at this scale. */}
@@ -163,6 +241,24 @@ export const StadiumScene: React.FC = () => {
           pointerEvents: 'none',
         }}
       />
+
+      {/* Floodlights catching the lens during the wide aerial — strongest at
+          the top of the descent, fading as the camera drops below the roof
+          line and the lights move out of frame. */}
+      {[{x: 0.14, y: 0.1}, {x: 0.86, y: 0.1}, {x: 0.5, y: 0.04}].map((pos, i) => (
+        <LensFlare
+          key={i}
+          origin={pos}
+          strength={
+            reveal *
+            interpolate(descent, [0, 0.35, 0.6], [0.55, 0.3, 0], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          }
+          streak={18}
+        />
+      ))}
 
       {/* ── Cut inserts: ordinary people playing ─────────────────────────── */}
       {streetStrength > 0.01 ? (

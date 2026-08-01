@@ -9,6 +9,7 @@ import {
 import {useLayout} from '../config/layout';
 import {fontStacks, letterspacing, palette, springs, typeScale} from '../config/theme';
 import {GoldParticles, Shockwave} from '../components/GoldParticles';
+import {LensFlare} from '../components/CameraRealism';
 import {useScoreAmplitude} from '../audio';
 
 /**
@@ -306,6 +307,16 @@ export const FirstTouch: React.FC = () => {
         intensity={0.75 + amplitude * 0.9}
         gravity={0.42}
         lifetime={74}
+      />
+
+      {/* The flare arrives WITH the burst rather than sitting on top of it —
+          same trigger frame, same rise-and-fall envelope. */}
+      <LensFlare
+        origin={ballOrigin}
+        strength={interpolate(frame, [TOUCH, TOUCH + 5, TOUCH + 30, TOUCH + 60], [0, 1, 0.55, 0], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        })}
       />
 
       {/* 1930, pressed in. */}

@@ -22,6 +22,7 @@ import {
 import {flags} from '../config/flags';
 import {FlagField} from '../components/Flag';
 import {GoldParticles} from '../components/GoldParticles';
+import {LensFlare} from '../components/CameraRealism';
 import {TypeLine} from '../components/TypeLockup';
 
 /**
@@ -472,6 +473,14 @@ export const UnityLockup: React.FC = () => {
         spread={38}
         gravity={0.18}
         lifetime={64}
+      />
+
+      {/* The specular sweep catching the lens, not just the sphere — the same
+          moment that lit the burst above. */}
+      <LensFlare
+        origin={{x: 0.5, y: isPortrait ? 0.36 : 0.42}}
+        strength={specularOpacity * 0.85}
+        streak={30}
       />
     </AbsoluteFill>
   );
