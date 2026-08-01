@@ -4,6 +4,7 @@ import {FilmGrade, GrainOverlay} from './components/GrainOverlay';
 import {nations} from './config/nations';
 import {palette} from './config/theme';
 import {Timeline100} from './scenes/03-Timeline100';
+import {GlobeScene} from './scenes/04-Globe';
 import {NationModule} from './scenes/05-NationModule';
 import {UnityLockup} from './scenes/12-UnityLockup';
 
@@ -60,7 +61,7 @@ export const FIFA2030Intro: React.FC = () => {
         </Series.Sequence>
 
         <Series.Sequence durationInFrames={240} name="04 · Three Continents">
-          <Slate label="SHOT 04 — GLOBE" />
+          <GlobeScene />
         </Series.Sequence>
 
         {nations.map((nation, i) => (
