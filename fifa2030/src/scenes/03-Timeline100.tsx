@@ -10,8 +10,9 @@ import {useLayout} from '../config/layout';
 import {players} from '../config/players';
 import {fontStacks, letterspacing, palette, springs, typeScale} from '../config/theme';
 import {CENTENARY, worldCups, type TimelineEntry} from '../config/timeline';
-import {flagByCode, WINNER_FLAG} from '../config/flags';
+import {flagAccent, flagByCode, WINNER_FLAG} from '../config/flags';
 import {Flag} from '../components/Flag';
+import {Scoreboard} from '../components/Scoreboard';
 import {PlayerSilhouette} from '../components/PlayerSilhouette';
 import {GoldParticles, Shockwave} from '../components/GoldParticles';
 import {TypeLine} from '../components/TypeLockup';
@@ -122,6 +123,8 @@ const YearCard: React.FC<{
   const {u, t} = useLayout();
   const focused = Math.abs(distance) < 0.5 && Boolean(entry.hero);
   const winnerFlag = entry.winner ? flagByCode(WINNER_FLAG[entry.winner] ?? '') : undefined;
+  // Each card is tinted by its winner — a century of colour, not a column of grey.
+  const accent = flagAccent(winnerFlag) ?? palette.bone;
   const proximity = Math.max(0, 1 - Math.abs(distance) / 4.2);
 
   return (
@@ -156,7 +159,14 @@ const YearCard: React.FC<{
         {entry.year}
       </div>
 
-      <div style={{width: '82%', height: u(0.14), backgroundColor: palette.bone, opacity: 0.35}} />
+      <div
+        style={{
+          width: '82%',
+          height: u(0.3),
+          backgroundColor: entry.cancelled ? palette.bone : accent,
+          opacity: entry.cancelled ? 0.3 : 0.9,
+        }}
+      />
 
       {entry.cancelled ? (
         <div
@@ -206,6 +216,21 @@ const YearCard: React.FC<{
               </div>
             ) : null}
             <span>{entry.winner ?? '—'}</span>
+            {entry.final ? (
+              <span
+                style={{
+                  fontFamily: fontStacks.display,
+                  fontSize: t(typeScale.caption),
+                  color: accent,
+                  fontVariantNumeric: 'tabular-nums',
+                  marginLeft: 'auto',
+                  paddingLeft: u(0.8),
+                }}
+              >
+                {entry.final.score}
+                {entry.final.decider === 'pens' ? '*' : entry.final.decider === 'aet' ? '†' : ''}
+              </span>
+            ) : null}
           </div>
         </div>
       )}
@@ -423,6 +448,19 @@ export const Timeline100: React.FC = () => {
             }}
           />
           <HeroFreeze entry={heroState.entry} strength={heroState.strength} />
+
+          {/* The final that year, on a broadcast board. This is what makes the
+              timeline a hundred years of football rather than a list of dates. */}
+          <AbsoluteFill
+            style={{
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              padding: `${u(6)}px ${u(6)}px`,
+              pointerEvents: 'none',
+            }}
+          >
+            <Scoreboard entry={heroState.entry} strength={heroState.strength} />
+          </AbsoluteFill>
           {/* Year and caption sit in a left column, clear of the figure and
               clear of the rail card that triggered the hold. */}
           <AbsoluteFill
@@ -463,12 +501,11 @@ export const Timeline100: React.FC = () => {
                 letterSpacing: letterspacing.ultra,
                 color: palette.bone,
                 opacity: 0.8,
-                maxWidth: '34%',
+                maxWidth: '40%',
                 lineHeight: 1.5,
               }}
             >
               {heroState.entry.host}
-              {heroState.entry.winner ? ` · ★ ${heroState.entry.winner}` : ''}
             </div>
           </AbsoluteFill>
         </>

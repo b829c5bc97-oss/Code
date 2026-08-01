@@ -414,3 +414,28 @@ export const HOST_FLAG: Record<string, string> = {
   Qatar: 'QAT',
   'Canada / Mexico / USA': 'CAN',
 };
+
+/**
+ * The colour a flag leads with — used to tint the timeline cards so a century
+ * of winners reads as a run of colour, not a column of grey type. Skips whites
+ * and near-blacks, which identify nothing on a dark card.
+ */
+export const flagAccent = (spec: FlagSpec | undefined): string | undefined => {
+  if (!spec) return undefined;
+  const usable = (c: string) => {
+    const n = parseInt(c.replace('#', ''), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    return max > 60 && max - min > 40;
+  };
+  for (const layer of spec.layers) {
+    if (layer.t === 'bands') {
+      const hit = layer.colors.find(usable);
+      if (hit) return hit;
+    } else if ('color' in layer && usable(layer.color)) {
+      return layer.color;
+    }
+  }
+  return undefined;
+};

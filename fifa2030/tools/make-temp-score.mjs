@@ -151,6 +151,76 @@ const clap = (t0, gain = 0.4) => {
   for (const o of [0, 0.012, 0.026]) noiseHit(t0 + o, 0.13, gain * (o ? 0.7 : 1), 34, 0.5);
 };
 
+/**
+ * A terrace chant — the "oh-oh-oh" a stand sings.
+ *
+ * Voices are the sound of a World Cup opening, and a chant is a crowd singing
+ * one note in rough unison: many voices, all slightly out of tune with each
+ * other and slightly late. That spread is the whole effect, so this stacks
+ * detuned copies with random small delays rather than one clean tone.
+ */
+const chant = (t0, dur, freq, gain) => {
+  const VOICES = 9;
+  for (let v = 0; v < VOICES; v++) {
+    const detune = 1 + (rnd() * 0.016);
+    const late = Math.abs(rnd()) * 0.045;
+    const steps = Math.floor(dur * SR);
+    for (let i = 0; i < steps; i++) {
+      const x = i / SR;
+      const e = env(x, dur, 0.05, 0.12, 0.78, 0.22);
+      if (e <= 0) continue;
+      const f = freq * detune * (1 + Math.sin(2 * Math.PI * 4.6 * x) * 0.004);
+      // Rough "oh" vowel: strong fundamental, second and third, little else.
+      const val =
+        Math.sin(2 * Math.PI * f * x) * 0.62 +
+        Math.sin(2 * Math.PI * f * 2 * x) * 0.26 +
+        Math.sin(2 * Math.PI * f * 3 * x) * 0.1;
+      add(t0 + late + x, (val * gain * e) / VOICES);
+    }
+  }
+};
+
+/** Brass stab: fast attack, bright, short. The punctuation of a stadium cue. */
+const brass = (t0, dur, freq, gain) => {
+  const steps = Math.floor(dur * SR);
+  for (let i = 0; i < steps; i++) {
+    const x = i / SR;
+    const e = env(x, dur, 0.02, 0.1, 0.62, 0.14);
+    if (e <= 0) continue;
+    // Brightness falls as the note decays, as a real horn does.
+    const bright = 10 * Math.exp(-x * 1.4) + 2;
+    let v = 0;
+    for (let h = 1; h <= bright; h++) v += Math.sin(2 * Math.PI * freq * h * x) / (h ** 0.85);
+    add(t0 + x, (v / 5) * gain * e);
+  }
+};
+
+/** Floor tom / timpani — the big low hits under a build. */
+const tom = (t0, freq, gain = 0.6, dur = 0.55) => {
+  const steps = Math.floor(dur * SR);
+  for (let i = 0; i < steps; i++) {
+    const x = i / SR;
+    const f = freq * (1 + 0.45 * Math.exp(-x * 18));
+    add(t0 + x, Math.sin(2 * Math.PI * f * x) * gain * Math.exp(-x * 5.5));
+  }
+};
+
+/** Distant crowd: broadband noise, slowly breathing. */
+const crowdBed = (t0, dur, gain) => {
+  let lp = 0;
+  let lp2 = 0;
+  const steps = Math.floor(dur * SR);
+  for (let i = 0; i < steps; i++) {
+    const x = i / SR;
+    lp += (rnd() - lp) * 0.05;
+    lp2 += (lp - lp2) * 0.05;
+    // Swells and settles, the way a real crowd never sits still.
+    const breathe = 0.65 + 0.35 * Math.sin(2 * Math.PI * 0.09 * x) * Math.sin(2 * Math.PI * 0.031 * x);
+    const fade = Math.min(1, x / 2) * Math.min(1, (dur - x) / 2);
+    add(t0 + x, lp2 * gain * breathe * fade);
+  }
+};
+
 /** Sustained pad from a chord. */
 const pad = (t0, dur, chord, gain, opts = {}) => {
   for (const f of chord) {
@@ -173,13 +243,44 @@ const choir = (t0, dur, chord, gain) => {
 
 // ═══ ARRANGEMENT ════════════════════════════════════════════════════════════
 
-// ── 0:00–0:14 · sparse percussion ───────────────────────────────────────────
-// Almost nothing. The first touch is the loudest event in the section.
-kick(0.6, 1.15);
-noiseHit(0.62, 1.1, 0.3, 4.5, 0.3);
-for (let b = 4; b * BEAT < 13.5; b += 4) kick(b * BEAT, 0.42);
-for (let b = 6; b * BEAT < 13.5; b += 8) hat(b * BEAT, 0.1);
-pad(1.5, 12, [N_.A2, N_.E3], 0.1, {a: 3.5, r: 3.5});
+// ── 0:00–0:14 · sparse percussion, over a stadium ──────────────────────────
+//
+// The brief calls for sparse percussion here, and the picture is black. But
+// sparse is not the same as empty: a World Cup opens inside a stadium, and the
+// sound of one — a crowd already there, a terrace already singing — is what
+// stops the first six seconds feeling like a title card with a beep on it.
+crowdBed(0, 15.5, 0.075);
+
+// The first touch. The biggest single hit in the film.
+kick(0.6, 1.2);
+tom(0.6, 62, 0.5);
+noiseHit(0.62, 1.3, 0.34, 3.8, 0.28);
+brass(0.62, 1.6, N_.A2, 0.16);
+
+// A slow pulse, and a terrace answering it. The chant is the hook the rest of
+// the film keeps coming back to.
+for (let b = 4; b * BEAT < 14; b += 4) {
+  kick(b * BEAT, 0.5);
+  tom(b * BEAT, 74, 0.26);
+}
+for (let b = 8; b * BEAT < 14; b += 4) clap(b * BEAT, 0.2);
+
+// "Oh — oh — oh", rising, from 0:06.
+const OPENING_CHANT = [
+  [6.0, 1.0, N_.A3],
+  [7.0, 1.0, N_.C4],
+  [8.0, 2.0, N_.E4],
+  [10.0, 1.0, N_.A3],
+  [11.0, 1.0, N_.C4],
+  [12.0, 2.0, N_.E4],
+];
+for (const [t0, dur, f] of OPENING_CHANT) {
+  chant(t0, dur * 0.92, f, 0.2);
+  chant(t0, dur * 0.92, f / 2, 0.1);
+  clap(t0, 0.26);
+  kick(t0, 0.42);
+}
+pad(1.5, 12.5, [N_.A2, N_.E3], 0.12, {a: 3, r: 3});
 
 // ── 0:14–0:36 · building strings + drums ────────────────────────────────────
 for (let bar = 7; bar * BAR < 36; bar++) {
@@ -195,6 +296,21 @@ for (let bar = 7; bar * BAR < 36; bar++) {
     hat(t + BEAT / 2, 0.06 + grow * 0.1);
   }
 }
+// The terrace keeps singing under the timeline, and brass answers on the bar.
+for (let bar = 7; bar * BAR < 36; bar++) {
+  const t0 = bar * BAR;
+  if (t0 < 14) continue;
+  const grow = Math.min(1, (t0 - 14) / 16);
+  const chord = chordAt(t0);
+  chant(t0, BAR * 0.9, chord[1], 0.1 + grow * 0.1);
+  chant(t0, BAR * 0.9, chord[1] / 2, 0.05 + grow * 0.05);
+  if (bar % 2 === 1) {
+    brass(t0, 0.5, chord[0] * 2, 0.09 + grow * 0.09);
+    brass(t0 + BEAT * 1.5, 0.34, chord[2], 0.07 + grow * 0.07);
+  }
+  tom(t0, 70, 0.2 + grow * 0.2);
+}
+
 // The rail's tick under the timeline, on every beat.
 for (let b = Math.ceil(14 / BEAT); b * BEAT < 36; b++) {
   voice(b * BEAT, 0.05, 2100, 0.035, {a: 0.002, d: 0.02, s: 0.1, r: 0.02, bright: 2});
@@ -303,13 +419,28 @@ for (let bar = 36; bar * BAR < 84; bar++) {
     hat(t + BEAT / 2, 0.12, b === 3);
   }
 }
-// Crowd bed under the swell — this is what the wave intensity reads.
-noiseHit(77.5, 6.5, 0.055, 0.32, 0.25);
+// Full crowd under the swell — this is what the wave intensity reads.
+crowdBed(72, 13, 0.16);
+noiseHit(77.5, 6.5, 0.05, 0.32, 0.25);
+
+// The terrace and the brass take the melody's chords with it.
+for (let bar = 36; bar * BAR < 84; bar++) {
+  const t0 = bar * BAR;
+  const chord = chordAt(t0);
+  chant(t0, BAR * 0.94, chord[1], 0.17);
+  chant(t0, BAR * 0.94, chord[2], 0.11);
+  brass(t0, 0.7, chord[0] * 2, 0.13);
+  brass(t0 + BEAT * 2, 0.5, chord[2], 0.1);
+  tom(t0, 66, 0.42);
+  tom(t0 + BEAT * 2, 66, 0.3);
+}
 
 // ── 1:24–1:30 · a single sustained note into silence ────────────────────────
 kick(84, 1.0);
 pad(84, 6, [N_.A2, N_.A3, N_.E4], 0.28, {a: 0.5, d: 1, s: 0.85, r: 4.6});
 choir(84, 6, [N_.A4, N_.C5, N_.E5], 0.1);
+chant(84, 4.5, N_.A3, 0.14);
+crowdBed(84, 6, 0.09);
 
 // ── Master ──────────────────────────────────────────────────────────────────
 

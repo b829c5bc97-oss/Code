@@ -38,6 +38,22 @@ const TOUCH = 46;
  * cannot live in coordinate systems that only agree by arithmetic luck. The
  * ball sits at (100, 62); the boot's toe travels to exactly its left edge.
  */
+/** Motes turning in the shaft of light. Fixed layout, so they never re-seed. */
+const DUST = Array.from({length: 46}, (_, i) => {
+  const h = (n: number) => {
+    const x = Math.sin((i + 1) * n) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  return {
+    x: (h(12.9) - 0.5) * 66,
+    r: 0.22 + h(78.2) ** 2 * 0.5,
+    speed: 0.03 + h(37.7) * 0.05,
+    phase: h(93.1),
+    sway: 1.5 + h(15.3) * 4,
+    alpha: 0.25 + h(51.7) * 0.5,
+  };
+});
+
 const CONTACT_W = 200;
 const CONTACT_H = 100;
 const BALL = {x: 100, y: 62, r: 11};
@@ -98,7 +114,8 @@ const ContactStage: React.FC<{
   travel: number;
   spin: number;
   light: number;
-}> = ({approach, recoil, withdraw, travel, spin, light}) => (
+  dustTime: number;
+}> = ({approach, recoil, withdraw, travel, spin, light, dustTime}) => (
   <svg
     viewBox={`0 0 ${CONTACT_W} ${CONTACT_H}`}
     width="100%"
@@ -111,6 +128,15 @@ const ContactStage: React.FC<{
         <stop offset="52%" stopColor={palette.pitchDeep} stopOpacity={0.16} />
         <stop offset="100%" stopColor="#000000" stopOpacity="0" />
       </radialGradient>
+      {/* A hard-edged polygon reads as a triangle, not as light. */}
+      <filter id="beamSoft" x="-40%" y="-20%" width="180%" height="140%">
+        <feGaussianBlur stdDeviation="4.5" />
+      </filter>
+      <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={palette.bone} stopOpacity="0.16" />
+        <stop offset="70%" stopColor={palette.bone} stopOpacity="0.05" />
+        <stop offset="100%" stopColor={palette.bone} stopOpacity="0" />
+      </linearGradient>
       <radialGradient id="ballLight" cx="34%" cy="28%" r="76%">
         <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
         <stop offset="60%" stopColor="#000000" stopOpacity="0.1" />
@@ -118,8 +144,33 @@ const ContactStage: React.FC<{
       </radialGradient>
     </defs>
 
-    {/* The pool of light. Nothing else exists yet. */}
+    {/* A shaft of light from above, and the dust turning inside it. Pure black
+        with one object in it reads as a still frame; the drifting motes are
+        what make the opening feel like a held breath rather than a freeze. */}
+    <path
+      d={`M${BALL.x - 17},-6 L${BALL.x + 17},-6 L${BALL.x + 42},${CONTACT_H} L${
+        BALL.x - 42
+      },${CONTACT_H} Z`}
+      fill="url(#beam)"
+      filter="url(#beamSoft)"
+      opacity={light * 0.55}
+    />
     <rect x="0" y="0" width={CONTACT_W} height={CONTACT_H} fill="url(#pool)" opacity={light} />
+    {DUST.map((d, i) => {
+      const drift = (dustTime * d.speed + d.phase) % 1;
+      const y = CONTACT_H * 0.94 - drift * CONTACT_H * 0.85;
+      const x = BALL.x + d.x + Math.sin(drift * Math.PI * 2 + d.phase * 9) * d.sway;
+      return (
+        <circle
+          key={i}
+          cx={x}
+          cy={y}
+          r={d.r}
+          fill={palette.bone}
+          opacity={light * d.alpha * Math.sin(drift * Math.PI) * 0.9}
+        />
+      );
+    })}
 
     {/* Contact shadow, tightening as the ball settles. */}
     <ellipse
@@ -226,7 +277,7 @@ export const FirstTouch: React.FC = () => {
 
   return (
     <AbsoluteFill style={{backgroundColor: '#000000', opacity: outro}}>
-      <AbsoluteFill>
+      <AbsoluteFill style={{transform: `scale(${1 + frame * 0.00055})`}}>
         <ContactStage
           approach={approach}
           recoil={recoil}
@@ -234,6 +285,7 @@ export const FirstTouch: React.FC = () => {
           travel={ballTravel}
           spin={ballSpin}
           light={light}
+          dustTime={frame / fps}
         />
       </AbsoluteFill>
 
