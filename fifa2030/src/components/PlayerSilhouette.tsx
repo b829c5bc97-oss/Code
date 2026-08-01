@@ -63,15 +63,15 @@ const Figure: React.FC<{
   pose: Pose;
   color: string;
   opacity?: number;
+  /** Thickens every limb — used to build the dark contour behind a duotone. */
   scale?: number;
-  outline?: boolean;
-}> = ({pose, color, opacity = 1, scale = 1, outline = false}) => {
+}> = ({pose, color, opacity = 1, scale = 1}) => {
   const w = (n: number) => n * scale;
-  const stroke = outline ? 'none' : color;
-  const fill = outline ? 'none' : color;
+  const stroke = color;
+  const fill = color;
 
   return (
-    <g opacity={opacity} {...(outline ? {stroke: color, fill: 'none', strokeWidth: 1.4} : {})}>
+    <g opacity={opacity}>
       {/* Legs first so the torso sits over the hips. */}
       {seg(pose.hip, pose.kneeL, w(LIMB.thigh), stroke, 1, 'thighL')}
       {seg(pose.kneeL, pose.footL, w(LIMB.shin), stroke, 1, 'shinL')}
@@ -205,8 +205,12 @@ export const PlayerSilhouette: React.FC<Props> = ({
         </>
       ) : null}
 
-      <Figure pose={pose} color={figure} outline={linework} />
-      {linework ? <Figure pose={pose} color={figure} opacity={0.14} /> : null}
+      {/* Duotone freeze-frame: a dark mass carrying a bright contour, which is
+          how the Shot 03 hero moments are rendered. Stroking the limb segments
+          instead would leave each joint outlined separately and the figure
+          would read as a diagram rather than a silhouette. */}
+      {linework ? <Figure pose={pose} color={palette.ink} opacity={0.85} scale={1.16} /> : null}
+      <Figure pose={pose} color={figure} />
 
       {/* Jersey number — the only identification this film uses. */}
       <text

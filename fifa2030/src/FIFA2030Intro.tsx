@@ -3,6 +3,7 @@ import {loadFonts} from './fonts';
 import {FilmGrade, GrainOverlay} from './components/GrainOverlay';
 import {nations} from './config/nations';
 import {palette} from './config/theme';
+import {Timeline100} from './scenes/03-Timeline100';
 import {NationModule} from './scenes/05-NationModule';
 import {UnityLockup} from './scenes/12-UnityLockup';
 
@@ -55,7 +56,7 @@ export const FIFA2030Intro: React.FC = () => {
 
         {/* JOURNEY ────────────────────────────────────────────────────── */}
         <Series.Sequence durationInFrames={420} name="03 · 100 Years">
-          <Slate label="SHOT 03 — 100 YEARS" />
+          <Timeline100 />
         </Series.Sequence>
 
         <Series.Sequence durationInFrames={240} name="04 · Three Continents">
