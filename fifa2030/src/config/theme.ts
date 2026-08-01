@@ -75,3 +75,15 @@ export const letterspacing = {
   wide: '0.14em',
   ultra: '0.34em',
 } as const;
+
+/**
+ * Mix a hex colour toward the film's ink. Used to push background layers back
+ * without introducing colours that aren't in the palette.
+ */
+export const shade = (hex: string, amount: number): string => {
+  const ink = [5, 11, 8];
+  const n = parseInt(hex.replace('#', ''), 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const mixed = rgb.map((c, i) => Math.round(c + ((ink[i] as number) - c) * amount));
+  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+};

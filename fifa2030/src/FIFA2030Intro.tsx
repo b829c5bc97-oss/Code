@@ -3,6 +3,7 @@ import {loadFonts} from './fonts';
 import {FilmGrade, GrainOverlay} from './components/GrainOverlay';
 import {nations} from './config/nations';
 import {palette} from './config/theme';
+import {NationModule} from './scenes/05-NationModule';
 import {UnityLockup} from './scenes/12-UnityLockup';
 
 loadFonts();
@@ -67,7 +68,7 @@ export const FIFA2030Intro: React.FC = () => {
             durationInFrames={180}
             name={`${String(5 + i).padStart(2, '0')} · ${nation.nameEn}`}
           >
-            <Slate label={`SHOT ${String(5 + i).padStart(2, '0')} — ${nation.nameEn}`} />
+            <NationModule nation={nation} />
           </Series.Sequence>
         ))}
 
