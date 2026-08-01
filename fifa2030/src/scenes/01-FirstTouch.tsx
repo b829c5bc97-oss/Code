@@ -10,6 +10,7 @@ import {useLayout} from '../config/layout';
 import {fontStacks, letterspacing, palette, springs, typeScale} from '../config/theme';
 import {GoldParticles, Shockwave} from '../components/GoldParticles';
 import {LensFlare} from '../components/CameraRealism';
+import {buildBarrage, Fireworks} from '../components/Fireworks';
 import {useScoreAmplitude} from '../audio';
 
 /**
@@ -30,6 +31,21 @@ import {useScoreAmplitude} from '../audio';
  */
 
 const TOUCH = 46;
+
+/**
+ * The touch sends the sky up. Shells launch on contact and burst overhead
+ * while 1930 is still pressing in — the tournament announcing itself before
+ * the film has said a word.
+ */
+const OPENING_SHELLS = buildBarrage({
+  start: TOUCH + 2,
+  count: 9,
+  stagger: 6,
+  seed: 'open',
+  yRange: [0.08, 0.34],
+  scale: 1.05,
+  colors: ['#D4A73C', '#F2D998', '#F4EFE6'],
+});
 
 /**
  * Ball, boot and ground, drawn in ONE coordinate space.
@@ -318,6 +334,8 @@ export const FirstTouch: React.FC = () => {
           extrapolateRight: 'clamp',
         })}
       />
+
+      <Fireworks shells={OPENING_SHELLS} frame={frame} opacity={0.95} />
 
       {/* 1930, pressed in. */}
       <AbsoluteFill

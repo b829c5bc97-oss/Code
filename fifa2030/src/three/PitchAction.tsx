@@ -127,31 +127,109 @@ const playerAt = (
 };
 
 /**
- * One articulated figure: torso, head, two arms, two legs, each limb a scaled
- * box, plus a contact shadow. Built as raw THREE objects and posed by direct
- * transform writes — 22 figures × 9 parts is 198 meshes, and reconciling that
- * through React on every frame is the difference between a shot that renders
- * and one that crawls.
+ * One articulated figure — torso, head, arms, thighs, shins, shadow.
+ *
+ * Rewritten from scaled boxes to capsules on a real skeleton. Two changes do
+ * almost all the work of making these read as people rather than as markers:
+ *
+ * 1. LIT MATERIALS. Boxes with MeshBasicMaterial are flat colour with no
+ *    shading, which is why the old figures looked like game pieces — nothing
+ *    on them told you they had volume. Phong with a directional key gives
+ *    every limb a lit side and a shadow side.
+ *
+ * 2. REAL JOINTS. Limbs are now placed BETWEEN computed joint positions via
+ *    forward kinematics, so the knee actually bends and the lower leg trails
+ *    the thigh through the stride. Rotating a whole leg rigidly about the hip
+ *    is the single biggest tell of a cheap run cycle.
+ *
+ * Kit is split into shirt / shorts / socks, which is most of what makes a
+ * football figure legible at distance.
  */
-const buildTeam = (count: number, kit: string, skin: string): THREE.Group => {
+
+type Limbs = {
+  torso: THREE.Mesh;
+  head: THREE.Mesh;
+  armL: THREE.Mesh;
+  armR: THREE.Mesh;
+  thighL: THREE.Mesh;
+  thighR: THREE.Mesh;
+  shinL: THREE.Mesh;
+  shinR: THREE.Mesh;
+  shadow: THREE.Mesh;
+};
+
+const GEO = {
+  torso: new THREE.CapsuleGeometry(0.032, 0.062, 4, 10),
+  head: new THREE.SphereGeometry(0.026, 12, 10),
+  arm: new THREE.CapsuleGeometry(0.0115, 0.055, 3, 8),
+  thigh: new THREE.CapsuleGeometry(0.0165, 0.055, 3, 8),
+  shin: new THREE.CapsuleGeometry(0.013, 0.058, 3, 8),
+  shadow: new THREE.CircleGeometry(0.05, 14),
+};
+
+/** Segment lengths, in world units. Total standing height ≈ 0.26. */
+const SEG = {hip: 0.115, thigh: 0.058, shin: 0.058, torso: 0.075, arm: 0.062};
+
+const V_UP = new THREE.Vector3(0, 1, 0);
+const scratchA = new THREE.Vector3();
+const scratchB = new THREE.Vector3();
+const scratchDir = new THREE.Vector3();
+const scratchQuat = new THREE.Quaternion();
+
+/**
+ * Place a capsule so it spans from `a` to `b`. The capsule's own axis is Y, so
+ * this is a rotation from +Y onto the segment direction plus a midpoint.
+ */
+const spanLimb = (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => {
+  scratchDir.subVectors(b, a);
+  const len = scratchDir.length() || 0.0001;
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  scratchDir.divideScalar(len);
+  scratchQuat.setFromUnitVectors(V_UP, scratchDir);
+  mesh.quaternion.copy(scratchQuat);
+};
+
+const buildTeam = (
+  count: number,
+  kit: string,
+  shorts: string,
+  skin: string,
+): THREE.Group => {
   const group = new THREE.Group();
-  const body = new THREE.BoxGeometry(1, 1, 1);
-  const kitMat = new THREE.MeshBasicMaterial({color: kit, toneMapped: false});
-  const skinMat = new THREE.MeshBasicMaterial({color: skin, toneMapped: false});
+
+  const shirtMat = new THREE.MeshPhongMaterial({
+    color: new THREE.Color(kit),
+    shininess: 18,
+    specular: new THREE.Color('#2A2A2A'),
+  });
+  const shortsMat = new THREE.MeshPhongMaterial({
+    color: new THREE.Color(shorts),
+    shininess: 14,
+    specular: new THREE.Color('#222222'),
+  });
+  const skinMat = new THREE.MeshPhongMaterial({
+    color: new THREE.Color(skin),
+    shininess: 8,
+  });
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: '#000000',
+    transparent: true,
+    opacity: 0.32,
+  });
 
   for (let i = 0; i < count; i++) {
     const p = new THREE.Group();
-    // torso, head, armL, armR, thighL, shinL, thighR, shinR, shadow
     const parts = [
-      new THREE.Mesh(body, kitMat),
-      new THREE.Mesh(body, skinMat),
-      new THREE.Mesh(body, skinMat),
-      new THREE.Mesh(body, skinMat),
-      new THREE.Mesh(body, kitMat),
-      new THREE.Mesh(body, skinMat),
-      new THREE.Mesh(body, kitMat),
-      new THREE.Mesh(body, skinMat),
-      new THREE.Mesh(body, new THREE.MeshBasicMaterial({color: '#000000', transparent: true, opacity: 0.3})),
+      new THREE.Mesh(GEO.torso, shirtMat),
+      new THREE.Mesh(GEO.head, skinMat),
+      new THREE.Mesh(GEO.arm, skinMat),
+      new THREE.Mesh(GEO.arm, skinMat),
+      new THREE.Mesh(GEO.thigh, shortsMat),
+      new THREE.Mesh(GEO.thigh, shortsMat),
+      // Socks take the shirt colour, as they do on nearly every kit.
+      new THREE.Mesh(GEO.shin, shirtMat),
+      new THREE.Mesh(GEO.shin, shirtMat),
+      new THREE.Mesh(GEO.shadow, shadowMat),
     ];
     for (const part of parts) p.add(part);
     group.add(p);
@@ -159,7 +237,7 @@ const buildTeam = (count: number, kit: string, skin: string): THREE.Group => {
   return group;
 };
 
-/** Pose a single figure's parts for a given position, heading and gait phase. */
+/** Pose one figure for a position, heading and gait phase. */
 const poseFigure = (
   figure: THREE.Object3D,
   x: number,
@@ -167,57 +245,67 @@ const poseFigure = (
   heading: number,
   gait: number,
   speed: number,
-  scale: number,
 ) => {
-  const [torso, head, armL, armR, thighL, shinL, thighR, shinR, shadow] =
-    figure.children as THREE.Mesh[];
-  if (!torso || !head || !armL || !armR || !thighL || !shinL || !thighR || !shinR || !shadow) return;
+  const c = figure.children as THREE.Mesh[];
+  const limbs: Limbs = {
+    torso: c[0]!, head: c[1]!, armL: c[2]!, armR: c[3]!,
+    thighL: c[4]!, thighR: c[5]!, shinL: c[6]!, shinR: c[7]!, shadow: c[8]!,
+  };
+  if (!limbs.shadow) return;
 
   figure.position.set(x, 0, z);
   figure.rotation.y = heading;
 
-  // Stride amplitude scales with speed — a jogging player barely swings.
-  const amp = Math.min(1, speed * 0.55);
-  const swing = Math.sin(gait) * amp;
-  const swing2 = Math.sin(gait + Math.PI) * amp;
-  // The body rises and falls once per stride.
-  const bob = Math.abs(Math.cos(gait)) * 0.03 * amp;
+  const amp = Math.min(1, speed * 0.6);
+  const bob = Math.abs(Math.cos(gait)) * 0.014 * amp;
+  const hipY = SEG.hip + bob;
+  // A running figure leans into the run.
+  const lean = amp * 0.14;
 
-  const S = scale;
-  torso.position.set(0, (0.42 + bob) * S, 0);
-  torso.scale.set(0.17 * S, 0.3 * S, 0.1 * S);
+  const shoulderY = hipY + SEG.torso;
+  scratchA.set(0, hipY, 0);
+  scratchB.set(0, shoulderY, lean * 0.06);
+  spanLimb(limbs.torso, scratchA, scratchB);
 
-  head.position.set(0, (0.63 + bob) * S, 0);
-  head.scale.set(0.12 * S, 0.13 * S, 0.12 * S);
+  limbs.head.position.set(0, shoulderY + 0.028, lean * 0.07);
 
-  armL.position.set(-0.13 * S, (0.44 + bob) * S, swing2 * 0.1 * S);
-  armL.scale.set(0.06 * S, 0.24 * S, 0.06 * S);
-  armL.rotation.x = swing2 * 0.7;
+  // Legs: hip → knee → foot, with a real knee bend that trails the thigh.
+  for (const side of [-1, 1] as const) {
+    const phase = side < 0 ? gait : gait + Math.PI;
+    const thighAngle = Math.sin(phase) * 0.85 * amp;
+    // The knee only bends one way, and bends most as the leg swings through.
+    const kneeBend = Math.max(0, -Math.cos(phase)) * 1.15 * amp + 0.12;
 
-  armR.position.set(0.13 * S, (0.44 + bob) * S, swing * 0.1 * S);
-  armR.scale.set(0.06 * S, 0.24 * S, 0.06 * S);
-  armR.rotation.x = swing * 0.7;
+    const hipX = side * 0.019;
+    const hip = scratchA.set(hipX, hipY, 0);
+    const knee = new THREE.Vector3(
+      hipX,
+      hipY - Math.cos(thighAngle) * SEG.thigh,
+      Math.sin(thighAngle) * SEG.thigh,
+    );
+    const shinAngle = thighAngle - kneeBend;
+    const foot = new THREE.Vector3(
+      hipX,
+      knee.y - Math.cos(shinAngle) * SEG.shin,
+      knee.z + Math.sin(shinAngle) * SEG.shin,
+    );
 
-  thighL.position.set(-0.07 * S, (0.22 + bob) * S, swing * 0.09 * S);
-  thighL.scale.set(0.08 * S, 0.2 * S, 0.08 * S);
-  thighL.rotation.x = swing * 0.8;
+    spanLimb(side < 0 ? limbs.thighL : limbs.thighR, hip, knee);
+    spanLimb(side < 0 ? limbs.shinL : limbs.shinR, knee, foot);
 
-  shinL.position.set(-0.07 * S, (0.07 + bob) * S, swing * 0.16 * S);
-  shinL.scale.set(0.065 * S, 0.16 * S, 0.065 * S);
-  shinL.rotation.x = swing * 0.4;
+    // Arms counter-swing against the legs on the same side.
+    const armAngle = -Math.sin(phase) * 0.8 * amp;
+    const shoulder = new THREE.Vector3(side * 0.036, shoulderY - 0.012, 0);
+    const hand = new THREE.Vector3(
+      side * 0.044,
+      shoulder.y - Math.cos(armAngle) * SEG.arm,
+      Math.sin(armAngle) * SEG.arm,
+    );
+    spanLimb(side < 0 ? limbs.armL : limbs.armR, shoulder, hand);
+  }
 
-  thighR.position.set(0.07 * S, (0.22 + bob) * S, swing2 * 0.09 * S);
-  thighR.scale.set(0.08 * S, 0.2 * S, 0.08 * S);
-  thighR.rotation.x = swing2 * 0.8;
-
-  shinR.position.set(0.07 * S, (0.07 + bob) * S, swing2 * 0.16 * S);
-  shinR.scale.set(0.065 * S, 0.16 * S, 0.065 * S);
-  shinR.rotation.x = swing2 * 0.4;
-
-  // Contact shadow, so nobody floats.
-  shadow.position.set(0, 0.008, 0);
-  shadow.scale.set(0.26 * S, 0.001, 0.18 * S);
-  shadow.rotation.set(0, 0, 0);
+  limbs.shadow.position.set(0, 0.006, 0);
+  limbs.shadow.rotation.set(-Math.PI / 2, 0, 0);
 };
 
 export const PitchAction: React.FC<{
@@ -235,8 +323,10 @@ export const PitchAction: React.FC<{
   homeKit?: string;
   awayKit?: string;
 }> = ({t, seconds, reveal, homeKit = '#3E86C4', awayKit = '#F4EFE6'}) => {
-  const home = useMemo(() => buildTeam(11, homeKit, '#C99A72'), [homeKit]);
-  const away = useMemo(() => buildTeam(11, awayKit, '#E7C9A8'), [awayKit]);
+  // Uruguay: sky-blue shirt, black shorts. Argentina: white shirt, black
+  // shorts. Both real, and both readable against green from the air.
+  const home = useMemo(() => buildTeam(11, homeKit, '#14203A', '#C99A72'), [homeKit]);
+  const away = useMemo(() => buildTeam(11, awayKit, '#1A1A22', '#E7C9A8'), [awayKit]);
 
   const ball = ballAt(t);
 
@@ -255,7 +345,7 @@ export const PitchAction: React.FC<{
         // Gait phase advances with distance covered, not with wall-clock —
         // that is why a stationary player's legs stop instead of treadmilling.
         const gait = seconds * (2.2 + p.speed * 1.6) + i * 1.3;
-        poseFigure(figure, p.x, p.z, heading, gait, p.speed, 0.34);
+        poseFigure(figure, p.x, p.z, heading, gait, p.speed);
         figure.visible = reveal > 0.02;
       });
     }

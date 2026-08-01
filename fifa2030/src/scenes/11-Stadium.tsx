@@ -17,6 +17,10 @@ import {Stadium} from '../three/Stadium';
 import {PitchAction, PitchFurniture} from '../three/PitchAction';
 import {STREET_SCENES, StreetFootball} from '../components/StreetFootball';
 import {LensFlare} from '../components/CameraRealism';
+import {buildBarrage, Fireworks} from '../components/Fireworks';
+import {TrophyLift} from '../three/Trophy';
+import {Scoreboard} from '../components/Scoreboard';
+import type {TimelineEntry} from '../config/timeline';
 import {useScoreAmplitude} from '../audio';
 
 /**
@@ -32,22 +36,69 @@ import {useScoreAmplitude} from '../audio';
  * this is the game.
  *
  *   frames   0– 20  bowl fades up, wide aerial
- *   frames  10–300  the descent, one move
+ *   frames  10–230  the descent, one move
  *   frames  60/120/180  flash inserts on beats 4, 8, 12
- *   frames 240–300  eye height on the halfway line, slow drift
- *   frames 300–360  crowd swell, hand off to the lockup
+ *   frame     232   THE GOAL — Uruguay score, the bowl erupts
+ *   frames 244–286  FULL TIME: Uruguay 2–1 Argentina
+ *   frames 286–360  the trophy is lifted, and the sky goes up with it
  */
 
 const BEAT = 15;
 const FLASH_FRAMES = [BEAT * 4, BEAT * 8, BEAT * 12];
 const FLASH_LENGTH = 11;
 
+/** The goal lands here; everything after it is celebration. */
+const GOAL = 232;
+const FULLTIME = 244;
+const LIFT = 286;
+
+/**
+ * The 2030 opening match, invented for the film: Uruguay beat Argentina at the
+ * Estadio Centenario, a hundred years after they beat them there in the first
+ * final. Shaped as a TimelineEntry so it renders through the same broadcast
+ * Scoreboard the century used — the film's last result is presented exactly
+ * like its first.
+ */
+const OPENING_MATCH: TimelineEntry = {
+  year: 2030,
+  host: 'Uruguay',
+  winner: 'Uruguay',
+  final: {
+    runnerUp: 'Argentina',
+    score: '2-1',
+    venue: 'Estadio Centenario, Montevideo',
+  },
+};
+
+/** Two waves of shells: one on the goal, a bigger barrage on the lift. */
+const GOAL_SHELLS = buildBarrage({
+  start: GOAL + 4,
+  count: 5,
+  stagger: 7,
+  seed: 'goal',
+  yRange: [0.1, 0.3],
+  scale: 0.9,
+});
+const LIFT_SHELLS = buildBarrage({
+  start: LIFT - 6,
+  count: 16,
+  stagger: 4.2,
+  seed: 'lift',
+  yRange: [0.06, 0.4],
+  scale: 1.25,
+  colors: ['#D4A73C', '#F2D998', '#F4EFE6', '#5FA8E8', '#8FC7F0'],
+});
+
 /**
  * The descent, as an unbroken camera path. Written as one easing over the
  * whole move rather than as segments — the brief calls for a single
  * uninterrupted descent, and any keyframe seam would show as a hitch.
  */
-const CameraRig: React.FC<{progress: number; drift: number}> = ({progress, drift}) => {
+const CameraRig: React.FC<{progress: number; drift: number; celebrate: number}> = ({
+  progress,
+  drift,
+  celebrate,
+}) => {
   const camera = useThree((s) => s.camera);
 
   useLayoutEffect(() => {
@@ -60,11 +111,24 @@ const CameraRig: React.FC<{progress: number; drift: number}> = ({progress, drift
     // settles back onto it — a straight plumb drop reads as a lift, not a shot.
     const x = Math.sin(progress * Math.PI) * 2.6 + drift * 0.35;
 
-    camera.position.set(x, y, z);
-    // The look-at target rises from the centre spot to standing eye height.
-    camera.lookAt(0, interpolate(progress, [0, 1], [0, 0.75]), 0);
+    /**
+     * Once the trophy is up, the camera closes in on it. The celebration
+     * happens at player scale — roughly a quarter-metre tall in world units —
+     * so from the touchline it would be a speck. A broadcast would push in
+     * here too; nobody covers a trophy lift in a wide.
+     */
+    const cx = x + (0.28 - x) * celebrate;
+    const cy = y + (0.34 - y) * celebrate;
+    const cz = z + (1.55 - z) * celebrate;
+
+    camera.position.set(cx, cy, cz);
+    camera.lookAt(
+      0,
+      interpolate(progress, [0, 1], [0, 0.75]) * (1 - celebrate) + 0.26 * celebrate,
+      0.4 * celebrate,
+    );
     camera.updateProjectionMatrix();
-  }, [camera, progress, drift]);
+  }, [camera, progress, drift, celebrate]);
 
   return null;
 };
@@ -78,7 +142,7 @@ export const StadiumScene: React.FC = () => {
   // crowd rises with the score's actual amplitude, not an approximation of it.
   const amplitude = useScoreAmplitude(2160 + frame);
 
-  const descent = interpolate(frame, [10, 300], [0, 1], {
+  const descent = interpolate(frame, [10, 230], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.bezier(0.42, 0, 0.28, 1),
@@ -106,16 +170,15 @@ export const StadiumScene: React.FC = () => {
     }),
   })).find((x) => x.on);
 
-  // The fourth street scene plays out under the final swell rather than as a
-  // flash — the film settles on ordinary football before the lockup.
-  const codaStrength = interpolate(frame, [306, 318, 340, 352], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-
-  const streetIndex = active ? active.i : 3;
+  /**
+   * The street inserts are now the three beat-flashes only. The fourth used to
+   * play as a coda under the final swell, but the swell is the trophy lift —
+   * cutting away from a trophy being raised to a dust pitch throws the ending
+   * away, and its caption collided with the champions line besides.
+   */
+  const streetIndex = active ? active.i : 0;
   const street = STREET_SCENES[streetIndex] ?? STREET_SCENES[0]!;
-  const streetStrength = active ? active.strength : codaStrength;
+  const streetStrength = active ? active.strength : 0;
 
   return (
     <AbsoluteFill style={{backgroundColor: palette.ink}}>
@@ -134,18 +197,32 @@ export const StadiumScene: React.FC = () => {
         style={{position: 'absolute', inset: 0}}
       >
         <ambientLight intensity={1} />
-        <CameraRig progress={descent} drift={drift} />
+        <CameraRig
+          progress={descent}
+          drift={drift}
+          celebrate={interpolate(frame, [LIFT - 14, LIFT + 26], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.4, 0, 0.2, 1),
+          })}
+        />
         <Stadium
           wavePhase={wavePhase}
           intensity={waveIntensity}
           reveal={reveal}
           crowdCount={pick({landscape: 26000, portrait: 18000, square: 21000})}
         />
+        {/* Key light for the lit figures. The bowl, crowd and pitch all use
+            unlit materials, so this only touches the players and the trophy —
+            no regression to anything that already looked right. */}
+        <directionalLight position={[4, 9, 5]} intensity={1.15} />
+        <directionalLight position={[-6, 4, -3]} intensity={0.42} color="#9FC4E8" />
+
         {/* A real passage of play: build-up, switch, overlap, cross, finish —
-            timed so the goal lands on the final swell. */}
+            timed so the goal lands on the beat. */}
         <PitchFurniture reveal={reveal} />
         <PitchAction
-          t={interpolate(frame, [12, 330], [0, 1], {
+          t={interpolate(frame, [12, GOAL], [0, 1], {
             extrapolateLeft: 'clamp',
             extrapolateRight: 'clamp',
           })}
@@ -158,6 +235,20 @@ export const StadiumScene: React.FC = () => {
           homeKit={nationById('uruguay').colors.panel}
           awayKit="#F4EFE6"
         />
+
+        {/* The lift. Placed on the halfway line so the descent lands on it. */}
+        {frame >= LIFT - 20 ? (
+          <group position={[0, 0, 0.4]}>
+            <TrophyLift
+              t={interpolate(frame, [LIFT, LIFT + 54], [0, 1], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+              })}
+              seconds={frame / fps}
+              kit={nationById('uruguay').colors.panel}
+            />
+          </group>
+        ) : null}
       </ThreeCanvas>
 
       {/* Broadcast fixture bug — the two flags, up front, in colour. This is
@@ -288,12 +379,13 @@ export const StadiumScene: React.FC = () => {
         </AbsoluteFill>
       ) : null}
 
-      {/* The line that makes the argument explicit, under the final swell. */}
+      {/* The line that makes the argument explicit — moved ahead of the goal
+          so the finale is uninterrupted once it starts. */}
       <AbsoluteFill
         style={{
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: interpolate(frame, [258, 274, 300, 312], [0, 1, 1, 0], {
+          opacity: interpolate(frame, [186, 200, 218, 230], [0, 1, 1, 0], {
             extrapolateLeft: 'clamp',
             extrapolateRight: 'clamp',
           }),
@@ -314,6 +406,98 @@ export const StadiumScene: React.FC = () => {
           Everyone&rsquo;s Game
         </span>
       </AbsoluteFill>
+
+      {/* THE GOAL — a hard white flash on the frame the ball crosses the line,
+          which is how a goal actually registers on a broadcast cut. */}
+      <AbsoluteFill
+        style={{
+          backgroundColor: palette.bone,
+          opacity: interpolate(frame, [GOAL, GOAL + 2, GOAL + 12], [0, 0.5, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          mixBlendMode: 'screen',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* FULL TIME, on the same broadcast board the century used. */}
+      <AbsoluteFill
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: `${u(6)}px`,
+          opacity: interpolate(frame, [FULLTIME, FULLTIME + 12, LIFT - 8, LIFT + 4], [0, 1, 1, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: u(1.4)}}>
+          <span
+            style={{
+              fontFamily: fontStacks.body,
+              fontSize: t(typeScale.micro),
+              fontWeight: 700,
+              letterSpacing: letterspacing.ultra,
+              textTransform: 'uppercase',
+              color: palette.goldTrophy,
+            }}
+          >
+            Full Time
+          </span>
+          <Scoreboard entry={OPENING_MATCH} delay={FULLTIME} />
+        </div>
+      </AbsoluteFill>
+
+      {/* The sky goes up with the trophy. */}
+      <Fireworks shells={GOAL_SHELLS} frame={frame} opacity={0.9} />
+      <Fireworks shells={LIFT_SHELLS} frame={frame} />
+
+      {/* Champions line, under the lift. */}
+      <AbsoluteFill
+        style={{
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          padding: `${u(7)}px`,
+          opacity: interpolate(frame, [LIFT + 22, LIFT + 36, 348, 360], [0, 1, 1, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: u(0.8)}}>
+          <span
+            style={{
+              fontFamily: fontStacks.display,
+              fontSize: t(typeScale.title),
+              textTransform: 'uppercase',
+              letterSpacing: letterspacing.tight,
+              color: palette.goldTrophy,
+              textShadow: `0 ${u(0.3)}px ${u(2.4)}px rgba(212,167,60,0.45)`,
+            }}
+          >
+            Uruguay
+          </span>
+          <span
+            style={{
+              fontFamily: fontStacks.body,
+              fontSize: t(typeScale.caption),
+              fontWeight: 600,
+              letterSpacing: letterspacing.ultra,
+              textTransform: 'uppercase',
+              color: palette.bone,
+              opacity: 0.85,
+              textAlign: 'center',
+            }}
+          >
+            Where it began · Where it returns
+          </span>
+        </div>
+      </AbsoluteFill>
+
     </AbsoluteFill>
   );
 };
