@@ -1,4 +1,5 @@
-import {AbsoluteFill, Series} from 'remotion';
+import {AbsoluteFill, Audio, Series} from 'remotion';
+import {SCORE_SRC} from './audio';
 import {loadFonts} from './fonts';
 import {FilmGrade, GrainOverlay} from './components/GrainOverlay';
 import {nations} from './config/nations';
@@ -6,6 +7,7 @@ import {palette} from './config/theme';
 import {Timeline100} from './scenes/03-Timeline100';
 import {GlobeScene} from './scenes/04-Globe';
 import {NationModule} from './scenes/05-NationModule';
+import {StadiumScene} from './scenes/11-Stadium';
 import {UnityLockup} from './scenes/12-UnityLockup';
 
 loadFonts();
@@ -45,6 +47,9 @@ const Slate: React.FC<{label: string}> = ({label}) => (
 export const FIFA2030Intro: React.FC = () => {
   return (
     <AbsoluteFill style={{backgroundColor: palette.ink}}>
+      {/* The temp score. See src/audio.ts for the licensed-score swap. */}
+      <Audio src={SCORE_SRC} />
+
       <Series>
         {/* ORIGIN ─────────────────────────────────────────────────────── */}
         <Series.Sequence durationInFrames={180} name="01 · First Touch">
@@ -76,7 +81,7 @@ export const FIFA2030Intro: React.FC = () => {
 
         {/* UNITY ──────────────────────────────────────────────────────── */}
         <Series.Sequence durationInFrames={360} name="11 · The Stadium">
-          <Slate label="SHOT 11 — THE STADIUM" />
+          <StadiumScene />
         </Series.Sequence>
 
         <Series.Sequence durationInFrames={180} name="12 · Unity Lockup">
