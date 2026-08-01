@@ -37,8 +37,8 @@ export const CrowdWave: React.FC<CrowdProps> = ({
   wavePhase,
   intensity,
   count = 26000,
-  innerRadius = 5.4,
-  outerRadius = 9.6,
+  innerRadius = 6.3,
+  outerRadius = 10.2,
   bowlHeight = 4.4,
   reveal,
 }) => {
@@ -68,7 +68,10 @@ export const CrowdWave: React.FC<CrowdProps> = ({
       // bunching everyone against the inner rail.
       const tier = Math.sqrt(hash(i * 7.7));
       const radius = innerRadius + tier * (outerRadius - innerRadius);
-      const y = tier * bowlHeight;
+      // Stands start ABOVE pitch level, as real ones do. Without this the
+      // front row sits at the camera's eye height on the touchline and
+      // individual spectators fill the frame as house-sized blocks.
+      const y = 0.55 + tier * bowlHeight;
 
       out[i * 3] = Math.cos(angle) * radius;
       out[i * 3 + 1] = y;

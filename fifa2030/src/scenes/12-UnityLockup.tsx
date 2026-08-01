@@ -19,6 +19,8 @@ import {
   panelPath,
   type Panel,
 } from '../lib/ball';
+import {flags} from '../config/flags';
+import {FlagField} from '../components/Flag';
 import {GoldParticles} from '../components/GoldParticles';
 import {TypeLine} from '../components/TypeLockup';
 
@@ -182,6 +184,52 @@ export const UnityLockup: React.FC = () => {
             isPortrait ? 36 : 42
           }%, ${palette.pitchDeep} 0%, ${palette.ink} 62%)`,
           opacity: interpolate(frame, [0, 40], [0, 1], {extrapolateRight: 'clamp'}),
+        }}
+      />
+
+      {/*
+        THE WORLD, BEHIND THE BALL.
+
+        Every flag rises behind the lockup as the type resolves. The motto is
+        "Football Unites the World" — that has to be shown, not just set in
+        type, and this is the frame that shows it.
+      */}
+      <AbsoluteFill
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: interpolate(frame, [86, 116, 168, 180], [0, 0.85, 0.85, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
+          transform: `scale(${1 + frame * 0.0004})`,
+        }}
+      >
+        <FlagField
+          specs={flags}
+          t={frame / fps}
+          reveal={interpolate(frame, [86, 150], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          })}
+          columns={pick({landscape: 10, portrait: 6, square: 8})}
+          size={pick({landscape: u(9.5), portrait: u(13), square: u(11)})}
+          gap={u(1.5)}
+        />
+      </AbsoluteFill>
+
+      {/* Scrim so the ball and the lockup stay clear of the flag wall. */}
+      <AbsoluteFill
+        style={{
+          // Tight to the lockup only. A full-frame scrim buries the flag wall
+          // entirely, which defeats the point of putting it there.
+          background: `radial-gradient(ellipse ${
+            isPortrait ? 64 : 38
+          }% 54% at 50% ${isPortrait ? 42 : 48}%, ${palette.ink}f7 0%, ${palette.ink}e0 52%, transparent 100%)`,
+          opacity: interpolate(frame, [86, 112], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          }),
         }}
       />
 

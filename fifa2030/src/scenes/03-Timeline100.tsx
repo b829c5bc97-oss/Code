@@ -1,7 +1,6 @@
 import {useMemo} from 'react';
 import {
   AbsoluteFill,
-  Easing,
   interpolate,
   spring,
   useCurrentFrame,
@@ -11,6 +10,8 @@ import {useLayout} from '../config/layout';
 import {players} from '../config/players';
 import {fontStacks, letterspacing, palette, springs, typeScale} from '../config/theme';
 import {CENTENARY, worldCups, type TimelineEntry} from '../config/timeline';
+import {flagByCode, WINNER_FLAG} from '../config/flags';
+import {Flag} from '../components/Flag';
 import {PlayerSilhouette} from '../components/PlayerSilhouette';
 import {GoldParticles, Shockwave} from '../components/GoldParticles';
 import {TypeLine} from '../components/TypeLockup';
@@ -47,63 +48,81 @@ const END = 420;
 /**
  * Rail travel in card-strides, as a function of frame.
  *
- * Built by integrating a speed curve rather than interpolating position
- * directly: that guarantees the rail is always moving forward and that each
- * hero hold decelerates into and accelerates out of its freeze-frame.
+ * This is CONSTRUCTED from a schedule rather than integrated from a speed
+ * curve. Integrating a speed felt more physical but made the timing emergent,
+ * and the emergent answer was wrong: the rail ate the whole century in about
+ * forty frames and then sat on empty track until the slam. Building the
+ * keyframes explicitly means every hero hold is guaranteed to land on its card
+ * and the last edition is guaranteed to arrive exactly at the ramp.
  */
-const buildRailCurve = (heroIndices: number[]) => {
-  const HOLD_FRAMES = 45; // 1.5s
-  const samples: number[] = [];
-  let travelled = 0;
-  let heroCursor = 0;
+const buildRailCurve = (heroIndices: number[], cardCount: number) => {
+  const HOLD = 30; // frames parked on a hero card
+  const START = 12;
+  /** Index the rail has reached when the speed ramp begins. */
+  const lastCruise = Math.max(...heroIndices);
 
-  for (let f = 0; f <= END; f++) {
-    samples.push(travelled);
+  const holdsBeforeRamp = heroIndices.length;
+  const travelFrames = RAMP_START - START - holdsBeforeRamp * HOLD;
+  const perStride = travelFrames / Math.max(1, lastCruise);
 
-    if (f < 12) continue;
+  // Keyframes of (frame, position-in-strides).
+  const keys: {f: number; p: number}[] = [{f: 0, p: 0}];
+  let f = START;
+  let p = 0;
+  keys.push({f, p});
 
-    // Base speed accelerates gently through the century, then ramps hard.
-    const base = interpolate(f, [12, RAMP_START, SLAM], [0.55, 0.92, 3.6], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-      easing: Easing.bezier(0.7, 0, 0.9, 1),
-    });
-
-    // Slow to a crawl while a hero card is centred.
-    let speed = base;
-    const nextHero = heroIndices[heroCursor];
-    if (nextHero !== undefined && f < RAMP_START) {
-      const distance = nextHero - travelled;
-      if (distance < 1.1 && distance > -1.1) {
-        speed = base * 0.1;
-      }
-      if (distance <= -0.35) {
-        heroCursor++;
-      }
-      // Hold longer than the crawl alone would give.
-      if (Math.abs(distance) < 0.14) {
-        speed = base * 0.02 * (1 + HOLD_FRAMES / 45);
-      }
+  for (let idx = 0; idx <= lastCruise; idx++) {
+    if (idx > 0) {
+      f += perStride;
+      p = idx;
+      keys.push({f, p});
     }
+    if (heroIndices.includes(idx)) {
+      // Park. Two keys at the same position is what makes it a hold.
+      f += HOLD;
+      keys.push({f, p});
+    }
+  }
 
-    if (f >= SLAM) speed = 0;
-    travelled += speed;
+  // The ramp: everything left flies past, then the rail stops dead on 2030.
+  keys.push({f: SLAM, p: cardCount});
+
+  // Sample per frame, easing across each segment so the rail decelerates into
+  // a hold and accelerates out of it instead of stepping.
+  const samples: number[] = [];
+  let k = 0;
+  for (let frame = 0; frame <= END; frame++) {
+    while (k < keys.length - 2 && frame > keys[k + 1]!.f) k++;
+    const a = keys[k]!;
+    const b = keys[k + 1]!;
+    const span = b.f - a.f;
+    const local = span <= 0 ? 1 : Math.max(0, Math.min(1, (frame - a.f) / span));
+    // Smoothstep: zero velocity at both ends of every segment.
+    const e = local * local * (3 - 2 * local);
+    samples.push(a.p + (b.p - a.p) * e);
   }
   return samples;
 };
 
 const YearCard: React.FC<{
   entry: TimelineEntry;
-  /** Distance from the rail's focus, in card-strides. */
+  /** The card's own position along the rail, in strides. */
   offset: number;
+  /**
+   * Signed distance from the rail's focus, in strides. This is what drives
+   * fade and highlight — using the raw index instead meant every card past
+   * the fifth was permanently dimmed no matter where it sat on screen.
+   */
+  distance: number;
   row: number;
   blur: number;
   /** Row depth: the back row travels a shorter distance for the same time. */
   parallax: number;
-}> = ({entry, offset, row, blur, parallax}) => {
+}> = ({entry, offset, distance, row, blur, parallax}) => {
   const {u, t} = useLayout();
-  const focused = Math.abs(offset) < 0.5 && Boolean(entry.hero);
-  const proximity = Math.max(0, 1 - Math.abs(offset) / 5);
+  const focused = Math.abs(distance) < 0.5 && Boolean(entry.hero);
+  const winnerFlag = entry.winner ? flagByCode(WINNER_FLAG[entry.winner] ?? '') : undefined;
+  const proximity = Math.max(0, 1 - Math.abs(distance) / 4.2);
 
   return (
     <div
@@ -115,7 +134,7 @@ const YearCard: React.FC<{
         flexDirection: 'column',
         gap: u(0.7),
         // The two rows sit at different depths and therefore different scales.
-        opacity: (entry.cancelled ? 0.45 : 1) * (0.25 + proximity * 0.75),
+        opacity: (entry.cancelled ? 0.5 : 1) * (0.12 + proximity * 0.88),
         filter: blur > 0.15 ? `blur(${blur * u(1.1)}px)` : undefined,
         alignItems: 'flex-start',
         paddingTop: row === 0 ? 0 : u(1.4),
@@ -170,8 +189,24 @@ const YearCard: React.FC<{
           }}
         >
           {entry.host}
-          <br />
-          <span style={{opacity: 0.7}}>{entry.winner ? `★ ${entry.winner}` : '★ —'}</span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: u(0.7),
+              marginTop: u(0.35),
+              opacity: 0.85,
+            }}
+          >
+            {/* The winner's flag. A century of the tournament is a century of
+                these, which is the whole argument of the film. */}
+            {winnerFlag ? (
+              <div style={{width: u(2.6), height: u(1.73), flexShrink: 0}}>
+                <Flag spec={winnerFlag} bordered={false} />
+              </div>
+            ) : null}
+            <span>{entry.winner ?? '—'}</span>
+          </div>
         </div>
       )}
     </div>
@@ -251,20 +286,23 @@ export const Timeline100: React.FC = () => {
     () => worldCups.map((c, i) => (c.hero ? i : -1)).filter((i) => i >= 0),
     [],
   );
-  const rail = useMemo(() => buildRailCurve(heroIndices), [heroIndices]);
+  const rail = useMemo(
+    () => buildRailCurve(heroIndices, worldCups.length),
+    [heroIndices],
+  );
   const travelled = rail[Math.min(frame, END)] ?? 0;
 
   // Motion blur follows velocity, not position.
   const velocity = (rail[Math.min(frame + 1, END)] ?? 0) - travelled;
-  const blur = Math.max(0, (velocity - 0.9) * 1.5);
+  const blur = Math.max(0, (velocity - 0.32) * 5.5);
 
   // Which hero card, if any, is currently centred.
   const heroState = useMemo(() => {
     let best: {entry: TimelineEntry; strength: number} | null = null;
     for (const i of heroIndices) {
       const d = Math.abs(i - travelled);
-      if (d < 0.85) {
-        const strength = interpolate(d, [0.35, 0.85], [1, 0], {
+      if (d < 0.5) {
+        const strength = interpolate(d, [0.16, 0.5], [1, 0], {
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
         });
@@ -337,6 +375,7 @@ export const Timeline100: React.FC = () => {
                     key={entry.year}
                     entry={entry}
                     offset={index}
+                    distance={index - travelled}
                     row={row}
                     blur={blur}
                     parallax={ROW_PARALLAX[row]!}

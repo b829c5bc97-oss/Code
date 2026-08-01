@@ -10,7 +10,8 @@ import {
 } from 'remotion';
 import {useLayout} from '../config/layout';
 import {fontStacks, letterspacing, palette, typeScale} from '../config/theme';
-import {PitchPlayers, Stadium} from '../three/Stadium';
+import {Stadium} from '../three/Stadium';
+import {PitchAction, PitchFurniture} from '../three/PitchAction';
 import {STREET_SCENES, StreetFootball} from '../components/StreetFootball';
 import {useScoreAmplitude} from '../audio';
 
@@ -46,8 +47,11 @@ const CameraRig: React.FC<{progress: number; drift: number}> = ({progress, drift
   const camera = useThree((s) => s.camera);
 
   useLayoutEffect(() => {
-    const y = interpolate(progress, [0, 1], [15.5, 0.62]);
-    const z = interpolate(progress, [0, 1], [13.5, 6.15]);
+    const y = interpolate(progress, [0, 1], [15.5, 0.78]);
+    // Lands just outside the touchline (z = 3.2) and well inside the crowd's
+    // inner radius, so the stands rise beyond the pitch instead of engulfing
+    // the lens.
+    const z = interpolate(progress, [0, 1], [13.5, 4.5]);
     // The camera arcs slightly off the halfway line on the way down, then
     // settles back onto it — a straight plumb drop reads as a lift, not a shot.
     const x = Math.sin(progress * Math.PI) * 2.6 + drift * 0.35;
@@ -133,7 +137,17 @@ export const StadiumScene: React.FC = () => {
           reveal={reveal}
           crowdCount={pick({landscape: 26000, portrait: 18000, square: 21000})}
         />
-        <PitchPlayers t={frame / fps} reveal={reveal} />
+        {/* A real passage of play: build-up, switch, overlap, cross, finish —
+            timed so the goal lands on the final swell. */}
+        <PitchFurniture reveal={reveal} />
+        <PitchAction
+          t={interpolate(frame, [12, 330], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          })}
+          seconds={frame / fps}
+          reveal={reveal}
+        />
       </ThreeCanvas>
 
       {/* Roof-ring glow bloom, cheaper and more controllable than a postprocess
