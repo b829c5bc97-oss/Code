@@ -1,0 +1,87 @@
+# AIOS configuration.
+#
+# Copy to `aios.toml` in your workspace (or any parent directory) and edit.
+# Precedence, lowest to highest:
+#     defaults  <  this file  <  AIOS_* environment  <  CLI flags
+#
+# Environment names map onto sections: AIOS_EXECUTION_MAX_PARALLEL=8,
+# AIOS_SECURITY_MODE=strict, AIOS_BUDGET_MAX_USD=5.
+
+log_level = "INFO"
+
+# Directories scanned for plugins (modules exposing tools/providers/policy_rules).
+plugin_paths = []
+
+
+[workspace]
+# The sandbox jail. No builtin tool may write outside it without an explicit
+# `fs.outside_workspace` grant.
+root = "."
+state_dirname = ".aios"   # ledgers, blobs, memory, trash
+keep_runs = 200
+
+
+[model]
+# "auto" uses Anthropic when ANTHROPIC_API_KEY is set and falls back to the
+# offline provider otherwise, so the OS always starts.
+provider = "auto"          # auto | anthropic | offline
+model = "claude-sonnet-5"
+fast_model = "claude-haiku-4-5-20251001"
+temperature = 0.2
+max_tokens = 8192
+timeout_seconds = 120
+max_retries = 3
+cache_enabled = true       # dedupe identical requests within a run
+
+
+[execution]
+max_parallel = 4           # concurrent steps
+step_timeout_seconds = 900
+max_attempts = 3           # per step, before recovery escalates
+backoff_base_seconds = 1.0
+backoff_max_seconds = 60.0
+backoff_jitter = 0.25      # so parallel steps don't retry in lockstep
+replan_limit = 2           # rounds of replanning after failures
+verify = true              # DO NOT disable: this is what makes success mean something
+continue_on_optional_failure = true
+
+
+[security]
+# strict     every side effect needs approval
+# standard   workspace writes are free, outward-facing actions are gated
+# permissive network + writes free, only destructive/irreversible gated
+mode = "standard"
+
+approval_mode = "prompt"   # prompt | auto | deny
+                           # "prompt" with no TTY resolves to deny, never to yes
+
+allow_network = true
+allowed_hosts = []         # empty = any public host; entries also bypass the SSRF guard
+blocked_hosts = ["169.254.169.254"]   # cloud instance metadata
+
+allow_shell = true
+shell_denylist = ["mkfs", "shutdown", "reboot", "halt", "poweroff", "init", "dd", "fdisk"]
+
+# Only these variables reach subprocesses; everything credential-shaped is stripped.
+subprocess_env_allowlist = ["PATH", "HOME", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR"]
+
+max_output_bytes = 2000000
+
+
+[budget]
+# Hard ceilings, checked before each consuming action. A warning fires at 80%.
+wall_clock_seconds = 3600
+max_steps = 200
+max_tool_calls = 500
+max_model_calls = 200
+max_tokens = 2000000
+max_usd = 25.0
+
+
+[memory]
+enabled = true
+db_filename = "memory.db"
+max_recall = 12
+# Leave false. Credentials are refused on write rather than masked, so a leak
+# cannot survive as a remembered "fact".
+persist_secrets = false
