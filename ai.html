@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your AI</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b; --border:#2a2f3a;
+    --text:#e8eaf0; --muted:#9aa3b2; --accent:#6c8dff; --accent-2:#4fd1c5;
+    --danger:#ef5a6f; --user-bubble:#232a3a; --assistant-bubble:#1b2230;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); display:flex; flex-direction:column;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--border); background:var(--panel);
+  }
+  header h1{font-size:16px; margin:0; font-weight:600; display:flex; align-items:center; gap:8px}
+  header h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent-2)}
+  .header-actions{display:flex; gap:8px; align-items:center}
+  button{
+    font:inherit; cursor:pointer; border:1px solid var(--border); background:var(--panel-2);
+    color:var(--text); border-radius:8px; padding:7px 12px; transition:.15s;
+  }
+  button:hover{border-color:var(--accent)}
+  button.icon{padding:7px 9px}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#0a0c10; font-weight:600}
+  button.primary:hover{opacity:.9}
+  button.danger{border-color:var(--danger); color:var(--danger); background:transparent}
+  select,input[type=text],input[type=password]{
+    font:inherit; background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:7px 10px;
+  }
+  main{flex:1; display:flex; overflow:hidden}
+  #chat-col{flex:1; display:flex; flex-direction:column; min-width:0}
+  #log{flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px}
+  .msg{max-width:78%; padding:10px 14px; border-radius:12px; line-height:1.5; font-size:14.5px; white-space:pre-wrap; word-wrap:break-word}
+  .msg.user{align-self:flex-end; background:var(--user-bubble); border-bottom-right-radius:2px}
+  .msg.assistant{align-self:flex-start; background:var(--assistant-bubble); border-bottom-left-radius:2px}
+  .msg code{background:#00000055; padding:1px 5px; border-radius:4px; font-size:13px}
+  .msg pre{background:#00000055; padding:10px; border-radius:8px; overflow-x:auto}
+  .msg pre code{background:none; padding:0}
+  .tool-chip{
+    align-self:flex-start; font-size:11.5px; color:var(--muted); background:var(--panel-2);
+    border:1px solid var(--border); border-radius:20px; padding:3px 10px;
+  }
+  .system-note{align-self:center; font-size:12.5px; color:var(--muted); font-style:italic}
+  #composer{display:flex; gap:8px; padding:14px 18px; border-top:1px solid var(--border); background:var(--panel)}
+  #composer textarea{
+    flex:1; resize:none; font:inherit; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:10px; padding:10px 12px; max-height:140px;
+  }
+  #side{
+    width:260px; border-left:1px solid var(--border); background:var(--panel); display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  #side.hidden{display:none}
+  #side h2{font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); padding:14px 14px 6px}
+  #items{flex:1; overflow-y:auto; padding:0 10px 10px}
+  .item{background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px}
+  .item .row{display:flex; align-items:flex-start; gap:6px}
+  .item .title{font-weight:600; flex:1}
+  .item .content{color:var(--muted); margin-top:3px; font-size:12.5px}
+  .item .meta{color:var(--muted); font-size:11px; margin-top:4px}
+  .item button{padding:2px 6px; font-size:11px}
+  .item.done .title{text-decoration:line-through; color:var(--muted)}
+  .empty-hint{color:var(--muted); font-size:12.5px; padding:8px 4px}
+  footer{padding:8px 18px; font-size:11px; color:var(--muted); border-top:1px solid var(--border); background:var(--panel); text-align:center}
+  dialog{background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:20px; max-width:420px}
+  dialog::backdrop{background:#000a}
+  .field{margin-bottom:12px; display:flex; flex-direction:column; gap:5px}
+  .field label{font-size:12.5px; color:var(--muted)}
+  .field input,.field select{width:100%}
+  .dialog-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:14px}
+  .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot"></span> Your AI</h1>
+  <div class="header-actions">
+    <button class="icon" id="toggle-side" title="Notes &amp; tasks">📋</button>
+    <button class="icon" id="open-settings" title="Settings">⚙️</button>
+  </div>
+</header>
+
+<main>
+  <div id="chat-col">
+    <div id="log"></div>
+    <div id="composer">
+      <textarea id="input" rows="1" placeholder="Ask a question, or tell it what to do..."></textarea>
+      <button class="primary" id="send-btn">Send</button>
+    </div>
+  </div>
+  <div id="side">
+    <h2>Notes &amp; Tasks</h2>
+    <div id="items"></div>
+  </div>
+</main>
+
+<footer>Your API key stays in this browser and is sent directly to Anthropic — no other server sees it.</footer>
+
+<dialog id="settings-dialog">
+  <h2 style="margin-top:0">Settings</h2>
+  <div class="field">
+    <label for="api-key">Anthropic API key</label>
+    <input type="password" id="api-key" placeholder="sk-ant-...">
+  </div>
+  <div class="field">
+    <label for="model-select">Model</label>
+    <select id="model-select">
+      <option value="claude-opus-5">Claude Opus 5 — smartest</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5 — balanced</option>
+      <option value="claude-haiku-4-5">Claude Haiku 4.5 — fastest &amp; cheapest</option>
+    </select>
+  </div>
+  <div class="dialog-actions">
+    <button class="danger" id="clear-all-btn">Clear all data</button>
+    <button class="primary" id="save-settings-btn">Save</button>
+  </div>
+</dialog>
+
+<script>
+(function(){
+  "use strict";
+
+  const SETTINGS_KEY = "aios_settings";
+  const MESSAGES_KEY = "aios_messages";
+  const ITEMS_KEY = "aios_items";
+
+  let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+  if (!settings.model) settings.model = "claude-opus-5";
+  let messages = JSON.parse(localStorage.getItem(MESSAGES_KEY) || "[]");
+  let items = JSON.parse(localStorage.getItem(ITEMS_KEY) || "[]");
+
+  const log = document.getElementById("log");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send-btn");
+  const itemsEl = document.getElementById("items");
+  const sideEl = document.getElementById("side");
+  const settingsDialog = document.getElementById("settings-dialog");
+
+  function saveMessages(){ localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages)); }
+  function saveItems(){ localStorage.setItem(ITEMS_KEY, JSON.stringify(items)); renderItems(); }
+  function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
+  // ---------- rendering ----------
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function formatText(text){
+    let html = escapeHtml(text);
+    html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code.trim()}</code></pre>`);
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\n/g, "<br>");
+    return html;
+  }
+
+  function addBubble(role, text){
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.innerHTML = formatText(text);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
+  function addToolChip(name){
+    const div = document.createElement("div");
+    div.className = "tool-chip";
+    div.textContent = "🔧 " + name;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function addSystemNote(text){
+    const div = document.createElement("div");
+    div.className = "system-note";
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function renderHistory(){
+    log.innerHTML = "";
+    for (const m of messages){
+      if (typeof m.content === "string"){
+        if (m.content.trim()) addBubble(m.role, m.content);
+        continue;
+      }
+      if (Array.isArray(m.content)){
+        for (const block of m.content){
+          if (block.type === "text" && block.text && block.text.trim()){
+            addBubble(m.role, block.text);
+          } else if (block.type === "tool_use"){
+            addToolChip(block.name);
+          }
+        }
+      }
+    }
+  }
+
+  function renderItems(){
+    itemsEl.innerHTML = "";
+    if (!items.length){
+      itemsEl.innerHTML = '<div class="empty-hint">Nothing saved yet. Ask the assistant to remember something or add a task.</div>';
+      return;
+    }
+    for (const it of items.slice().reverse()){
+      const div = document.createElement("div");
+      div.className = "item" + (it.done ? " done" : "");
+      const checkbox = it.type === "task" ? `<input type="checkbox" data-id="${it.id}" class="task-check" ${it.done ? "checked" : ""}>` : "";
+      div.innerHTML = `
+        <div class="row">
+          ${checkbox}
+          <div class="title">${escapeHtml(it.title)}</div>
+          <button data-id="${it.id}" class="del-item" title="Delete">✕</button>
+        </div>
+        ${it.content ? `<div class="content">${escapeHtml(it.content)}</div>` : ""}
+        <div class="meta">${it.type === "task" ? "Task" : "Note"}${it.due ? " · due " + escapeHtml(it.due) : ""}</div>
+      `;
+      itemsEl.appendChild(div);
+    }
+    itemsEl.querySelectorAll(".del-item").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (confirm("Delete this item? This can't be undone.")){
+          items = items.filter(i => i.id !== btn.dataset.id);
+          saveItems();
+        }
+      });
+    });
+    itemsEl.querySelectorAll(".task-check").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const it = items.find(i => i.id === cb.dataset.id);
+        if (it){ it.done = cb.checked; saveItems(); }
+      });
+    });
+  }
+
+  // ---------- tools ----------
+
+  function uid(){ return Math.random().toString(36).slice(2, 10); }
+
+  const tools = [
+    {
+      name: "save_note",
+      description: "Save a note or task so the user can find it later, across conversations. Use type 'task' for an action item (optionally with a due date), or 'note' for information to remember.",
+      input_schema: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["note", "task"] },
+          title: { type: "string" },
+          content: { type: "string", description: "Optional details" },
+          due: { type: "string", description: "Optional due date/time, only for tasks" }
+        },
+        required: ["type", "title"]
+      }
+    },
+    {
+      name: "list_items",
+      description: "List the user's saved notes and tasks.",
+      input_schema: {
+        type: "object",
+        properties: { type: { type: "string", enum: ["note", "task", "all"] } }
+      }
+    },
+    {
+      name: "update_item",
+      description: "Update a saved note or task by id — e.g. mark a task done, or edit its title/content.",
+      input_schema: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          content: { type: "string" },
+          done: { type: "boolean" }
+        },
+        required: ["id"]
+      }
+    },
+    {
+      name: "delete_item",
+      description: "Permanently delete a saved note or task by id. The user will be asked to confirm before this happens.",
+      input_schema: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"]
+      }
+    },
+    {
+      name: "calculate",
+      description: "Evaluate an arithmetic expression (numbers, + - * / ( ) %, decimals) and return the numeric result.",
+      input_schema: {
+        type: "object",
+        properties: { expression: { type: "string" } },
+        required: ["expression"]
+      }
+    },
+    {
+      name: "get_datetime",
+      description: "Get the current date, time, and the user's local timezone.",
+      input_schema: { type: "object", properties: {} }
+    },
+    {
+      name: "create_download",
+      description: "Generate a downloadable text file for the user (a report, list, markdown notes, CSV, etc). Triggers a browser download immediately.",
+      input_schema: {
+        type: "object",
+        properties: {
+          filename: { type: "string" },
+          content: { type: "string" }
+        },
+        required: ["filename", "content"]
+      }
+    },
+    {
+      name: "open_url",
+      description: "Open a URL in a new browser tab for the user. This is a real action with a visible effect, so the user is asked to confirm before it happens.",
+      input_schema: {
+        type: "object",
+        properties: { url: { type: "string" } },
+        required: ["url"]
+      }
+    },
+    {
+      name: "set_reminder",
+      description: "Set a reminder that notifies the user after a delay, as long as this page stays open in their browser. Not persistent across closing the tab.",
+      input_schema: {
+        type: "object",
+        properties: {
+          message: { type: "string" },
+          minutes: { type: "number", description: "Delay in minutes" }
+        },
+        required: ["message", "minutes"]
+      }
+    }
+  ];
+
+  async function executeTool(name, input){
+    try{
+      switch(name){
+        case "save_note": {
+          const it = {
+            id: uid(), type: input.type, title: input.title,
+            content: input.content || "", due: input.due || "",
+            done: false, createdAt: new Date().toISOString()
+          };
+          items.push(it);
+          saveItems();
+          return { content: `Saved ${input.type} "${input.title}" (id: ${it.id}).` };
+        }
+        case "list_items": {
+          const filter = input.type && input.type !== "all" ? input.type : null;
+          const list = items.filter(i => !filter || i.type === filter);
+          if (!list.length) return { content: "No saved items." };
+          const lines = list.map(i =>
+            `- [${i.type}${i.type === "task" ? (i.done ? ", done" : ", open") : ""}] id=${i.id} "${i.title}"${i.content ? " — " + i.content : ""}${i.due ? " (due " + i.due + ")" : ""}`
+          );
+          return { content: lines.join("\n") };
+        }
+        case "update_item": {
+          const it = items.find(i => i.id === input.id);
+          if (!it) return { content: `No item with id ${input.id}.`, is_error: true };
+          if (typeof input.done === "boolean") it.done = input.done;
+          if (input.title) it.title = input.title;
+          if (input.content) it.content = input.content;
+          saveItems();
+          return { content: `Updated item ${input.id}.` };
+        }
+        case "delete_item": {
+          const it = items.find(i => i.id === input.id);
+          if (!it) return { content: `No item with id ${input.id}.`, is_error: true };
+          if (!confirm(`Delete "${it.title}"? This can't be undone.`)){
+            return { content: "The user declined to delete this item." };
+          }
+          items = items.filter(i => i.id !== input.id);
+          saveItems();
+          return { content: `Deleted item ${input.id}.` };
+        }
+        case "calculate": {
+          const expr = String(input.expression || "");
+          if (!/^[0-9+\-*/().%\s]+$/.test(expr)){
+            return { content: "Expression contains disallowed characters.", is_error: true };
+          }
+          // eslint-disable-next-line no-new-func
+          const result = Function('"use strict"; return (' + expr + ")")();
+          return { content: String(result) };
+        }
+        case "get_datetime": {
+          const now = new Date();
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          return { content: `${now.toString()} (timezone: ${tz})` };
+        }
+        case "create_download": {
+          const blob = new Blob([input.content || ""], { type: "text/plain" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = input.filename || "download.txt";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+          return { content: `Downloaded "${input.filename}".` };
+        }
+        case "open_url": {
+          if (!confirm(`Open this link in a new tab?\n${input.url}`)){
+            return { content: "The user declined to open this link." };
+          }
+          window.open(input.url, "_blank", "noopener");
+          return { content: `Opened ${input.url}.` };
+        }
+        case "set_reminder": {
+          const mins = Number(input.minutes) || 0;
+          const ms = Math.max(0, mins) * 60000;
+          if ("Notification" in window && Notification.permission === "default"){
+            try { await Notification.requestPermission(); } catch(e){}
+          }
+          setTimeout(() => {
+            if ("Notification" in window && Notification.permission === "granted"){
+              new Notification("Reminder", { body: input.message });
+            } else {
+              addSystemNote("⏰ Reminder: " + input.message);
+            }
+          }, ms);
+          return { content: `Reminder set for ${mins} minute(s) from now (only while this tab stays open).` };
+        }
+        default:
+          return { content: `Unknown tool: ${name}`, is_error: true };
+      }
+    } catch(e){
+      return { content: "Tool error: " + e.message, is_error: true };
+    }
+  }
+
+  // ---------- API ----------
+
+  const SYSTEM_PROMPT = `You are the user's personal AI assistant, running entirely in their browser with no separate backend.
+You can chat and answer questions, and you can also take real action for the user through the tools you're given: saving notes and tasks, calculating things, generating downloadable files, opening links, and setting reminders. Prefer using a tool over just describing what you could do.
+Be concise and direct. If a request is ambiguous or you're missing information you need, ask a short clarifying question instead of guessing. Never claim to have done something you haven't actually done via a tool call.`;
+
+  async function callClaude(){
+    const apiKey = settings.apiKey;
+    if (!apiKey){
+      addSystemNote("No API key set. Click ⚙️ Settings to add your Anthropic API key.");
+      settingsDialog.showModal();
+      return null;
+    }
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        max_tokens: 4096,
+        thinking: { type: "disabled" },
+        system: SYSTEM_PROMPT,
+        tools: tools,
+        messages: messages
+      })
+    });
+    const data = await res.json();
+    if (!res.ok){
+      throw new Error((data && data.error && data.error.message) || `Request failed (${res.status})`);
+    }
+    return data;
+  }
+
+  async function handleSend(){
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    input.style.height = "auto";
+    messages.push({ role: "user", content: text });
+    addBubble("user", text);
+    saveMessages();
+
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner"></span>';
+
+    try{
+      let guard = 0;
+      while (guard++ < 8){
+        const response = await callClaude();
+        if (!response) break;
+        messages.push({ role: "assistant", content: response.content });
+        saveMessages();
+
+        for (const block of response.content){
+          if (block.type === "text" && block.text.trim()) addBubble("assistant", block.text);
+          else if (block.type === "tool_use") addToolChip(block.name);
+        }
+
+        if (response.stop_reason !== "tool_use") break;
+
+        const toolResults = [];
+        for (const block of response.content){
+          if (block.type !== "tool_use") continue;
+          const result = await executeTool(block.name, block.input);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: result.content,
+            is_error: !!result.is_error
+          });
+        }
+        messages.push({ role: "user", content: toolResults });
+        saveMessages();
+      }
+    } catch(e){
+      addSystemNote("Error: " + e.message + ". If this persists, double-check your API key, or your browser/network may be blocking direct API calls.");
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Send";
+    }
+  }
+
+  // ---------- wiring ----------
+
+  sendBtn.addEventListener("click", handleSend);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      handleSend();
+    }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 140) + "px";
+  });
+
+  document.getElementById("toggle-side").addEventListener("click", () => {
+    sideEl.classList.toggle("hidden");
+  });
+
+  document.getElementById("open-settings").addEventListener("click", () => {
+    document.getElementById("api-key").value = settings.apiKey || "";
+    document.getElementById("model-select").value = settings.model || "claude-opus-5";
+    settingsDialog.showModal();
+  });
+
+  document.getElementById("save-settings-btn").addEventListener("click", () => {
+    settings.apiKey = document.getElementById("api-key").value.trim();
+    settings.model = document.getElementById("model-select").value;
+    saveSettings();
+    settingsDialog.close();
+  });
+
+  document.getElementById("clear-all-btn").addEventListener("click", () => {
+    if (confirm("Clear your API key, conversation, and all saved notes/tasks from this browser? This can't be undone.")){
+      localStorage.removeItem(SETTINGS_KEY);
+      localStorage.removeItem(MESSAGES_KEY);
+      localStorage.removeItem(ITEMS_KEY);
+      settings = { model: "claude-opus-5" };
+      messages = [];
+      items = [];
+      renderHistory();
+      renderItems();
+      settingsDialog.close();
+    }
+  });
+
+  // ---------- init ----------
+
+  renderHistory();
+  renderItems();
+  if (!settings.apiKey){
+    setTimeout(() => settingsDialog.showModal(), 300);
+  }
+})();
+</script>
+</body>
+</html>
