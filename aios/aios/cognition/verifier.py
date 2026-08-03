@@ -86,8 +86,18 @@ class Verifier:
             )
         return outcomes
 
-    @staticmethod
-    def implicit(step: Step, result: ToolResult) -> list[Check]:
+    # Tools whose entire point is that a path stops existing (or is merely
+    # read/inspected) must never get the "path must exist afterward" implicit
+    # check below - for fs.delete in particular, a successful run means the
+    # opposite is true. Getting this backwards turns a correctly executed
+    # delete into a reported failure, which is worse than no implicit check
+    # at all: it is confidently wrong rather than merely silent.
+    _NO_MUST_EXIST_CHECK = frozenset({
+        "fs.read", "fs.list", "fs.search", "data.inspect", "fs.delete", "fs.usage",
+    })
+
+    @classmethod
+    def implicit(cls, step: Step, result: ToolResult) -> list[Check]:
         """Default contract when a plan does not supply one.
 
         Derived from the tool's own arguments, so even an unverified plan gets
@@ -98,8 +108,9 @@ class Verifier:
         for key in ("output", "destination", "path"):
             value = step.arguments.get(key)
             if isinstance(value, str) and value and not value.startswith("${"):
-                if step.tool.split(".")[0] in {"fs", "doc", "media", "data", "code", "net"} and (
-                    step.tool not in {"fs.read", "fs.list", "fs.search", "data.inspect"}
+                if (
+                    step.tool.split(".")[0] in {"fs", "doc", "media", "data", "code", "net"}
+                    and step.tool not in cls._NO_MUST_EXIST_CHECK
                 ):
                     checks.append(Check("file_exists", value))
                 break

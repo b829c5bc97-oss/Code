@@ -67,6 +67,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--verbose", "-v", action="store_true")
     run.add_argument("--json", action="store_true", help="print the result as JSON")
 
+    serve = sub.add_parser(
+        "serve", help="start the local chat + task website (answers questions, runs tasks, "
+                      "asks before anything risky)"
+    )
+    serve.add_argument("--host", default="127.0.0.1",
+                       help="bind address (127.0.0.1 = this machine only)")
+    serve.add_argument("--port", type=int, default=8420)
+
     plan = sub.add_parser("plan", help="show the plan without executing it")
     plan.add_argument("goal", nargs="+")
     plan.add_argument("--json", action="store_true")
@@ -357,6 +365,35 @@ async def cmd_replay(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Start the local website. Synchronous and blocking by design.
+
+    uvicorn owns its own event loop end to end, so this must run outside the
+    ``asyncio.run(...)`` dispatch every other command goes through — mixing
+    the two would try to start a second loop inside the first.
+    """
+    try:
+        from . import web
+    except ImportError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    # An explicit "." is treated the same as "not given": defaulting a
+    # personal assistant's file access to whatever directory the terminal
+    # happens to be sitting in is more surprising than useful. Pass a real
+    # path with -w to widen it deliberately.
+    workspace = args.workspace if args.workspace and args.workspace != "." else None
+    print(
+        f"AI Workspace starting at http://{args.host}:{args.port}  (Ctrl-C to stop)",
+        file=sys.stderr,
+    )
+    try:
+        web.run(host=args.host, port=args.port, workspace=workspace)
+    except KeyboardInterrupt:  # pragma: no cover - uvicorn normally handles this itself
+        pass
+    return EXIT_OK
+
+
 COMMANDS = {
     "run": cmd_run,
     "plan": cmd_plan,
@@ -391,6 +428,8 @@ def _install_signal_handlers(task: asyncio.Future[Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure(args.log_level or "INFO", json_output=args.json_logs or None)
+    if args.command == "serve":
+        return cmd_serve(args)
     try:
         return asyncio.run(COMMANDS[args.command](args))
     except AiosError as exc:

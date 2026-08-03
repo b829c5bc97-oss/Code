@@ -63,8 +63,9 @@ degraded capability, never degraded honesty.
 
 ```bash
 pip install -e .                       # kernel + 50 builtin tools, no dependencies
+pip install -e '.[server]'             # + the local chat/task website (aios serve)
 pip install -e '.[browser,dev]'        # optional: Playwright, test tooling
-export ANTHROPIC_API_KEY=sk-ant-...    # optional: enables model planning
+export ANTHROPIC_API_KEY=sk-ant-...    # optional: enables real reasoning, not just templates
 ```
 
 ```bash
@@ -89,6 +90,41 @@ Useful flags: `--workspace DIR` (the sandbox root), `--budget-usd`,
 `--allow publish` (grant a capability), `--report DIR`.
 
 Exit codes: `0` succeeded · `1` partial · `2` failed · `3` cancelled · `4` usage.
+
+## The website (`aios serve`)
+
+```bash
+aios serve                              # http://127.0.0.1:8420, workspace = ~/ai-workspace
+aios serve -w ~/Documents/projects      # widen the sandbox to a real project folder
+```
+
+One page: type a question and get a direct answer, or type an instruction and
+watch it plan and execute live — the same step-by-step feed as the CLI, in the
+browser. Anything the policy engine would gate on the command line (deleting a
+file, running a risky shell command, publishing) shows up as an inline
+approve/deny card instead of an unattended `-y` — nothing happens until you
+click it.
+
+**Read this before you decide what "runs on my laptop" means here:**
+
+- `aios serve` must run **on the machine you want it to act on.** Open the
+  browser tab on that same machine (or tunnel to it deliberately). Nothing
+  hosted elsewhere can reach into your filesystem — no legitimate service
+  works that way, and one that claimed to would be indistinguishable from
+  malware. This is a local tool, not a cloud product.
+- It only touches files inside its **workspace** — `~/ai-workspace` by
+  default, shown in the header of the page. That is deliberate, not a
+  limitation: a fresh install shouldn't default to full access to your home
+  directory. Widen it with `-w <path>` when you mean to.
+- Without `ANTHROPIC_API_KEY` set, chat replies are **extractive** (they quote
+  back what you said, they don't reason) and task mode can only run the
+  builtin category templates (organize, profile data, scaffold a site, …) —
+  it cannot parse an arbitrary specific instruction like *"write hello.txt
+  with the content hi there."* The header shows a visible warning the whole
+  time this is true. Set the key for the real thing.
+- Every approval prompt is real: declining one means the action does not
+  happen, full stop. A tab that closes mid-approval is treated as a denial,
+  never a silent yes.
 
 ### As a library
 
@@ -187,10 +223,11 @@ escapes and denied approvals are all exercised deterministically and offline.
 
 ## Status
 
-The kernel, security model, tool layer and test suite are complete and working.
-Known gaps, stated plainly: web search needs a backend key (it fails loudly
-rather than inventing results); browser tools need Playwright installed; media
-tools need ffmpeg on PATH; `aios doctor` reports exactly what your machine is
-missing.
+The kernel, security model, tool layer, web interface and test suite (416
+tests) are complete and working. Known gaps, stated plainly: web search needs
+a backend key (it fails loudly rather than inventing results); browser tools
+need Playwright installed; media tools need ffmpeg on PATH; chat/task quality
+without `ANTHROPIC_API_KEY` is template-only, not generative; `aios doctor`
+reports exactly what your machine is missing.
 
 MIT licensed.

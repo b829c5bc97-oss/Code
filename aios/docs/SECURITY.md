@@ -93,6 +93,14 @@ Approvals are scoped so a long run asks once per class rather than per call:
 never to a silent yes. `--yes` switches to auto-approve and is an explicit,
 logged choice for unattended runs; it does not bypass `DENY`.
 
+The web interface (`aios serve`) uses its own broker, `WebApprover`, and does
+not read `security.approval_mode` at all — a browser session always requires
+a real click. A `CONFIRM` decision sends an `approval_request` over the
+WebSocket and blocks that step until the matching `approval_response`
+arrives; a tab that never answers times out to a denial, and a tab that
+disconnects mid-approval resolves every pending request as denied. There is
+no configuration path to make the website auto-approve.
+
 ### Secret handling
 
 Redaction runs on every record leaving the process: logs, ledger entries,
