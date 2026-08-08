@@ -18,6 +18,7 @@ needs to change.
 """
 from __future__ import annotations
 
+import base64
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -88,6 +89,18 @@ class LLMProvider(ABC):
         """
         text = await self.chat(messages)
         return LLMResult(text=text, tool_calls=[])
+
+    async def describe_image(self, image_bytes: bytes, prompt: str) -> str:
+        """Send an image + prompt and return a text answer (screen vision, Phase 2).
+
+        Default: not supported. Only providers with real multimodal support
+        (OpenAI, Anthropic) override this — screen vision fails with a clear
+        message rather than fabricating a description when it's unavailable.
+        """
+        raise LLMError(
+            f"The {self.name!r} provider doesn't support image understanding. "
+            "Use AI_PROVIDER=openai or anthropic for screen vision."
+        )
 
 
 class MockProvider(LLMProvider):
@@ -222,6 +235,28 @@ class OpenAIProvider(LLMProvider):
             return LLMResult(text=choice.content, tool_calls=calls)
         return LLMResult(text=choice.content or "", tool_calls=[])
 
+    async def describe_image(self, image_bytes: bytes, prompt: str) -> str:
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                            },
+                        ],
+                    }
+                ],
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise LLMError(f"OpenAI image request failed: {exc}") from exc
+        return response.choices[0].message.content or ""
+
 
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
@@ -303,6 +338,29 @@ class AnthropicProvider(LLMProvider):
             if block.type == "tool_use"
         ]
         return LLMResult(text="".join(text_parts) if text_parts else None, tool_calls=tool_calls)
+
+    async def describe_image(self, image_bytes: bytes, prompt: str) -> str:
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        try:
+            response = await self._client.messages.create(
+                model=self._model,
+                max_tokens=1024,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": "image/png", "data": b64},
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise LLMError(f"Anthropic image request failed: {exc}") from exc
+        return "".join(block.text for block in response.content if block.type == "text")
 
 
 _PROVIDERS: dict[str, type[LLMProvider]] = {

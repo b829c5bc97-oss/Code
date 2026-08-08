@@ -6,9 +6,11 @@ parameters, permission level, an async execution function) so the agent's
 tool loop (`core/agent.py`) can list, select, and invoke tools uniformly
 regardless of which module implements them.
 
-Phase 3 registers the first real tools here (`browser.*`, wired up in
-`tools/browser_tools.py`). `calculator.py`, `research.py`, and
-`code_tools.py` remain placeholders for later phases.
+Each tool category has its own `register_*_tools()` function (see
+`browser_tools.py`, `computer_tools.py`, `file_tools.py`, `code_tools.py`,
+`document_tools.py`, `memory_tools.py`, `system_tools.py`, `research.py`)
+called from `main.py` based on the matching `Settings.enable_*_tools` flag.
+`calculator.py` remains an intentional placeholder — see its docstring.
 """
 from __future__ import annotations
 
@@ -35,6 +37,11 @@ class Tool:
     parameters: dict[str, Any]  # JSON schema
     permission: PermissionLevel
     execute: Callable[..., Awaitable[ToolResult]]
+    # Optional: given a specific call's arguments, return a higher permission
+    # tier to apply just for that call (e.g. `code.run_command` escalates to
+    # HIGH when the command looks destructive). Return None to use `permission`
+    # unchanged. Never used to *lower* risk — see `Agent._effective_permission`.
+    risk_escalation: Callable[[dict[str, Any]], PermissionLevel | None] | None = None
 
 
 class ToolRegistry:

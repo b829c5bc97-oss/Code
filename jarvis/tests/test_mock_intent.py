@@ -6,6 +6,11 @@ ALL_TOOLS = {
     "browser.search",
     "browser.extract_text",
     "browser.close",
+    "computer.open_application",
+    "computer.describe_screen",
+    "system.get_system_info",
+    "memory.remember",
+    "files.delete",
 }
 
 
@@ -47,6 +52,39 @@ def test_detects_extract_text():
     call = detect_tool_intent("summarize this webpage for me", ALL_TOOLS)
     assert call is not None
     assert call.name == "browser.extract_text"
+
+
+def test_detects_open_application_not_browser():
+    call = detect_tool_intent("open chrome", ALL_TOOLS)
+    assert call is not None
+    assert call.name == "computer.open_application"
+    assert call.arguments["name"] == "chrome"
+
+
+def test_detects_describe_screen():
+    call = detect_tool_intent("what's on my screen?", ALL_TOOLS)
+    assert call is not None
+    assert call.name == "computer.describe_screen"
+
+
+def test_detects_system_info():
+    call = detect_tool_intent("how's my computer doing?", ALL_TOOLS)
+    assert call is not None
+    assert call.name == "system.get_system_info"
+
+
+def test_detects_remember_preserves_case():
+    call = detect_tool_intent("Remember that I prefer Minimal Black-and-White designs", ALL_TOOLS)
+    assert call is not None
+    assert call.name == "memory.remember"
+    assert call.arguments["content"] == "I prefer Minimal Black-and-White designs"
+
+
+def test_detects_delete_preserves_path_case():
+    call = detect_tool_intent("delete /tmp/MyFile.TXT", ALL_TOOLS)
+    assert call is not None
+    assert call.name == "files.delete"
+    assert call.arguments["path"] == "/tmp/MyFile.TXT"
 
 
 def test_no_match_for_unrelated_text():

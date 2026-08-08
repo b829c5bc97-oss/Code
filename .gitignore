@@ -9,4 +9,8 @@ jarvis/.pytest_cache/
 jarvis/frontend/node_modules/
 jarvis/frontend/dist/
 jarvis/frontend/.env.local
+# User data: long-term memory store and the code/document workspace.
+# Personal and regenerable — never committed.
+jarvis/data/
+jarvis/workspace/
 

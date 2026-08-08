@@ -1,4 +1,4 @@
-# --- Phase 1: backend, LLM integration ---
+# --- Backend, LLM integration ---
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 pydantic==2.10.3
@@ -10,20 +10,31 @@ httpx==0.28.1
 openai==1.58.1
 anthropic==0.40.0
 
-# --- Phase 3: browser automation ---
+# --- Browser automation (Phase 3) ---
 # After installing, run once: playwright install chromium
 playwright==1.49.1
+
+# --- Computer control (Phase 2) ---
+pyautogui==0.9.54
+mss==9.0.2
+psutil==6.1.1
+# Linux window management. On Windows/macOS, pygetwindow is used instead
+# (imported lazily — it doesn't support Linux at all, so it's harmless here).
+python-xlib==0.33; sys_platform == "linux"
+ewmh==0.1.6; sys_platform == "linux"
+pygetwindow==0.0.9; sys_platform != "linux"
+
+# --- Documents (Phase 7) ---
+python-docx==1.1.2
+python-pptx==1.0.2
+openpyxl==3.1.5
+fpdf2==2.8.2
 
 # --- Testing ---
 pytest==8.3.4
 pytest-asyncio==0.25.0
 
-# --- Later phases (uncomment as they are implemented) ---
-# pyautogui          # Phase 2 — mouse/keyboard control
-# mss                # Phase 2 — screenshot capture
-# faster-whisper     # Phase 4 — local speech-to-text (server-side fallback;
-#                      the shipped Phase 4 voice UI uses the browser's own
-#                      Web Speech API and needs no Python STT/TTS package)
-# python-docx        # Phase 7 — DOCX documents
-# python-pptx        # Phase 7 — PPTX documents
-# openpyxl           # Phase 7 — XLSX documents
+# --- Not yet implemented (see README roadmap) ---
+# faster-whisper     # server-side STT fallback; the shipped voice UI uses
+#                      the browser's own Web Speech API and needs no
+#                      Python STT/TTS package at all

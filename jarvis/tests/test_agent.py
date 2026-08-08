@@ -3,7 +3,7 @@ import pytest
 from backend.ai.llm import ChatMessage, LLMError, LLMProvider, LLMResult, ToolCall, ToolSchema
 from backend.core.agent import Agent, AgentState
 from backend.core.config import Settings
-from backend.core.memory import ConversationStore
+from backend.core.memory import ConversationStore, LongTermMemoryStore
 from backend.core.permissions import PermissionLevel
 from backend.tools.registry import Tool, ToolRegistry, ToolResult
 
@@ -43,6 +43,24 @@ class ScriptedToolProvider(LLMProvider):
     ) -> LLMResult:
         self.calls.append(messages)
         return self._script.pop(0)
+
+
+class PlanningScriptedProvider(LLMProvider):
+    """Separate scripts for plain `chat()` (planner) and `chat_with_tools()` (loop)."""
+
+    name = "planning-scripted"
+
+    def __init__(self, plan_response: str, tool_script: list[LLMResult]):
+        self._plan_response = plan_response
+        self._tool_script = list(tool_script)
+
+    async def chat(self, messages: list[ChatMessage]) -> str:
+        return self._plan_response
+
+    async def chat_with_tools(
+        self, messages: list[ChatMessage], tools: list[ToolSchema]
+    ) -> LLMResult:
+        return self._tool_script.pop(0)
 
 
 def make_tool(name: str, result: ToolResult, permission=PermissionLevel.LOW) -> Tool:
@@ -236,3 +254,77 @@ async def test_agent_gives_up_after_max_tool_steps():
 
     assert result.state == AgentState.ERROR
     assert len(provider.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_handle_message_includes_long_term_memory_in_system_prompt(tmp_path):
+    ltm = LongTermMemoryStore(tmp_path / "memory.json")
+    ltm.add("preference", "Prefers dark mode")
+
+    provider = StubProvider(reply="ok")
+    agent = Agent(
+        settings=Settings(),
+        llm=provider,
+        memory=ConversationStore(),
+        tool_registry=ToolRegistry(),
+        long_term_memory=ltm,
+    )
+    await agent.handle_message("s1", "hi")
+
+    system_message = provider.last_messages[0]
+    assert system_message.role == "system"
+    assert "Prefers dark mode" in system_message.content
+
+
+@pytest.mark.asyncio
+async def test_handle_message_generates_plan_for_long_requests():
+    registry = ToolRegistry()
+    registry.register(make_tool("browser.search", ToolResult(success=True, output="ok")))
+    provider = PlanningScriptedProvider(
+        plan_response='["Search the web", "Summarize results"]',
+        tool_script=[LLMResult(text="Done.", tool_calls=[])],
+    )
+    agent = Agent(settings=Settings(), llm=provider, memory=ConversationStore(), tool_registry=registry)
+
+    result = await agent.handle_message(
+        "s1", "please research the best beginner python resources thoroughly"
+    )
+
+    assert result.plan == ["Search the web", "Summarize results"]
+
+
+@pytest.mark.asyncio
+async def test_handle_message_skips_planning_for_short_requests():
+    registry = ToolRegistry()
+    registry.register(make_tool("browser.open", ToolResult(success=True, output="ok")))
+    provider = PlanningScriptedProvider(
+        plan_response='["Should not be used"]',
+        tool_script=[LLMResult(text="Opened.", tool_calls=[])],
+    )
+    agent = Agent(settings=Settings(), llm=provider, memory=ConversationStore(), tool_registry=registry)
+
+    result = await agent.handle_message("s1", "open chrome")
+
+    assert result.plan == []
+
+
+@pytest.mark.asyncio
+async def test_handle_message_skips_planning_when_disabled():
+    registry = ToolRegistry()
+    registry.register(make_tool("browser.search", ToolResult(success=True, output="ok")))
+    provider = PlanningScriptedProvider(
+        plan_response='["Should not be used"]',
+        tool_script=[LLMResult(text="Done.", tool_calls=[])],
+    )
+    agent = Agent(
+        settings=Settings(enable_planner=False),
+        llm=provider,
+        memory=ConversationStore(),
+        tool_registry=registry,
+    )
+
+    result = await agent.handle_message(
+        "s1", "please research the best beginner python resources thoroughly"
+    )
+
+    assert result.plan == []

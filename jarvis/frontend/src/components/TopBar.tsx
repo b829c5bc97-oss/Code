@@ -5,11 +5,13 @@ export function TopBar({
   wakeWordEnabled,
   wakeWordStatus,
   onOpenSettings,
+  onOpenMemory,
 }: {
   health: HealthResponse | null;
   wakeWordEnabled: boolean;
   wakeWordStatus: string;
   onOpenSettings: () => void;
+  onOpenMemory: () => void;
 }) {
   const connected = health !== null;
   const providerReady = health?.provider_ready ?? false;
@@ -39,6 +41,9 @@ export function TopBar({
             Mic: {wakeWordStatus}
           </span>
         )}
+        <button className="top-bar__settings" onClick={onOpenMemory} aria-label="Open memory">
+          🧠
+        </button>
         <button className="top-bar__settings" onClick={onOpenSettings} aria-label="Open settings">
           ⚙
         </button>
