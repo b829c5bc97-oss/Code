@@ -1,2 +1,12 @@
 ai-automation-portfolio.zip
 *.zip
+
+# JARVIS
+jarvis/.venv/
+jarvis/**/__pycache__/
+jarvis/.env
+jarvis/.pytest_cache/
+jarvis/frontend/node_modules/
+jarvis/frontend/dist/
+jarvis/frontend/.env.local
+

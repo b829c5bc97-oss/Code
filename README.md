@@ -42,3 +42,9 @@ Three.js is loaded from a CDN (`three@0.160.0`).
   (`--accent`, `--accent-2`, `--grad`).
 - Contact email is in `index.html` (`#contact`).
 - Core color / displacement is configurable near the top of `js/scene.js`.
+
+---
+
+This repository also contains an unrelated project on this branch:
+[`jarvis/`](./jarvis/README.md) — a personal AI computer assistant (backend +
+frontend). See its own README for setup and usage.

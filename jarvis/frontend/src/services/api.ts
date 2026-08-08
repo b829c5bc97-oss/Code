@@ -1,0 +1,43 @@
+import type { ChatResponse, HealthResponse } from "../types";
+
+// Configurable at build time via VITE_API_BASE_URL; defaults to the local
+// Phase 1 backend (see jarvis/backend/main.py).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+
+export class ApiError extends Error {}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...init,
+    });
+  } catch {
+    throw new ApiError(
+      "Can't reach the JARVIS backend. Is it running on " + API_BASE_URL + "?"
+    );
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = body?.detail ? JSON.stringify(body.detail) : response.statusText;
+    throw new ApiError(`Request to ${path} failed (${response.status}): ${detail}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export function getHealth(): Promise<HealthResponse> {
+  return request<HealthResponse>("/api/health");
+}
+
+export function sendChatMessage(
+  message: string,
+  sessionId: string | null
+): Promise<ChatResponse> {
+  return request<ChatResponse>("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+}

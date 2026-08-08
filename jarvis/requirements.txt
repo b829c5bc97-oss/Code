@@ -1,0 +1,25 @@
+# --- Phase 1: backend, LLM integration ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+httpx==0.28.1
+
+# Pluggable LLM providers (either/both optional depending on AI_PROVIDER)
+openai==1.58.1
+anthropic==0.40.0
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# --- Later phases (uncomment as they are implemented) ---
+# pyautogui          # Phase 2 — mouse/keyboard control
+# mss                # Phase 2 — screenshot capture
+# playwright         # Phase 3 — browser automation
+# faster-whisper     # Phase 4 — local speech-to-text
+# pyttsx3            # Phase 4 — local text-to-speech
+# python-docx        # Phase 7 — DOCX documents
+# python-pptx        # Phase 7 — PPTX documents
+# openpyxl           # Phase 7 — XLSX documents
