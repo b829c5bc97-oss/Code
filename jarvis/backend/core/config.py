@@ -44,9 +44,24 @@ class Settings(BaseSettings):
     system_persona: str = (
         "You are JARVIS, a concise, capable personal AI assistant. "
         "You speak plainly, avoid filler, and never claim to have taken an "
-        "action you did not actually perform."
+        "action you did not actually perform. When a task needs the browser, "
+        "use the browser tools rather than describing what the user should "
+        "click themselves."
     )
     max_history_messages: int = 20
+    max_tool_steps: int = 6
+
+    # --- Tools (Phase 3) ---
+    enable_browser_tools: bool = True
+    # Visible by default so browser automation stays observable, per the
+    # project's safety principle — set true to run headless instead.
+    browser_headless: bool = False
+    # Leave blank to use Playwright's own bundled Chromium. Only set this if
+    # you need to point at a specific browser binary.
+    browser_executable_path: str = ""
+    # Optional upstream proxy for the browser itself (e.g. "http://host:port"),
+    # for networks/sandboxes that require one. Leave blank otherwise.
+    browser_proxy_server: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

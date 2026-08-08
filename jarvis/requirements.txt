@@ -10,6 +10,10 @@ httpx==0.28.1
 openai==1.58.1
 anthropic==0.40.0
 
+# --- Phase 3: browser automation ---
+# After installing, run once: playwright install chromium
+playwright==1.49.1
+
 # --- Testing ---
 pytest==8.3.4
 pytest-asyncio==0.25.0
@@ -17,9 +21,9 @@ pytest-asyncio==0.25.0
 # --- Later phases (uncomment as they are implemented) ---
 # pyautogui          # Phase 2 — mouse/keyboard control
 # mss                # Phase 2 — screenshot capture
-# playwright         # Phase 3 — browser automation
-# faster-whisper     # Phase 4 — local speech-to-text
-# pyttsx3            # Phase 4 — local text-to-speech
+# faster-whisper     # Phase 4 — local speech-to-text (server-side fallback;
+#                      the shipped Phase 4 voice UI uses the browser's own
+#                      Web Speech API and needs no Python STT/TTS package)
 # python-docx        # Phase 7 — DOCX documents
 # python-pptx        # Phase 7 — PPTX documents
 # openpyxl           # Phase 7 — XLSX documents

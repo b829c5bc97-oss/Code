@@ -1,5 +1,6 @@
 export type AgentState =
   | "idle"
+  | "listening" // client-only: capturing a voice command, backend never returns this
   | "thinking"
   | "executing"
   | "waiting_for_confirmation"
@@ -15,11 +16,18 @@ export interface Message {
   timestamp: number;
 }
 
+export interface ToolActivity {
+  name: string;
+  success: boolean;
+  summary: string;
+}
+
 export interface ChatResponse {
   reply: string;
-  state: AgentState;
+  state: Exclude<AgentState, "listening">;
   provider: string;
   session_id: string;
+  tool_activity: ToolActivity[];
 }
 
 export interface HealthResponse {
@@ -28,4 +36,5 @@ export interface HealthResponse {
   ai_provider: string;
   provider_ready: boolean;
   provider_error: string | null;
+  browser_tools_enabled: boolean;
 }

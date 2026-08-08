@@ -1,6 +1,16 @@
 import type { HealthResponse } from "../types";
 
-export function TopBar({ health }: { health: HealthResponse | null }) {
+export function TopBar({
+  health,
+  wakeWordEnabled,
+  wakeWordStatus,
+  onOpenSettings,
+}: {
+  health: HealthResponse | null;
+  wakeWordEnabled: boolean;
+  wakeWordStatus: string;
+  onOpenSettings: () => void;
+}) {
   const connected = health !== null;
   const providerReady = health?.provider_ready ?? false;
 
@@ -23,6 +33,15 @@ export function TopBar({ health }: { health: HealthResponse | null }) {
             {!providerReady && " (not configured)"}
           </span>
         )}
+        {wakeWordEnabled && (
+          <span className="status-pill status-pill--mic" title="Microphone is active for wake-word detection">
+            <span className={`status-pill__mic-dot ${wakeWordStatus === "armed" ? "armed" : ""}`} />
+            Mic: {wakeWordStatus}
+          </span>
+        )}
+        <button className="top-bar__settings" onClick={onOpenSettings} aria-label="Open settings">
+          ⚙
+        </button>
       </div>
     </header>
   );

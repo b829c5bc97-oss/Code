@@ -1,16 +1,14 @@
 """
-Tool registry — Phase 6.
+Tool registry.
 
-Defines the shape every tool will have (name, description, JSON-schema
-parameters, permission level, an async execution function) so the
-planner/agent can list, select, and invoke tools uniformly once real
-tools exist. Registering a tool here does not by itself make the agent
-use it — that wiring (LLM function-calling or planner dispatch) is also
-Phase 6.
+Defines the shape every tool has (name, description, JSON-schema
+parameters, permission level, an async execution function) so the agent's
+tool loop (`core/agent.py`) can list, select, and invoke tools uniformly
+regardless of which module implements them.
 
-No tools are registered yet. `calculator.py`, `research.py`, and
-`code_tools.py` in this package are placeholders for the first tools to
-land.
+Phase 3 registers the first real tools here (`browser.*`, wired up in
+`tools/browser_tools.py`). `calculator.py`, `research.py`, and
+`code_tools.py` remain placeholders for later phases.
 """
 from __future__ import annotations
 
@@ -22,12 +20,21 @@ from backend.core.permissions import PermissionLevel
 
 
 @dataclass
+class ToolResult:
+    """The outcome of executing one tool call."""
+
+    success: bool
+    output: str = ""
+    error: str | None = None
+
+
+@dataclass
 class Tool:
     name: str
     description: str
     parameters: dict[str, Any]  # JSON schema
     permission: PermissionLevel
-    execute: Callable[..., Awaitable[Any]]
+    execute: Callable[..., Awaitable[ToolResult]]
 
 
 class ToolRegistry:
@@ -42,6 +49,10 @@ class ToolRegistry:
 
     def list(self) -> list[Tool]:
         return list(self._tools.values())
+
+    def clear(self) -> None:
+        """Mainly for tests — reset to an empty registry."""
+        self._tools.clear()
 
 
 _registry = ToolRegistry()

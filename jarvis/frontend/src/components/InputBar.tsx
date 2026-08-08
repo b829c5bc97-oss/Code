@@ -1,16 +1,20 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { isSpeechRecognitionSupported } from "../services/voice";
 import type { AgentState } from "../types";
 
 export function InputBar({
   state,
   onSend,
+  onStartVoiceCommand,
 }: {
   state: AgentState;
   onSend: (text: string) => void;
+  onStartVoiceCommand: () => void;
 }) {
   const [value, setValue] = useState("");
-  const busy = state === "thinking" || state === "executing";
+  const busy = state === "thinking" || state === "executing" || state === "listening";
+  const micSupported = isSpeechRecognitionSupported();
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -23,16 +27,16 @@ export function InputBar({
     <form className="input-bar" onSubmit={handleSubmit}>
       <button
         type="button"
-        className="input-bar__mic"
-        title="Voice input arrives in a later phase"
-        disabled
-        aria-disabled="true"
+        className={`input-bar__mic ${state === "listening" ? "input-bar__mic--active" : ""}`}
+        title={micSupported ? "Speak a command" : "Voice input isn't supported in this browser"}
+        onClick={onStartVoiceCommand}
+        disabled={!micSupported || busy}
       >
         🎙
       </button>
       <input
         className="input-bar__field"
-        placeholder="Ask JARVIS anything…"
+        placeholder={state === "listening" ? "Listening…" : "Ask JARVIS anything…"}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         disabled={busy}

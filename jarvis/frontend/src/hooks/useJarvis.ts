@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getHealth, sendChatMessage } from "../services/api";
-import type { AgentState, HealthResponse, Message } from "../types";
+import { listenOnce, speak, stopSpeaking } from "../services/voice";
+import type { AgentState, HealthResponse, Message, ToolActivity } from "../types";
 
 const SESSION_STORAGE_KEY = "jarvis.session_id";
+const VOICE_OUTPUT_KEY = "jarvis.voice_output_enabled";
 
 function makeId(): string {
   return crypto.randomUUID();
@@ -13,9 +15,20 @@ export function useJarvis() {
   const [state, setState] = useState<AgentState>("idle");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toolActivity, setToolActivity] = useState<ToolActivity[]>([]);
+  const [voiceOutputEnabled, setVoiceOutputEnabled] = useState<boolean>(
+    () => window.localStorage.getItem(VOICE_OUTPUT_KEY) !== "false"
+  );
   const sessionId = useRef<string | null>(
     typeof window !== "undefined" ? window.localStorage.getItem(SESSION_STORAGE_KEY) : null
   );
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    window.localStorage.setItem(VOICE_OUTPUT_KEY, String(voiceOutputEnabled));
+    if (!voiceOutputEnabled) stopSpeaking();
+  }, [voiceOutputEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,42 +44,77 @@ export function useJarvis() {
     };
   }, []);
 
-  const send = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const send = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
 
-    setError(null);
-    setMessages((prev) => [
-      ...prev,
-      { id: makeId(), role: "user", content: trimmed, timestamp: Date.now() },
-    ]);
-    setState("thinking");
-
-    try {
-      const response = await sendChatMessage(trimmed, sessionId.current);
-      sessionId.current = response.session_id;
-      window.localStorage.setItem(SESSION_STORAGE_KEY, response.session_id);
-
+      setError(null);
       setMessages((prev) => [
         ...prev,
-        {
-          id: makeId(),
-          role: "assistant",
-          content: response.reply,
-          timestamp: Date.now(),
-        },
+        { id: makeId(), role: "user", content: trimmed, timestamp: Date.now() },
       ]);
-      setState(response.state === "error" ? "error" : "speaking");
-      // Return to idle once the "speaking" beat has been shown.
-      window.setTimeout(() => setState((s) => (s === "speaking" ? "idle" : s)), 1200);
+      setState("thinking");
+
+      try {
+        const response = await sendChatMessage(trimmed, sessionId.current);
+        sessionId.current = response.session_id;
+        window.localStorage.setItem(SESSION_STORAGE_KEY, response.session_id);
+        setToolActivity(response.tool_activity ?? []);
+
+        setMessages((prev) => [
+          ...prev,
+          { id: makeId(), role: "assistant", content: response.reply, timestamp: Date.now() },
+        ]);
+
+        if (response.state === "error" || response.state === "waiting_for_confirmation") {
+          setState(response.state);
+          return;
+        }
+
+        if (voiceOutputEnabled) {
+          setState("speaking");
+          await speak(response.reply);
+          setState((s) => (s === "speaking" ? "idle" : s));
+        } else {
+          setState("idle");
+        }
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Something went wrong.";
+        setError(message);
+        setState("error");
+      }
+    },
+    [voiceOutputEnabled]
+  );
+
+  /** Triggered by the wake word (clap + phrase) or the mic button: capture one spoken command. */
+  const startVoiceCommand = useCallback(async () => {
+    if (stateRef.current === "listening" || stateRef.current === "thinking") return;
+    setError(null);
+    setState("listening");
+    if (voiceOutputEnabled) await speak("Yes?");
+    try {
+      const transcript = await listenOnce(7000);
+      await send(transcript);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Something went wrong.";
-      setError(message);
-      setState("error");
+      setState("idle");
+      setError(err instanceof Error ? err.message : "Didn't catch that.");
     }
-  }, []);
+  }, [send, voiceOutputEnabled]);
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { messages, state, health, error, send, clearError };
+  return {
+    messages,
+    state,
+    health,
+    error,
+    toolActivity,
+    voiceOutputEnabled,
+    setVoiceOutputEnabled,
+    send,
+    startVoiceCommand,
+    clearError,
+  };
 }
