@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple Software Beta — iOS 27 Developer Beta</title>
+<meta name="description" content="Concept page for the iOS 27, iPadOS 27, macOS 27, watchOS 27 and visionOS 27 developer beta program.">
+<style>
+:root{
+  --bg:#ffffff;
+  --bg-2:#f5f5f7;
+  --bg-3:#ffffff;
+  --text:#1d1d1f;
+  --text-2:#6e6e73;
+  --line:rgba(0,0,0,.10);
+  --line-2:rgba(0,0,0,.06);
+  --accent:#0071e3;
+  --accent-2:#0060c8;
+  --accent-soft:rgba(0,113,227,.10);
+  --nav:rgba(255,255,255,.72);
+  --shadow:0 4px 24px rgba(0,0,0,.06);
+  --shadow-lg:0 18px 60px rgba(0,0,0,.12);
+  --radius:18px;
+  --ok:#1d8a3f;
+  --warn:#a35700;
+  --bad:#c0392b;
+  --hero-1:#e8f0ff;
+  --hero-2:#fdf1ff;
+  --hero-3:#eafaff;
+}
+html[data-theme="dark"]{
+  --bg:#000000;
+  --bg-2:#0b0b0d;
+  --bg-3:#141416;
+  --text:#f5f5f7;
+  --text-2:#a1a1a6;
+  --line:rgba(255,255,255,.14);
+  --line-2:rgba(255,255,255,.07);
+  --accent:#2997ff;
+  --accent-2:#57adff;
+  --accent-soft:rgba(41,151,255,.14);
+  --nav:rgba(20,20,22,.72);
+  --shadow:0 4px 24px rgba(0,0,0,.5);
+  --shadow-lg:0 18px 60px rgba(0,0,0,.6);
+  --ok:#4cd07d;
+  --warn:#ffb340;
+  --bad:#ff6b5e;
+  --hero-1:#101a2e;
+  --hero-2:#1d1430;
+  --hero-3:#0c2230;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.55;letter-spacing:-.01em;
+  -webkit-font-smoothing:antialiased;
+  transition:background .35s ease,color .35s ease;
+  overflow-x:hidden;
+}
+img{max-width:100%}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+
+.wrap{width:min(1120px,92vw);margin:0 auto}
+.eyebrow{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1,h2,h3{letter-spacing:-.025em;line-height:1.08;margin:0}
+h2{font-size:clamp(28px,4vw,46px);font-weight:700}
+.lede{color:var(--text-2);font-size:clamp(17px,2vw,21px);max-width:62ch}
+.section{padding:clamp(64px,9vw,116px) 0}
+.section-head{margin-bottom:44px}
+.section-head p{margin:14px 0 0}
+
+/* ---------- progress + nav ---------- */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--accent),#bf5af2);z-index:120;transition:width .1s linear}
+header.nav{
+  position:sticky;top:0;z-index:100;background:var(--nav);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--line-2);
+}
+.nav-inner{display:flex;align-items:center;gap:10px;height:56px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;color:var(--text);text-decoration:none;margin-right:auto}
+.brand:hover{text-decoration:none}
+.brand svg{width:17px;height:20px;fill:var(--text)}
+.brand .tag{font-size:11px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:1px 7px;letter-spacing:.02em}
+.nav-links{display:flex;gap:4px}
+.nav-links a{color:var(--text-2);font-size:14px;padding:7px 12px;border-radius:999px}
+.nav-links a:hover{color:var(--text);background:var(--bg-2);text-decoration:none}
+.icon-btn{background:transparent;border:1px solid var(--line);width:36px;height:36px;border-radius:50%;display:grid;place-items:center;cursor:pointer;transition:background .2s,transform .2s}
+.icon-btn:hover{background:var(--bg-2)}
+.icon-btn:active{transform:scale(.93)}
+.icon-btn svg{width:17px;height:17px;fill:none;stroke:var(--text);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#menu-btn{display:none}
+.mobile-menu{display:none;flex-direction:column;padding:8px 0 16px;border-top:1px solid var(--line-2)}
+.mobile-menu a{padding:12px 4px;color:var(--text);font-size:16px;border-bottom:1px solid var(--line-2)}
+.mobile-menu.open{display:flex}
+@media(max-width:820px){
+  .nav-links{display:none}
+  #menu-btn{display:grid}
+}
+
+/* ---------- hero ---------- */
+.hero{position:relative;text-align:center;padding:clamp(72px,11vw,132px) 0 clamp(56px,8vw,96px);overflow:hidden}
+.hero::before{
+  content:"";position:absolute;inset:-30% -20% auto -20%;height:130%;
+  background:
+    radial-gradient(45% 55% at 22% 20%,var(--hero-1),transparent 70%),
+    radial-gradient(45% 55% at 78% 26%,var(--hero-2),transparent 70%),
+    radial-gradient(50% 50% at 50% 78%,var(--hero-3),transparent 72%);
+  filter:blur(10px);z-index:-1;
+}
+.badge{
+  display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+  padding:6px 14px;border-radius:999px;background:var(--accent-soft);color:var(--accent);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+.hero h1{font-size:clamp(42px,8.5vw,88px);font-weight:700;margin:22px 0 0}
+.grad{background:linear-gradient(120deg,#0071e3,#bf5af2 45%,#ff375f);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-theme="dark"] .grad{background:linear-gradient(120deg,#2997ff,#d07cff 45%,#ff6482);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lede{margin:22px auto 0}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;cursor:pointer;
+  padding:12px 24px;border-radius:999px;font-size:16px;font-weight:500;transition:transform .18s,background .2s,box-shadow .2s;
+}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn-primary{background:var(--accent);color:#fff;box-shadow:0 6px 20px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn-primary:hover{background:var(--accent-2)}
+.btn-ghost{border-color:var(--line);color:var(--text);background:transparent}
+.btn-ghost:hover{background:var(--bg-2)}
+.hero-note{margin-top:16px;font-size:13px;color:var(--text-2)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-2);border:1px solid var(--line-2);border-radius:var(--radius);overflow:hidden;margin-top:56px}
+.stats div{background:var(--bg);padding:22px 14px}
+.stats .n{font-size:clamp(22px,3vw,32px);font-weight:700;letter-spacing:-.03em;display:block}
+.stats .l{font-size:12.5px;color:var(--text-2)}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;padding:5px;background:var(--bg-2);border-radius:999px;width:fit-content;max-width:100%;margin:0 auto 40px}
+.tab{border:0;background:transparent;padding:9px 18px;border-radius:999px;cursor:pointer;font-size:14.5px;font-weight:500;color:var(--text-2);transition:.2s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{background:var(--bg-3);color:var(--text);box-shadow:var(--shadow)}
+html[data-theme="dark"] .tab[aria-selected="true"]{background:#2c2c2e}
+.panel[hidden]{display:none}
+.panel-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(24px,4vw,56px);align-items:center}
+@media(max-width:860px){.panel-grid{grid-template-columns:1fr}}
+.panel h3{font-size:clamp(24px,3.2vw,34px);font-weight:700;margin-bottom:14px}
+.panel ul{list-style:none;padding:0;margin:24px 0 0;display:grid;gap:14px}
+.panel li{display:flex;gap:12px;align-items:flex-start;font-size:16px}
+.check{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);display:grid;place-items:center;margin-top:1px}
+.check svg{width:12px;height:12px;stroke:var(--accent);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.device{
+  aspect-ratio:9/17;width:min(280px,72vw);margin:0 auto;border-radius:44px;padding:11px;
+  background:linear-gradient(160deg,#d9d9de,#8e8e93);box-shadow:var(--shadow-lg);position:relative;
+}
+html[data-theme="dark"] .device{background:linear-gradient(160deg,#3a3a3c,#1c1c1e)}
+.screen{
+  width:100%;height:100%;border-radius:34px;overflow:hidden;position:relative;
+  background:linear-gradient(160deg,#0a1a3d,#3b1d5e 50%,#7a1f4f);
+  display:flex;flex-direction:column;justify-content:space-between;padding:26px 16px 18px;color:#fff;
+}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:82px;height:22px;border-radius:999px;background:#000}
+.s-time{text-align:center;font-size:44px;font-weight:250;letter-spacing:-.02em;margin-top:26px;font-variant-numeric:tabular-nums}
+.s-date{text-align:center;font-size:13px;opacity:.85;margin-top:-4px}
+.s-cards{display:grid;gap:8px}
+.s-card{background:rgba(255,255,255,.16);backdrop-filter:blur(8px);border-radius:14px;padding:9px 11px;font-size:11.5px;line-height:1.35;border:1px solid rgba(255,255,255,.14)}
+.s-card b{display:block;font-size:12px;font-weight:600;margin-bottom:1px}
+.device[data-kind="mac"]{aspect-ratio:16/10;width:min(420px,86vw);border-radius:16px;padding:10px 10px 20px}
+.device[data-kind="mac"] .screen{border-radius:8px;padding:18px 14px}
+.device[data-kind="mac"] .notch{width:96px;height:16px;top:10px}
+.device[data-kind="watch"]{aspect-ratio:5/6;width:min(200px,60vw);border-radius:52px;padding:12px}
+.device[data-kind="watch"] .screen{border-radius:42px;padding:20px 12px}
+.device[data-kind="watch"] .notch{display:none}
+.device[data-kind="watch"] .s-time{font-size:34px;margin-top:6px}
+
+/* ---------- cards ---------- */
+.grid-3>*{min-width:0}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:20px}
+.card{background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow);transition:transform .25s,box-shadow .25s}
+.card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+.card h3{font-size:19px;font-weight:600;margin-bottom:8px}
+.card p{margin:0;color:var(--text-2);font-size:15px}
+.card .ico{width:42px;height:42px;border-radius:12px;background:var(--accent-soft);display:grid;place-items:center;margin-bottom:16px;font-size:20px}
+
+/* ---------- compatibility ---------- */
+.checker{background:var(--bg-2);border:1px solid var(--line-2);border-radius:24px;padding:clamp(24px,4vw,40px)}
+.field{display:grid;gap:7px;margin-bottom:18px}
+.field label{font-size:13.5px;font-weight:600;color:var(--text-2)}
+select,input[type=email]{
+  width:100%;padding:13px 15px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg-3);color:var(--text);font-size:16px;appearance:none;cursor:pointer;
+}
+select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%236e6e73' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 15px center;background-size:12px 8px;padding-right:40px;
+}
+select:disabled{opacity:.5;cursor:not-allowed}
+input[type=email]{cursor:text}
+.check-row{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:end}
+@media(max-width:760px){.check-row{grid-template-columns:1fr}.check-row .btn{width:100%;justify-content:center}}
+.result{margin-top:22px;border-radius:16px;padding:18px 20px;display:none;border:1px solid var(--line);background:var(--bg-3);animation:fade .35s ease}
+.result.show{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.result .r-title{font-weight:650;display:flex;align-items:center;gap:9px;font-size:17px}
+.result p{margin:8px 0 0;color:var(--text-2);font-size:14.5px}
+.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px}
+.pill.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.pill.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.meta-list{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px;font-size:13.5px;color:var(--text-2)}
+.meta-list b{color:var(--text);font-weight:600}
+
+/* ---------- release notes ---------- */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+.chip{border:1px solid var(--line);background:transparent;padding:7px 15px;border-radius:999px;font-size:13.5px;cursor:pointer;color:var(--text-2);transition:.2s}
+.chip:hover{background:var(--bg-2);color:var(--text)}
+.chip.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+.notes{display:grid;gap:12px}
+.note{border:1px solid var(--line-2);border-radius:14px;background:var(--bg-3);overflow:hidden}
+.note summary{cursor:pointer;list-style:none;padding:17px 20px;display:flex;align-items:center;gap:12px;font-weight:550;font-size:16px}
+.note summary::-webkit-details-marker{display:none}
+.note summary::after{content:"+";margin-left:auto;font-size:22px;color:var(--text-2);font-weight:300;transition:transform .25s}
+.note[open] summary::after{transform:rotate(45deg)}
+.note .body{padding:0 20px 20px;color:var(--text-2);font-size:15px}
+.note .body ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.kind{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent)}
+.kind[data-k="fixed"]{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.kind[data-k="known"]{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.empty{color:var(--text-2);font-size:15px;padding:28px;text-align:center;border:1px dashed var(--line);border-radius:14px}
+
+/* ---------- steps ---------- */
+.steps{counter-reset:s;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.step{min-width:0;display:flex;gap:18px;padding:22px;border:1px solid var(--line-2);border-radius:var(--radius);background:var(--bg-3)}
+.step::before{
+  counter-increment:s;content:counter(s);flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+  background:var(--accent);color:#fff;display:grid;place-items:center;font-size:15px;font-weight:600;
+}
+.step>div{min-width:0;flex:1}
+.step h3{font-size:17px;font-weight:600;margin-bottom:5px}
+.step p{margin:0;color:var(--text-2);font-size:15px}
+.code{
+  display:flex;align-items:center;gap:10px;margin-top:12px;background:var(--bg-2);
+  border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;font-size:13.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-x:auto;
+}
+.code span{white-space:nowrap}
+.code::-webkit-scrollbar{height:6px}
+@media(max-width:560px){.code{flex-wrap:wrap}.copy{margin-left:0}}
+.copy{margin-left:auto;border:1px solid var(--line);background:var(--bg-3);border-radius:8px;padding:4px 11px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.copy:hover{background:var(--bg-2)}
+
+/* ---------- signup ---------- */
+.signup{background:var(--bg-2);border-radius:24px;padding:clamp(28px,5vw,56px);text-align:center;border:1px solid var(--line-2)}
+.form{display:flex;gap:10px;max-width:470px;margin:26px auto 0}
+@media(max-width:560px){.form{flex-direction:column}}
+.form input{flex:1}
+.form-msg{margin-top:14px;font-size:14px;min-height:20px}
+.form-msg.ok{color:var(--ok)}
+.form-msg.err{color:var(--bad)}
+
+footer{border-top:1px solid var(--line-2);padding:40px 0;color:var(--text-2);font-size:13px;background:var(--bg-2)}
+.foot-inner{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.disclaimer{margin-top:14px;font-size:12px;line-height:1.6;max-width:78ch}
+
+.reveal{opacity:0;transform:translateY(22px)}
+.reveal.in{opacity:1;transform:none;transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+  .reveal{opacity:1;transform:none}
+}
+.to-top{position:fixed;right:20px;bottom:20px;z-index:90;opacity:0;pointer-events:none;transition:opacity .3s;background:var(--bg-3);box-shadow:var(--shadow-lg)}
+.to-top.show{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 17 20" aria-hidden="true"><path d="M14.1 10.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.9-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7 1.4 0 1.8.7 3 .7 1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-1-2.5-3.5zM11.8 3.7c.6-.8 1.1-1.9 1-3-1 0-2.2.6-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.5z"/></svg>
+      Apple Software Beta <span class="tag">Concept</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#whats-new">What's New</a>
+      <a href="#compatibility">Compatibility</a>
+      <a href="#notes">Release Notes</a>
+      <a href="#install">Install</a>
+      <a href="#signup">Enroll</a>
+    </nav>
+    <button class="icon-btn" id="theme-btn" aria-label="Toggle dark mode" title="Toggle appearance">
+      <svg id="theme-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <button class="icon-btn" id="menu-btn" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+  <div class="wrap"><div class="mobile-menu" id="mobile-menu">
+    <a href="#whats-new">What's New</a>
+    <a href="#compatibility">Compatibility</a>
+    <a href="#notes">Release Notes</a>
+    <a href="#install">Install</a>
+    <a href="#signup">Enroll</a>
+  </div></div>
+</header>
+
+<main id="top">
+
+<section class="hero">
+  <div class="wrap">
+    <span class="badge"><span class="dot"></span> Developer Beta 1 · Build 27A5248c</span>
+    <h1>iOS 27 <span class="grad">is here for developers.</span></h1>
+    <p class="lede">A smarter on-device assistant, a redesigned Control Centre, live translation across every app, and the biggest battery gains in years. Available today for iOS, iPadOS, macOS, watchOS, tvOS and visionOS.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#install">Get the beta</a>
+      <a class="btn btn-ghost" href="#whats-new">See what's new</a>
+    </div>
+    <p class="hero-note">Released <time datetime="2026-08-21">21 August 2026</time> · Requires a free developer account · Not for daily-driver devices</p>
+
+    <div class="stats reveal">
+      <div><span class="n" data-count="27">0</span><span class="l">Major version</span></div>
+      <div><span class="n" data-count="146">0</span><span class="l">New APIs</span></div>
+      <div><span class="n" data-count="38" data-suffix="%">0</span><span class="l">Faster app launch</span></div>
+      <div><span class="n" data-count="6" data-suffix=" platforms">0</span><span class="l">Shipping today</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="whats-new" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center">
+      <p class="eyebrow">What's new</p>
+      <h2>Every platform, updated.</h2>
+      <p class="lede" style="margin:14px auto 0">Pick a platform to see the headline features in this build.</p>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Platforms">
+      <button class="tab" role="tab" id="tab-ios" aria-controls="panel-ios" aria-selected="true">iOS 27</button>
+      <button class="tab" role="tab" id="tab-ipados" aria-controls="panel-ipados" aria-selected="false">iPadOS 27</button>
+      <button class="tab" role="tab" id="tab-macos" aria-controls="panel-macos" aria-selected="false">macOS 27</button>
+      <button class="tab" role="tab" id="tab-watchos" aria-controls="panel-watchos" aria-selected="false">watchOS 27</button>
+      <button class="tab" role="tab" id="tab-visionos" aria-controls="panel-visionos" aria-selected="false">visionOS 27</button>
+    </div>
+
+    <div class="panel" id="panel-ios" role="tabpanel" aria-labelledby="tab-ios">
+      <div class="panel-grid">
+        <div>
+          <h3>A phone that finishes your sentences.</h3>
+          <p class="lede">On-device intelligence now spans Mail, Messages, Notes and third-party apps through the new App Intents surface — with nothing leaving the device.</p>
+          <ul>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Live Translation everywhere.</b> Real-time captions in calls, FaceTime and any app that adopts the new API.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Control Centre, rebuilt.</b> Resizable tiles, per-Focus layouts and third-party controls.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Adaptive Power 2.0.</b> Learns your week and shifts background work to charging windows.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Call Screening.</b> Unknown numbers state their business before your phone rings.</div></li>
+          </ul>
+        </div>
+        <div class="device" data-kind="phone">
+          <div class="screen"><div class="notch"></div>
+            <div><div class="s-time" data-clock>9:41</div><div class="s-date" data-date>Friday, 21 August</div></div>
+            <div class="s-cards">
+              <div class="s-card"><b>Live Translation</b>Caption calls in 21 languages, on device.</div>
+              <div class="s-card"><b>Adaptive Power</b>Battery projected to last until 11:20 pm.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-ipados" role="tabpanel" aria-labelledby="tab-ipados" hidden>
+      <div class="panel-grid">
+        <div>
+          <h3>Desktop-class, finally literal.</h3>
+          <p class="lede">Windowing, a real menu bar and background tasks that keep running when you switch apps.</p>
+          <ul>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Free-form windows.</b> Resize, tile and stack — with traffic-light controls.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Background exports.</b> Renders and uploads continue in the background.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Files, reworked.</b> Column view, resizable list columns and folders in the Dock.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Pointer refinements.</b> A precise arrow cursor that morphs like the Mac's.</div></li>
+          </ul>
+        </div>
+        <div class="device" data-kind="mac">
+          <div class="screen" style="background:linear-gradient(150deg,#04263f,#0b5b6e 55%,#123f7a)"><div class="notch"></div>
+            <div class="s-cards" style="margin-top:auto">
+              <div class="s-card"><b>Stage Manager 3</b>Four windows, real resize handles.</div>
+              <div class="s-card"><b>Background Tasks</b>Export continues while you switch apps.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" hidden>
+      <div class="panel-grid">
+        <div>
+          <h3>Faster where it counts.</h3>
+          <p class="lede">A rewritten window server, Spotlight actions, and Xcode 27 with a local coding model.</p>
+          <ul>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Spotlight Actions.</b> Run shortcuts, send messages and file things without leaving the search field.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Xcode 27.</b> On-device completion model, 38% faster incremental builds.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Continuity Camera 3.</b> Multi-cam capture from iPhone and iPad at once.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Containers 2.0.</b> Native Linux containers with GPU passthrough.</div></li>
+          </ul>
+        </div>
+        <div class="device" data-kind="mac">
+          <div class="screen" style="background:linear-gradient(150deg,#1b1033,#4a1450 50%,#8a2a3e)"><div class="notch"></div>
+            <div class="s-cards" style="margin-top:auto">
+              <div class="s-card"><b>Spotlight</b>Type "send the deck to Maya" — done.</div>
+              <div class="s-card"><b>Xcode 27</b>Incremental build: 4.2 s (was 6.8 s).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-watchos" role="tabpanel" aria-labelledby="tab-watchos" hidden>
+      <div class="panel-grid">
+        <div>
+          <h3>A coach on your wrist.</h3>
+          <p class="lede">Workout Buddy learns your history and talks you through the session — offline.</p>
+          <ul>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Workout Buddy.</b> Voice pacing built from your last 90 days of training.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Sleep Score.</b> One number, with the four inputs behind it.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Wrist Flick.</b> Dismiss notifications with a flick.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Smart Stack hints.</b> Widgets surface from routine, not just time.</div></li>
+          </ul>
+        </div>
+        <div class="device" data-kind="watch">
+          <div class="screen" style="background:linear-gradient(160deg,#0d2c1f,#0b5c3a 55%,#1c7a4a)">
+            <div><div class="s-time" data-clock>9:41</div><div class="s-date">Move 420/500</div></div>
+            <div class="s-cards"><div class="s-card"><b>Workout Buddy</b>Hold 5:40/km for 3 more minutes.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-visionos" role="tabpanel" aria-labelledby="tab-visionos" hidden>
+      <div class="panel-grid">
+        <div>
+          <h3>Spatial, but practical.</h3>
+          <p class="lede">Widgets that stay where you left them and a Mac display that wraps around you.</p>
+          <ul>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Persistent widgets.</b> Pinned to a wall, still there tomorrow.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Ultrawide Mac Display.</b> Two 5K panels side by side.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Personas, refined.</b> Full side profiles and truer hair.</div></li>
+            <li><span class="check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></span><div><b>Look to Scroll.</b> Scroll a view with your eyes alone.</div></li>
+          </ul>
+        </div>
+        <div class="device" data-kind="mac" style="border-radius:70px/40px">
+          <div class="screen" style="border-radius:60px/34px;background:linear-gradient(150deg,#101223,#28203f 55%,#0f3348)"><div class="notch" style="display:none"></div>
+            <div class="s-cards" style="margin-top:auto">
+              <div class="s-card"><b>Ultrawide Mac Display</b>10240 × 2880 virtual panel.</div>
+              <div class="s-card"><b>Look to Scroll</b>Enabled in Accessibility.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">For developers</p>
+      <h2>146 new APIs to build against.</h2>
+      <p class="lede">The frameworks that changed most in this seed.</p>
+    </div>
+    <div class="grid-3">
+      <div class="card reveal"><div class="ico">🧠</div><h3>FoundationModels</h3><p>Call the on-device model in three lines, with guided generation and streaming structured output.</p></div>
+      <div class="card reveal"><div class="ico">🎛️</div><h3>ControlKit</h3><p>Ship resizable Control Centre tiles that respond to Focus and time of day.</p></div>
+      <div class="card reveal"><div class="ico">🌐</div><h3>TranslationKit</h3><p>Live caption any audio stream your app plays or records, fully offline.</p></div>
+      <div class="card reveal"><div class="ico">🪟</div><h3>WindowScene</h3><p>Free-form iPad windowing with a single scene declaration and no layout rewrite.</p></div>
+      <div class="card reveal"><div class="ico">🔋</div><h3>PowerBudget</h3><p>Declare background work as deferrable and let the system pick the cheapest moment.</p></div>
+      <div class="card reveal"><div class="ico">📦</div><h3>ContainerKit</h3><p>Run and orchestrate Linux containers from Swift, with GPU passthrough on Apple silicon.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="compatibility" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Compatibility</p>
+      <h2>Will your device run it?</h2>
+      <p class="lede">Choose a platform and a model. Results reflect Developer Beta 1.</p>
+    </div>
+    <div class="checker reveal">
+      <div class="check-row">
+        <div class="field">
+          <label for="plat">Platform</label>
+          <select id="plat"><option value="">Select a platform…</option></select>
+        </div>
+        <div class="field">
+          <label for="model">Device</label>
+          <select id="model" disabled><option value="">Select a platform first</option></select>
+        </div>
+        <div class="field"><button class="btn btn-primary" id="check-btn" type="button">Check</button></div>
+      </div>
+      <div class="result" id="result" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="notes">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Release notes</p>
+      <h2>Build 27A5248c</h2>
+      <p class="lede">Filter by what changed. Known issues are listed with workarounds where one exists.</p>
+    </div>
+    <div class="filters reveal" id="filters">
+      <button class="chip active" data-f="all" type="button">All</button>
+      <button class="chip" data-f="new" type="button">New</button>
+      <button class="chip" data-f="fixed" type="button">Resolved</button>
+      <button class="chip" data-f="known" type="button">Known issues</button>
+    </div>
+    <div class="notes" id="notes-list"></div>
+    <p class="empty" id="notes-empty" hidden>No entries match this filter.</p>
+  </div>
+</section>
+
+<section class="section" id="install" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Install</p>
+      <h2>Four steps to the beta.</h2>
+      <p class="lede">Back up first. Downgrading from a beta means a full restore.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div><h3>Archive a backup</h3><p>Make an encrypted archived backup on a Mac — not just iCloud. An iCloud backup made on iOS 27 cannot be restored onto iOS 26.</p></div></div>
+      <div class="step reveal"><div><h3>Sign in with your developer account</h3><p>Open <b>Settings → General → Software Update → Beta Updates</b> and pick <b>iOS 27 Developer Beta</b>. The Apple Account signed in must be enrolled.</p></div></div>
+      <div class="step reveal"><div><h3>Download and install</h3><p>Roughly 7.4 GB. Keep the device on power and Wi‑Fi through the first boot, which takes longer than usual while the index rebuilds.</p>
+        <div class="code"><span>xcrun devicectl device install --beta 27A5248c</span><button class="copy" type="button" data-copy="xcrun devicectl device install --beta 27A5248c">Copy</button></div></div></div>
+      <div class="step reveal"><div><h3>File what breaks</h3><p>Use Feedback Assistant and attach a sysdiagnose — hold both volume buttons and the side button for a second. Bugs without one usually stall.</p>
+        <div class="code"><span>sudo sysdiagnose -u -f ~/Desktop</span><button class="copy" type="button" data-copy="sudo sysdiagnose -u -f ~/Desktop">Copy</button></div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="signup">
+  <div class="wrap">
+    <div class="signup reveal">
+      <p class="eyebrow">Enrol</p>
+      <h2>Get build notifications.</h2>
+      <p class="lede" style="margin:14px auto 0">We'll tell you when beta 2 seeds — roughly every two weeks until the release candidate.</p>
+      <form class="form" id="signup-form" novalidate>
+        <input type="email" id="email" placeholder="you@example.com" aria-label="Email address" autocomplete="email">
+        <button class="btn btn-primary" type="submit">Notify me</button>
+      </form>
+      <p class="form-msg" id="form-msg" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-inner">
+      <span>Apple Software Beta — concept page · Build 27A5248c</span>
+      <span>Made as a front-end demo</span>
+    </div>
+    <p class="disclaimer">This is an independent, fictional design concept built for demonstration purposes. It is not affiliated with, endorsed by, or produced by Apple Inc. Version numbers, features, dates and build strings on this page are invented, and no software is actually distributed here. “Apple”, “iOS”, “iPadOS”, “macOS”, “watchOS” and “visionOS” are trademarks of Apple Inc.</p>
+  </div>
+</footer>
+
+<button class="icon-btn to-top" id="to-top" aria-label="Back to top">
+  <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- theme ---------------- */
+var root=document.documentElement, themeBtn=document.getElementById("theme-btn"), themeIcon=document.getElementById("theme-icon");
+var SUN='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+var MOON='<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+function store(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function setTheme(t){root.setAttribute("data-theme",t);themeIcon.innerHTML=t==="dark"?MOON:SUN;themeBtn.setAttribute("aria-label",t==="dark"?"Switch to light mode":"Switch to dark mode");}
+var saved=load("beta-theme");
+setTheme(saved||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
+themeBtn.addEventListener("click",function(){var t=root.getAttribute("data-theme")==="dark"?"light":"dark";setTheme(t);store("beta-theme",t);});
+
+/* ---------------- mobile menu ---------------- */
+var menuBtn=document.getElementById("menu-btn"), menu=document.getElementById("mobile-menu");
+menuBtn.addEventListener("click",function(){
+  var open=menu.classList.toggle("open");
+  menuBtn.setAttribute("aria-expanded",String(open));
+});
+menu.addEventListener("click",function(e){if(e.target.tagName==="A"){menu.classList.remove("open");menuBtn.setAttribute("aria-expanded","false");}});
+
+/* ---------------- scroll progress + to top ---------------- */
+var bar=document.getElementById("progress"), top=document.getElementById("to-top"), ticking=false;
+function onScroll(){
+  var h=document.documentElement.scrollHeight-window.innerHeight;
+  var p=h>0?(window.scrollY/h)*100:0;
+  bar.style.width=p+"%";
+  top.classList.toggle("show",window.scrollY>700);
+  ticking=false;
+}
+window.addEventListener("scroll",function(){if(!ticking){ticking=true;requestAnimationFrame(onScroll);}},{passive:true});
+onScroll();
+top.addEventListener("click",function(){window.scrollTo({top:0,behavior:"smooth"});});
+
+/* ---------------- reveal on scroll ---------------- */
+var reveals=[].slice.call(document.querySelectorAll(".reveal"));
+if("IntersectionObserver" in window){
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(!en.isIntersecting) return;
+      var el=en.target, sibs=[].slice.call(el.parentNode.children).filter(function(n){return n.classList.contains("reveal")});
+      el.style.transitionDelay=(Math.min(sibs.indexOf(el),5)*70)+"ms";
+      el.classList.add("in"); io.unobserve(el);
+      if(el.classList.contains("stats")) countUp(el);
+    });
+  },{threshold:.15,rootMargin:"0px 0px -40px 0px"});
+  reveals.forEach(function(el){io.observe(el)});
+}else{
+  reveals.forEach(function(el){el.classList.add("in")});
+  var s=document.querySelector(".stats"); if(s) countUp(s);
+}
+
+function countUp(scope){
+  [].slice.call(scope.querySelectorAll("[data-count]")).forEach(function(el){
+    var target=parseFloat(el.getAttribute("data-count"))||0, suffix=el.getAttribute("data-suffix")||"";
+    var start=performance.now(), dur=1100;
+    function frame(now){
+      var t=Math.min((now-start)/dur,1), eased=1-Math.pow(1-t,3);
+      el.textContent=Math.round(target*eased)+suffix;
+      if(t<1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ---------------- tabs ---------------- */
+var tabs=[].slice.call(document.querySelectorAll('[role="tab"]'));
+function selectTab(tab){
+  tabs.forEach(function(t){
+    var on=t===tab;
+    t.setAttribute("aria-selected",String(on));
+    t.tabIndex=on?0:-1;
+    document.getElementById(t.getAttribute("aria-controls")).hidden=!on;
+  });
+}
+tabs.forEach(function(t,i){
+  t.tabIndex=t.getAttribute("aria-selected")==="true"?0:-1;
+  t.addEventListener("click",function(){selectTab(t)});
+  t.addEventListener("keydown",function(e){
+    var d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;
+    if(!d) return;
+    e.preventDefault();
+    var next=tabs[(i+d+tabs.length)%tabs.length];
+    selectTab(next); next.focus();
+  });
+});
+
+/* ---------------- live clock on device mockups ---------------- */
+function tick(){
+  var d=new Date();
+  var hh=d.getHours(), mm=String(d.getMinutes()).padStart(2,"0");
+  var t=hh+":"+mm;
+  [].slice.call(document.querySelectorAll("[data-clock]")).forEach(function(el){el.textContent=t});
+  var fmt=d.toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  [].slice.call(document.querySelectorAll("[data-date]")).forEach(function(el){el.textContent=fmt});
+}
+tick(); setInterval(tick,15000);
+
+/* ---------------- compatibility checker ---------------- */
+var DATA={
+  ios:{label:"iOS 27",devices:[
+    {n:"iPhone 17 Pro / Pro Max",s:"ok",note:"Full support, including every on-device intelligence feature."},
+    {n:"iPhone 17 / 17 Air",s:"ok",note:"Full support. Live Translation runs entirely on device."},
+    {n:"iPhone 16 series",s:"ok",note:"Full support."},
+    {n:"iPhone 15 Pro / Pro Max",s:"ok",note:"Full support."},
+    {n:"iPhone 15 / 15 Plus",s:"warn",note:"Supported, but the on-device model is unavailable — 8 GB of RAM is required."},
+    {n:"iPhone 14 series",s:"warn",note:"Supported. No intelligence features, and Adaptive Power is limited to a basic profile."},
+    {n:"iPhone 13 / 13 mini",s:"warn",note:"Supported this cycle only. Expect longer first boots and no intelligence features."},
+    {n:"iPhone 12 or earlier",s:"bad",note:"Not supported. iOS 26.4 remains the final release for these models."}
+  ]},
+  ipados:{label:"iPadOS 27",devices:[
+    {n:"iPad Pro (M4 or later)",s:"ok",note:"Full support, including four-window free-form mode."},
+    {n:"iPad Air (M2 or later)",s:"ok",note:"Full support."},
+    {n:"iPad mini (A17 Pro)",s:"ok",note:"Full support. Free-form windowing capped at three windows."},
+    {n:"iPad (A16)",s:"warn",note:"Supported without on-device intelligence."},
+    {n:"iPad Pro (M1 / M2)",s:"warn",note:"Supported. Background exports are limited to two concurrent tasks."},
+    {n:"iPad (9th gen or earlier)",s:"bad",note:"Not supported."}
+  ]},
+  macos:{label:"macOS 27",devices:[
+    {n:"Mac (M3 or later)",s:"ok",note:"Full support, including GPU passthrough for containers."},
+    {n:"Mac (M1 / M2)",s:"ok",note:"Full support. Container GPU passthrough is unavailable."},
+    {n:"Mac Pro (2019, Intel)",s:"warn",note:"Supported this cycle only. No on-device model, no Containers 2.0."},
+    {n:"Intel Mac (2020 or earlier)",s:"bad",note:"Not supported. macOS 26 was the last Intel release for these."}
+  ]},
+  watchos:{label:"watchOS 27",devices:[
+    {n:"Apple Watch Ultra 2 / 3",s:"ok",note:"Full support, including offline Workout Buddy."},
+    {n:"Apple Watch Series 10 / 11",s:"ok",note:"Full support."},
+    {n:"Apple Watch Series 9",s:"ok",note:"Full support."},
+    {n:"Apple Watch SE (2nd gen)",s:"warn",note:"Supported. Workout Buddy requires a paired iPhone nearby."},
+    {n:"Apple Watch Series 8 or earlier",s:"bad",note:"Not supported."}
+  ]},
+  visionos:{label:"visionOS 27",devices:[
+    {n:"Apple Vision Pro (M5)",s:"ok",note:"Full support, including the ultrawide Mac display."},
+    {n:"Apple Vision Pro (M2)",s:"warn",note:"Supported. Ultrawide Mac display is capped at 5K."}
+  ]}
+};
+var REQ={ios:"iPhone 13 or later",ipados:"M1 iPad Pro / A16 iPad or later",macos:"Apple silicon, or 2019 Mac Pro",watchos:"Series 9, SE 2 or Ultra 2 and later",visionos:"Apple Vision Pro"};
+var SIZE={ios:"7.4 GB",ipados:"8.1 GB",macos:"16.2 GB",watchos:"2.3 GB",visionos:"9.6 GB"};
+
+var platSel=document.getElementById("plat"), modelSel=document.getElementById("model"),
+    checkBtn=document.getElementById("check-btn"), result=document.getElementById("result");
+
+Object.keys(DATA).forEach(function(k){
+  var o=document.createElement("option"); o.value=k; o.textContent=DATA[k].label; platSel.appendChild(o);
+});
+
+function fillModels(){
+  var k=platSel.value;
+  modelSel.innerHTML="";
+  result.classList.remove("show");
+  if(!k){
+    modelSel.disabled=true;
+    modelSel.appendChild(new Option("Select a platform first",""));
+    return;
+  }
+  modelSel.disabled=false;
+  modelSel.appendChild(new Option("Select your device…",""));
+  DATA[k].devices.forEach(function(d,i){modelSel.appendChild(new Option(d.n,String(i)))});
+}
+platSel.addEventListener("change",fillModels);
+fillModels();
+
+var LABEL={ok:"Supported",warn:"Supported with limits",bad:"Not supported"};
+function runCheck(){
+  var k=platSel.value, i=modelSel.value;
+  if(!k){show("bad","Pick a platform","Choose which beta you're checking against."); return;}
+  if(i===""){show("warn","Pick a device","Select your model from the second menu."); return;}
+  var d=DATA[k].devices[parseInt(i,10)];
+  show(d.s,d.n,d.note,k);
+}
+function show(state,title,note,k){
+  var meta = k ? '<div class="meta-list"><span>Minimum: <b>'+REQ[k]+'</b></span><span>Download: <b>'+SIZE[k]+'</b></span><span>Build: <b>27A5248c</b></span></div>' : "";
+  result.innerHTML='<div class="r-title"><span class="pill '+state+'">'+LABEL[state]+'</span> '+title+'</div><p>'+note+'</p>'+meta;
+  result.classList.remove("show");
+  void result.offsetWidth;
+  result.classList.add("show");
+}
+checkBtn.addEventListener("click",runCheck);
+modelSel.addEventListener("change",function(){if(modelSel.value!=="") runCheck();});
+
+/* ---------------- release notes ---------------- */
+var NOTES=[
+ {k:"new",t:"FoundationModels framework",b:["Guided generation with Swift macros and streaming structured output.","Tool calling against your own App Intents.","Sessions persist across app launches with a 32k token window."]},
+ {k:"new",t:"Control Centre and ControlKit",b:["Controls are resizable across four tile sizes.","Per-Focus layouts sync across devices.","Third-party controls can be added to the Lock Screen."]},
+ {k:"new",t:"Live Translation API",b:["Caption any AVAudioEngine stream in 21 languages.","Runs offline once a language pack is downloaded.","Available in FaceTime, Phone and Messages."]},
+ {k:"new",t:"Free-form windowing on iPad",b:["Adopt with a single WindowScene declaration.","Traffic-light controls and a real menu bar.","Windows restore across reboots."]},
+ {k:"fixed",t:"Battery drain after restore",b:["Fixed a case where Spotlight reindexed indefinitely after a device restore.","Adaptive Power no longer double-schedules background refresh."]},
+ {k:"fixed",t:"CarPlay disconnects",b:["Resolved wired CarPlay dropping on some 2021–2023 vehicles.","Wireless handoff no longer stalls when two phones are paired."]},
+ {k:"fixed",t:"Xcode 27 previews",b:["SwiftUI previews no longer crash when a package uses macros.","Fixed a hang when attaching to an app already running on device."]},
+ {k:"known",t:"Third-party keyboards may not appear",b:["After installing, a custom keyboard can be missing from the switcher.","Workaround: toggle it off and on in Settings → General → Keyboard."]},
+ {k:"known",t:"Some banking apps fail attestation",b:["Apps using older App Attest builds may refuse to launch.","No workaround. Fixed in a forthcoming seed."]},
+ {k:"known",t:"External displays flicker on wake",b:["A brief flicker can occur on DisplayPort monitors when waking a Mac from sleep.","Workaround: sleep and wake the display, or unplug and replug the cable."]},
+ {k:"known",t:"Watch pairing can time out",b:["Pairing a watch running watchOS 27 to an iPhone on iOS 26 may time out.","Workaround: update the iPhone to iOS 27 before pairing."]}
+];
+var KLABEL={new:"New",fixed:"Resolved",known:"Known issue"};
+var list=document.getElementById("notes-list"), emptyMsg=document.getElementById("notes-empty");
+
+function renderNotes(filter){
+  var items=NOTES.filter(function(n){return filter==="all"||n.k===filter});
+  list.innerHTML="";
+  emptyMsg.hidden=items.length>0;
+  items.forEach(function(n){
+    var d=document.createElement("details");
+    d.className="note";
+    var bullets=n.b.map(function(x){return "<li>"+x+"</li>"}).join("");
+    d.innerHTML='<summary><span class="kind" data-k="'+n.k+'">'+KLABEL[n.k]+'</span>'+n.t+'</summary><div class="body"><ul>'+bullets+'</ul></div>';
+    list.appendChild(d);
+  });
+}
+renderNotes("all");
+document.getElementById("filters").addEventListener("click",function(e){
+  var b=e.target.closest(".chip"); if(!b) return;
+  [].slice.call(this.querySelectorAll(".chip")).forEach(function(c){c.classList.toggle("active",c===b)});
+  renderNotes(b.getAttribute("data-f"));
+});
+
+/* ---------------- copy buttons ---------------- */
+document.addEventListener("click",function(e){
+  var b=e.target.closest(".copy"); if(!b) return;
+  var text=b.getAttribute("data-copy"), done=function(){
+    var old=b.textContent; b.textContent="Copied"; setTimeout(function(){b.textContent=old},1400);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done,fallback);
+  }else fallback();
+  function fallback(){
+    var ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{document.execCommand("copy");done()}catch(err){b.textContent="Press ⌘C";}
+    document.body.removeChild(ta);
+  }
+});
+
+/* ---------------- signup ---------------- */
+var form=document.getElementById("signup-form"), email=document.getElementById("email"), msg=document.getElementById("form-msg");
+form.addEventListener("submit",function(e){
+  e.preventDefault();
+  var v=email.value.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){
+    msg.className="form-msg err"; msg.textContent="Enter a valid email address.";
+    email.focus(); return;
+  }
+  msg.className="form-msg ok";
+  msg.textContent="Thanks — we'll email "+v+" when beta 2 seeds. (Demo only: nothing was sent.)";
+  form.reset();
+});
+
+/* ---------------- smooth anchor offset for sticky nav ---------------- */
+document.addEventListener("click",function(e){
+  var a=e.target.closest('a[href^="#"]'); if(!a) return;
+  var id=a.getAttribute("href").slice(1);
+  var el=id?document.getElementById(id):null; if(!el) return;
+  e.preventDefault();
+  var y=el.getBoundingClientRect().top+window.scrollY-56;
+  window.scrollTo({top:Math.max(y,0),behavior:"smooth"});
+  history.replaceState(null,"","#"+id);
+});
+})();
+</script>
+</body>
+</html>
