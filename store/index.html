@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Store — a concept homepage</title>
+<meta name="description" content="An independent concept storefront: live search, a working bag, a product configurator and a comparison tool. Not affiliated with Apple Inc.">
+<style>
+:root{
+  --bg:#fff; --bg-2:#f5f5f7; --bg-3:#fff; --bg-4:#fafafa;
+  --text:#1d1d1f; --text-2:#6e6e73; --text-3:#86868b;
+  --line:rgba(0,0,0,.12); --line-2:rgba(0,0,0,.06);
+  --accent:#0071e3; --accent-2:#0077ed; --accent-soft:rgba(0,113,227,.1);
+  --nav-bg:rgba(255,255,255,.72); --nav-text:#1d1d1f;
+  --sheet:rgba(250,250,252,.94);
+  --shadow-s:0 2px 10px rgba(0,0,0,.05);
+  --shadow:0 6px 28px rgba(0,0,0,.09);
+  --shadow-l:0 24px 70px rgba(0,0,0,.16);
+  --ok:#1d8a3f; --warn:#a35700; --bad:#c92c2c;
+  --r-s:12px; --r:18px; --r-l:28px;
+  --scrim:rgba(0,0,0,.45);
+  --nav-h:48px;
+}
+html[data-theme="dark"]{
+  --bg:#000; --bg-2:#101012; --bg-3:#161618; --bg-4:#0b0b0d;
+  --text:#f5f5f7; --text-2:#a1a1a6; --text-3:#86868b;
+  --line:rgba(255,255,255,.16); --line-2:rgba(255,255,255,.08);
+  --accent:#2997ff; --accent-2:#57adff; --accent-soft:rgba(41,151,255,.15);
+  --nav-bg:rgba(22,22,24,.72); --nav-text:#f5f5f7;
+  --sheet:rgba(20,20,22,.94);
+  --shadow-s:0 2px 10px rgba(0,0,0,.5);
+  --shadow:0 6px 28px rgba(0,0,0,.55);
+  --shadow-l:0 24px 70px rgba(0,0,0,.7);
+  --ok:#4cd07d; --warn:#ffb340; --bad:#ff6b5e;
+  --scrim:rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.5;letter-spacing:-.012em;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  transition:background .4s ease,color .4s ease;
+}
+body.locked{overflow:hidden}
+h1,h2,h3,h4{margin:0;letter-spacing:-.028em;line-height:1.07;font-weight:600}
+p{margin:0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font:inherit;color:inherit;background:none;border:0}
+img,svg{max-width:100%}
+:focus-visible{outline:2.5px solid var(--accent);outline-offset:3px;border-radius:8px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:fixed;top:-60px;left:12px;z-index:300;background:var(--bg-3);padding:10px 18px;border-radius:10px;box-shadow:var(--shadow);transition:top .2s}
+.skip:focus{top:12px}
+.wrap{width:min(1120px,90vw);margin:0 auto}
+.wide{width:min(1440px,94vw);margin:0 auto}
+.eyebrow{font-size:13px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)}
+.lede{color:var(--text-2);font-size:clamp(17px,1.7vw,21px);line-height:1.45;letter-spacing:-.01em}
+.section{padding:clamp(56px,7vw,104px) 0}
+.sec-head{margin-bottom:clamp(28px,4vw,48px)}
+.sec-head h2{font-size:clamp(30px,4.2vw,52px);font-weight:700}
+.sec-head p{margin-top:14px;max-width:60ch}
+.center{text-align:center}
+.center .lede{margin-left:auto;margin-right:auto}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
+  padding:11px 22px;border-radius:980px;font-size:16px;font-weight:450;border:1px solid transparent;
+  transition:background .2s,transform .16s,box-shadow .2s,border-color .2s;white-space:nowrap}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn:active{transform:scale(.975)}
+.btn-p{background:var(--accent);color:#fff}
+.btn-p:hover{background:var(--accent-2);box-shadow:0 6px 22px color-mix(in srgb,var(--accent) 38%,transparent)}
+.btn-s{border-color:var(--line);color:var(--text)}
+.btn-s:hover{background:var(--bg-2)}
+.btn-sm{padding:7px 16px;font-size:14px}
+.btn-lg{padding:14px 30px;font-size:17px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.link-arrow{font-size:17px;display:inline-flex;align-items:center;gap:4px}
+.link-arrow::after{content:"›";font-size:1.25em;line-height:1;transition:transform .2s}
+.link-arrow:hover{text-decoration:none}
+.link-arrow:hover::after{transform:translateX(3px)}
+.icon-btn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;cursor:pointer;
+  border:1px solid transparent;transition:background .2s,transform .15s}
+.icon-btn:hover{background:color-mix(in srgb,var(--text) 8%,transparent)}
+.icon-btn:active{transform:scale(.9)}
+.icon-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:80;background:var(--nav-bg);color:var(--nav-text);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--line-2)}
+.nav-in{display:flex;align-items:center;height:var(--nav-h);gap:2px}
+.logo{display:flex;align-items:center;gap:8px;color:inherit;font-weight:600;font-size:15px;padding:0 10px 0 2px}
+.logo:hover{text-decoration:none}
+.logo svg{width:16px;height:19px;fill:currentColor}
+.logo .chip{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  border:1px solid currentColor;border-radius:999px;padding:1px 6px;opacity:.55}
+.nav-items{display:flex;flex:1;justify-content:center;gap:2px}
+.nav-item{position:relative}
+.nav-btn{padding:8px 12px;border-radius:8px;font-size:13.5px;color:inherit;opacity:.85;cursor:pointer;transition:opacity .2s,background .2s}
+.nav-btn:hover,.nav-btn[aria-expanded="true"]{opacity:1;background:color-mix(in srgb,var(--text) 7%,transparent)}
+.nav-right{display:flex;align-items:center;gap:2px}
+.nav-right .icon-btn{width:34px;height:34px}
+.bag-count{position:absolute;top:2px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;
+  background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;display:none;place-items:center;line-height:1}
+.bag-count.show{display:grid}
+.bag-wrap{position:relative}
+#nav-toggle{display:none}
+@media(max-width:900px){.nav-items{display:none}#nav-toggle{display:grid}}
+
+/* mega menu */
+.mega{position:absolute;left:0;right:0;top:100%;background:var(--sheet);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line-2);
+  overflow:hidden;max-height:0;transition:max-height .4s cubic-bezier(.2,.7,.2,1);z-index:79}
+.mega.open{max-height:440px}
+.mega-in{padding:34px 0 44px;display:flex;gap:clamp(30px,6vw,90px);flex-wrap:wrap}
+.mega-col h4{font-size:12px;color:var(--text-3);font-weight:400;letter-spacing:0;margin-bottom:12px}
+.mega-col ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.mega-col a{color:var(--text);font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.02em}
+.mega-col a:hover{color:var(--accent);text-decoration:none}
+.mega-col.small a{font-size:12.5px;font-weight:400;letter-spacing:0}
+
+/* mobile drawer nav */
+.mnav{position:fixed;inset:var(--nav-h) 0 0;background:var(--sheet);backdrop-filter:blur(20px);z-index:78;
+  padding:24px 5vw;overflow-y:auto;transform:translateY(-8px);opacity:0;pointer-events:none;transition:.28s}
+.mnav.open{opacity:1;transform:none;pointer-events:auto}
+.mnav a{display:block;color:var(--text);font-size:22px;font-weight:600;padding:12px 0;border-bottom:1px solid var(--line-2)}
+
+/* ---------- search ---------- */
+.overlay{position:fixed;inset:0;background:var(--scrim);z-index:90;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:auto}
+.search-sheet{position:fixed;top:0;left:0;right:0;z-index:91;background:var(--sheet);
+  backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  border-bottom:1px solid var(--line-2);transform:translateY(-102%);transition:transform .34s cubic-bezier(.2,.75,.2,1);
+  max-height:86vh;overflow-y:auto;padding:18px 0 26px}
+.search-sheet.open{transform:none}
+.search-bar{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.search-bar svg{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:var(--text-3);stroke-width:2;stroke-linecap:round}
+#q{flex:1;border:0;background:transparent;color:var(--text);font-size:clamp(20px,3vw,28px);
+  font-weight:500;letter-spacing:-.02em;outline:none;min-width:0}
+#q::placeholder{color:var(--text-3)}
+.kbd{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:11.5px;color:var(--text-3);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.s-hint{margin-top:16px;font-size:12px;color:var(--text-3);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.s-results{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:2px}
+.s-results li a,.s-results li button{display:flex;width:100%;text-align:left;align-items:center;gap:14px;padding:11px 12px;border-radius:12px;
+  color:var(--text);cursor:pointer;transition:background .15s}
+.s-results li[aria-selected="true"] a,.s-results li[aria-selected="true"] button,
+.s-results li a:hover,.s-results li button:hover{background:color-mix(in srgb,var(--text) 7%,transparent);text-decoration:none}
+.s-thumb{width:40px;height:40px;border-radius:10px;background:var(--bg-2);display:grid;place-items:center;flex:0 0 auto}
+.s-thumb svg{width:24px;height:24px}
+.s-meta{flex:1;min-width:0}
+.s-meta b{display:block;font-size:15.5px;font-weight:550}
+.s-meta span{font-size:13px;color:var(--text-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-price{font-size:14px;color:var(--text-2);white-space:nowrap}
+.s-empty{padding:26px 12px;color:var(--text-2);font-size:15px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13.5px;color:var(--text-2);cursor:pointer;transition:.18s}
+.chip:hover{background:var(--bg-2);color:var(--text)}
+.chip.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+/* ---------- bag drawer ---------- */
+.bag{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);z-index:92;background:var(--bg-3);
+  box-shadow:var(--shadow-l);transform:translateX(101%);transition:transform .36s cubic-bezier(.2,.75,.2,1);
+  display:flex;flex-direction:column}
+.bag.open{transform:none}
+.bag-head{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--line-2)}
+.bag-head h3{font-size:20px;font-weight:600;flex:1}
+.bag-body{flex:1;overflow-y:auto;padding:8px 20px}
+.bag-empty{text-align:center;padding:56px 10px;color:var(--text-2)}
+.bag-empty svg{width:52px;height:52px;stroke:var(--text-3);fill:none;stroke-width:1.4;margin-bottom:14px}
+.bag-item{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--line-2)}
+.bag-thumb{width:64px;height:64px;border-radius:12px;background:var(--bg-2);display:grid;place-items:center;flex:0 0 auto}
+.bag-thumb svg{width:40px;height:40px}
+.bag-info{flex:1;min-width:0}
+.bag-info b{font-size:15px;font-weight:550;display:block}
+.bag-info small{color:var(--text-3);font-size:12.5px;display:block;margin-top:1px}
+.qty{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:999px;margin-top:10px}
+.qty button{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;cursor:pointer;font-size:16px;color:var(--text-2)}
+.qty button:hover{background:var(--bg-2);color:var(--text)}
+.qty span{min-width:22px;text-align:center;font-size:14px;font-variant-numeric:tabular-nums}
+.bag-right{text-align:right;display:flex;flex-direction:column;justify-content:space-between}
+.bag-right b{font-size:15px;font-weight:550;white-space:nowrap}
+.bag-remove{font-size:12.5px;color:var(--text-3);cursor:pointer;text-decoration:underline}
+.bag-remove:hover{color:var(--bad)}
+.bag-foot{border-top:1px solid var(--line-2);padding:18px 20px;background:var(--bg-4)}
+.ship{margin-bottom:14px}
+.ship-bar{height:5px;border-radius:999px;background:var(--line-2);overflow:hidden;margin-top:7px}
+.ship-fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#30d158);transition:width .5s cubic-bezier(.2,.7,.2,1)}
+.ship p{font-size:12.5px;color:var(--text-2)}
+.row{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;color:var(--text-2);margin-bottom:6px}
+.row.total{font-size:19px;font-weight:600;color:var(--text);margin:12px 0 16px}
+.bag .btn{width:100%}
+
+/* ---------- toast ---------- */
+.toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;display:grid;gap:8px;width:max-content;max-width:92vw}
+.toast{background:var(--text);color:var(--bg);padding:12px 20px;border-radius:999px;font-size:14.5px;
+  box-shadow:var(--shadow-l);display:flex;align-items:center;gap:9px;animation:pop .35s cubic-bezier(.2,.8,.2,1)}
+.toast.out{animation:popout .3s forwards}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes popout{to{opacity:0;transform:translateY(10px) scale(.97)}}
+.toast svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- hero ---------- */
+.hero{position:relative;text-align:center;padding:clamp(56px,8vw,96px) 0 0;overflow:hidden}
+.hero-bg{position:absolute;inset:-25% -15% auto -15%;height:120%;z-index:0;filter:blur(22px);
+  background:radial-gradient(42% 50% at 20% 24%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 70%),
+             radial-gradient(42% 50% at 80% 20%,rgba(191,90,242,.17),transparent 70%),
+             radial-gradient(52% 48% at 50% 82%,rgba(48,209,88,.12),transparent 72%)}
+.hero>.wrap,.hero>.hero-stage{position:relative;z-index:1}
+.hero h1{font-size:clamp(44px,8vw,92px);font-weight:700;letter-spacing:-.035em}
+.hero .lede{max-width:56ch;margin:18px auto 0}
+.hero .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+.price-note{margin-top:14px;font-size:14px;color:var(--text-3)}
+.hero-stage{margin-top:clamp(20px,4vw,40px);display:grid;place-items:center;min-height:clamp(280px,38vw,440px);padding-bottom:10px}
+.hero-stage svg{height:clamp(260px,36vw,420px);width:auto;filter:drop-shadow(0 30px 60px rgba(0,0,0,.28));animation:float 7s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+
+/* ---------- tiles / bento ---------- */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.tile{position:relative;overflow:hidden;border-radius:var(--r-l);background:var(--bg-2);padding:36px 30px;
+  min-height:340px;display:flex;flex-direction:column;transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s;grid-column:span 2}
+.tile:hover{transform:translateY(-5px);box-shadow:var(--shadow-l)}
+.tile.tall{min-height:440px}
+.tile.span1{grid-column:span 1}
+.tile.span4{grid-column:span 4;min-height:300px}
+.tile h3{font-size:clamp(24px,2.6vw,34px);font-weight:700}
+.tile p{color:var(--text-2);margin-top:10px;font-size:16px;max-width:38ch}
+.tile .links{display:flex;gap:18px;margin-top:16px;flex-wrap:wrap}
+.tile .art{margin-top:auto;display:grid;place-items:center;padding-top:22px}
+.tile .art svg{height:clamp(130px,17vw,210px);width:auto;filter:drop-shadow(0 18px 34px rgba(0,0,0,.2))}
+.tile.dark{background:#0b0b0d;color:#f5f5f7}
+.tile.dark p{color:#a1a1a6}
+.tile.grad{background:linear-gradient(150deg,#0a2540,#3b1d5e 55%,#7a1f4f);color:#fff}
+.tile.grad p{color:rgba(255,255,255,.75)}
+.tile.grad a,.tile.dark a{color:#2997ff}
+@media(max-width:980px){.bento{grid-template-columns:repeat(2,1fr)}.tile,.tile.span1,.tile.span4{grid-column:span 2}}
+@media(max-width:600px){.bento{grid-template-columns:1fr}.tile,.tile.span1,.tile.span4{grid-column:span 1}.tile{padding:28px 22px;min-height:0}}
+
+/* ---------- carousel ---------- */
+.carousel{position:relative}
+.track{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding:6px 4px 20px;
+  scrollbar-width:none;-ms-overflow-style:none}
+.track::-webkit-scrollbar{display:none}
+.slide{flex:0 0 clamp(230px,25vw,290px);scroll-snap-align:start;background:var(--bg-3);border:1px solid var(--line-2);
+  border-radius:var(--r);padding:22px;display:flex;flex-direction:column;transition:transform .25s,box-shadow .25s}
+.slide:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+.slide .badge{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+.slide h3{font-size:19px;margin-top:6px}
+.slide .sub{color:var(--text-2);font-size:14px;margin-top:6px;min-height:42px}
+.slide .art{display:grid;place-items:center;padding:18px 0;min-height:150px}
+.slide .art svg{height:120px;width:auto}
+.slide .foot{margin-top:auto;display:flex;align-items:center;gap:10px;justify-content:space-between}
+.slide .price{font-size:14.5px;color:var(--text-2)}
+.c-nav{position:absolute;top:calc(50% - 22px);width:40px;height:40px;border-radius:50%;background:var(--bg-3);
+  box-shadow:var(--shadow);display:grid;place-items:center;cursor:pointer;z-index:2;border:1px solid var(--line-2);transition:.2s}
+.c-nav:hover{transform:scale(1.08)}
+.c-nav[disabled]{opacity:0;pointer-events:none}
+.c-nav svg{width:17px;height:17px;stroke:var(--text);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.c-prev{left:-18px}.c-next{right:-18px}
+@media(max-width:860px){.c-nav{display:none}}
+
+/* ---------- configurator ---------- */
+.cfg{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(24px,4vw,64px);align-items:start}
+@media(max-width:900px){.cfg{grid-template-columns:1fr}}
+.cfg-stage{position:sticky;top:calc(var(--nav-h) + 20px);background:var(--bg-2);border-radius:var(--r-l);
+  padding:30px;display:grid;place-items:center;min-height:clamp(300px,42vw,460px)}
+@media(max-width:900px){.cfg-stage{position:static}}
+.cfg-stage svg{height:clamp(230px,34vw,380px);width:auto;transition:filter .3s}
+.cfg-group{margin-bottom:30px}
+.cfg-group h4{font-size:18px;font-weight:600;margin-bottom:4px}
+.cfg-group .hint{font-size:13.5px;color:var(--text-3);margin-bottom:14px}
+.swatches{display:flex;gap:12px;flex-wrap:wrap}
+.sw{width:42px;height:42px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);position:relative;transition:transform .18s}
+.sw:hover{transform:scale(1.07)}
+.sw[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--bg)}
+.opts{display:grid;gap:10px}
+.opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;
+  border:1.5px solid var(--line);border-radius:var(--r-s);padding:15px 18px;transition:.2s;background:var(--bg-3)}
+.opt:hover{border-color:var(--text-3)}
+.opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.opt b{font-size:16px;font-weight:550;flex:1}
+.opt span{font-size:14px;color:var(--text-2);white-space:nowrap}
+.opt small{display:block;font-weight:400;font-size:13px;color:var(--text-3);margin-top:2px}
+.cfg-summary{border-top:1px solid var(--line);padding-top:22px;margin-top:6px}
+.cfg-total{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:6px}
+.cfg-total b{font-size:30px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.cfg-total .mo{font-size:14px;color:var(--text-2)}
+.cfg-actions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+.cfg-actions .btn{flex:1;min-width:150px}
+.spec-line{font-size:13.5px;color:var(--text-3);margin-top:10px}
+
+/* ---------- compare ---------- */
+.cmp-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}
+@media(max-width:760px){.cmp-pick{grid-template-columns:1fr}}
+select{width:100%;padding:13px 40px 13px 15px;border-radius:var(--r-s);border:1px solid var(--line);
+  background-color:var(--bg-3);color:var(--text);font-size:15.5px;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 15px center;background-size:12px 8px}
+.cmp-scroll{overflow-x:auto;border:1px solid var(--line-2);border-radius:var(--r);background:var(--bg-3)}
+table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{padding:15px 18px;text-align:left;border-bottom:1px solid var(--line-2);font-size:15px;vertical-align:middle}
+thead th{position:sticky;top:0;background:var(--bg-3);font-size:13px;color:var(--text-3);font-weight:600;
+  letter-spacing:.03em;text-transform:uppercase;z-index:1}
+tbody th{font-weight:500;color:var(--text-2);font-size:14px;width:170px}
+td.best{color:var(--ok);font-weight:600}
+td.best::after{content:" ✓";font-weight:700}
+.cmp-art{display:grid;place-items:center;padding:16px 0}
+.cmp-art svg{height:82px;width:auto}
+.cmp-note{font-size:13px;color:var(--text-3);margin-top:12px}
+
+/* ---------- feature strip ---------- */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:1px;background:var(--line-2);
+  border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden}
+.strip>div{background:var(--bg);padding:26px 22px}
+.strip .ic{width:38px;height:38px;border-radius:11px;background:var(--accent-soft);display:grid;place-items:center;margin-bottom:14px}
+.strip .ic svg{width:19px;height:19px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.strip h4{font-size:16.5px;font-weight:600}
+.strip p{font-size:14.5px;color:var(--text-2);margin-top:6px}
+
+/* ---------- footer ---------- */
+footer{background:var(--bg-2);color:var(--text-2);font-size:12px;line-height:1.7;padding:36px 0 44px;margin-top:20px}
+.f-note{padding-bottom:18px;border-bottom:1px solid var(--line-2)}
+.f-cols{display:grid;grid-template-columns:repeat(5,1fr);gap:26px;padding:22px 0}
+.f-col h5{font-size:12px;color:var(--text);margin:0 0 10px;font-weight:600}
+.f-col ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.f-col a{color:var(--text-2)}
+.f-col a:hover{color:var(--text)}
+.f-toggle{display:none;width:100%;justify-content:space-between;align-items:center;padding:13px 0;
+  border-bottom:1px solid var(--line-2);cursor:pointer;color:var(--text);font-size:13px;font-weight:600}
+.f-toggle::after{content:"+";font-size:17px;font-weight:300;color:var(--text-2);transition:transform .25s}
+.f-col.open .f-toggle::after{transform:rotate(45deg)}
+@media(max-width:760px){
+  .f-cols{grid-template-columns:1fr;gap:0}
+  .f-toggle{display:flex}
+  .f-col h5{display:none}
+  .f-col ul{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s}
+  .f-col.open ul{max-height:340px;padding:12px 0}
+}
+.f-bottom{padding-top:18px;border-top:1px solid var(--line-2);display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between}
+
+/* ---------- misc ---------- */
+.reveal{opacity:0;transform:translateY(24px)}
+.reveal.in{opacity:1;transform:none;transition:opacity .75s cubic-bezier(.2,.7,.2,1),transform .75s cubic-bezier(.2,.7,.2,1)}
+.to-top{position:fixed;right:18px;bottom:18px;z-index:70;background:var(--bg-3);box-shadow:var(--shadow);
+  border:1px solid var(--line-2);opacity:0;pointer-events:none;transition:opacity .3s;width:42px;height:42px}
+.to-top.show{opacity:1;pointer-events:auto}
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  html{scroll-behavior:auto}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ============ SVG sprite ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d2a4d"/><stop offset=".5" stop-color="#3b1d5e"/><stop offset="1" stop-color="#7a1f4f"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e6e6ea"/><stop offset=".5" stop-color="#b9b9c0"/><stop offset="1" stop-color="#8e8e96"/>
+    </linearGradient>
+  </defs>
+
+  <symbol id="i-phone" viewBox="0 0 120 240">
+    <rect x="2" y="2" width="116" height="236" rx="30" fill="var(--pc,#5b6472)"/>
+    <rect x="5.5" y="5.5" width="109" height="229" rx="27" fill="#08080a"/>
+    <rect x="9" y="9" width="102" height="222" rx="24" fill="url(#scr)"/>
+    <rect x="9" y="9" width="102" height="104" rx="24" fill="url(#glass)"/>
+    <rect x="44" y="16" width="32" height="10" rx="5" fill="#000"/>
+    <text x="24" y="24" font-size="8" font-family="-apple-system,Helvetica,Arial" font-weight="600" fill="#fff" opacity=".9">9:41</text>
+    <rect x="88" y="18" width="12" height="6" rx="2" fill="#fff" opacity=".75"/>
+    <rect x="18" y="38" width="84" height="36" rx="11" fill="#fff" opacity=".16"/>
+    <rect x="26" y="47" width="34" height="4" rx="2" fill="#fff" opacity=".65"/>
+    <rect x="26" y="56" width="52" height="3.4" rx="1.7" fill="#fff" opacity=".38"/>
+    <rect x="26" y="63" width="42" height="3.4" rx="1.7" fill="#fff" opacity=".38"/>
+    <g opacity=".95">
+      <rect x="18" y="86" width="20" height="20" rx="6" fill="#ff9f0a"/>
+      <rect x="43" y="86" width="20" height="20" rx="6" fill="#30d158"/>
+      <rect x="68" y="86" width="20" height="20" rx="6" fill="#0a84ff"/>
+      <rect x="93" y="86" width="9" height="20" rx="4" fill="#fff" opacity=".22"/>
+      <rect x="18" y="112" width="20" height="20" rx="6" fill="#bf5af2"/>
+      <rect x="43" y="112" width="20" height="20" rx="6" fill="#ff375f"/>
+      <rect x="68" y="112" width="20" height="20" rx="6" fill="#64d2ff"/>
+      <rect x="93" y="112" width="9" height="20" rx="4" fill="#fff" opacity=".22"/>
+    </g>
+    <rect x="18" y="150" width="84" height="30" rx="10" fill="#fff" opacity=".13"/>
+    <rect x="26" y="158" width="30" height="3.6" rx="1.8" fill="#fff" opacity=".55"/>
+    <rect x="26" y="167" width="58" height="3.2" rx="1.6" fill="#fff" opacity=".33"/>
+    <rect x="18" y="192" width="84" height="26" rx="13" fill="#fff" opacity=".14"/>
+    <circle cx="31" cy="205" r="7" fill="#fff" opacity=".3"/>
+    <circle cx="53" cy="205" r="7" fill="#fff" opacity=".3"/>
+    <circle cx="75" cy="205" r="7" fill="#fff" opacity=".3"/>
+    <rect x="45" y="226" width="30" height="3.4" rx="1.7" fill="#fff" opacity=".55"/>
+    <rect x="1" y="62" width="2.6" height="24" rx="1.3" fill="var(--pc,#5b6472)"/>
+    <rect x="1" y="94" width="2.6" height="24" rx="1.3" fill="var(--pc,#5b6472)"/>
+    <rect x="116.4" y="72" width="2.6" height="36" rx="1.3" fill="var(--pc,#5b6472)"/>
+  </symbol>
+
+  <symbol id="i-laptop" viewBox="0 0 260 165">
+    <rect x="28" y="4" width="204" height="132" rx="9" fill="var(--pc,#8e8e96)"/>
+    <rect x="34" y="10" width="192" height="118" rx="5" fill="#0a0a0c"/>
+    <rect x="37" y="13" width="186" height="112" rx="3" fill="url(#scr)"/>
+    <rect x="37" y="13" width="186" height="56" rx="3" fill="url(#glass)"/>
+    <rect x="118" y="13" width="24" height="6" rx="3" fill="#000"/>
+    <path d="M4 138h252l-10 16a8 8 0 0 1-6 3H20a8 8 0 0 1-6-3z" fill="url(#metal)"/>
+    <rect x="106" y="139" width="48" height="4" rx="2" fill="#9a9aa2"/>
+  </symbol>
+
+  <symbol id="i-tablet" viewBox="0 0 170 230">
+    <rect x="2" y="2" width="166" height="226" rx="18" fill="var(--pc,#6b7280)"/>
+    <rect x="9" y="9" width="152" height="212" rx="13" fill="#0a0a0c"/>
+    <rect x="12" y="12" width="146" height="206" rx="11" fill="url(#scr)"/>
+    <rect x="12" y="12" width="146" height="100" rx="11" fill="url(#glass)"/>
+    <circle cx="85" cy="7" r="2.4" fill="#1a1a20"/>
+    <rect x="128" y="18" width="30" height="30" rx="9" fill="var(--pc,#6b7280)"/>
+    <circle cx="143" cy="33" r="8" fill="#15151a"/><circle cx="143" cy="33" r="3.4" fill="#3b6ea5"/>
+  </symbol>
+
+  <symbol id="i-watch" viewBox="0 0 120 168">
+    <path d="M38 6h44l4 30H34z" fill="var(--pc,#3a3a3f)"/>
+    <path d="M34 132h52l-4 30H38z" fill="var(--pc,#3a3a3f)"/>
+    <rect x="22" y="28" width="76" height="112" rx="26" fill="var(--pc,#3a3a3f)"/>
+    <rect x="28" y="34" width="64" height="100" rx="21" fill="#0a0a0c"/>
+    <rect x="31" y="37" width="58" height="94" rx="19" fill="url(#scr)"/>
+    <rect x="31" y="37" width="58" height="48" rx="19" fill="url(#glass)"/>
+    <rect x="97" y="56" width="6" height="17" rx="3" fill="var(--pc,#3a3a3f)"/>
+    <rect x="97" y="80" width="5" height="13" rx="2.5" fill="var(--pc,#3a3a3f)"/>
+    <circle cx="60" cy="84" r="20" fill="none" stroke="#ff375f" stroke-width="6" opacity=".9"/>
+    <circle cx="60" cy="84" r="12" fill="none" stroke="#30d158" stroke-width="6" opacity=".9"/>
+  </symbol>
+
+  <symbol id="i-buds" viewBox="0 0 150 120">
+    <rect x="34" y="34" width="82" height="66" rx="20" fill="var(--pc,#f2f2f4)" stroke="#d3d3d8"/>
+    <rect x="34" y="60" width="82" height="3" fill="#dedee3"/>
+    <circle cx="75" cy="84" r="5" fill="#c9c9d0"/>
+    <g fill="var(--pc,#f2f2f4)" stroke="#d3d3d8">
+      <path d="M45 8a13 13 0 0 1 13 13c0 8-5 11-5 17v22a5 5 0 0 1-10 0V38c0-6-5-9-5-17A13 13 0 0 1 45 8z"/>
+      <path d="M105 8a13 13 0 0 1 13 13c0 8-5 11-5 17v22a5 5 0 0 1-10 0V38c0-6-5-9-5-17A13 13 0 0 1 105 8z"/>
+    </g>
+  </symbol>
+
+  <symbol id="i-vision" viewBox="0 0 230 120">
+    <path d="M18 46c0-20 22-32 97-32s97 12 97 32c0 30-20 46-48 46-18 0-28-12-49-12s-31 12-49 12C38 92 18 76 18 46z" fill="var(--pc,#c9ccd3)"/>
+    <path d="M26 46c0-15 20-25 89-25s89 10 89 25c0 22-16 36-42 36-16 0-26-11-47-11s-31 11-47 11c-26 0-42-14-42-36z" fill="url(#scr)"/>
+    <path d="M26 40c10-13 40-19 89-19s79 6 89 19c-8 8-40 12-89 12S34 48 26 40z" fill="url(#glass)"/>
+    <path d="M14 40C6 44 4 52 6 60l10-4z" fill="var(--pc,#c9ccd3)"/>
+    <path d="M216 40c8 4 10 12 8 20l-10-4z" fill="var(--pc,#c9ccd3)"/>
+  </symbol>
+
+  <symbol id="i-logo" viewBox="0 0 17 20">
+    <path d="M14.1 10.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.9-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7 1.4 0 1.8.7 3 .7 1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-1-2.5-3.5zM11.8 3.7c.6-.8 1.1-1.9 1-3-1 0-2.2.6-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.5z"/>
+  </symbol>
+</svg>
+
+<!-- ============ nav ============ -->
+<header class="nav" id="nav">
+  <div class="wide nav-in">
+    <a class="logo" href="#top"><svg viewBox="0 0 17 20"><use href="#i-logo"/></svg> Store <span class="chip">Concept</span></a>
+    <nav class="nav-items" id="nav-items" aria-label="Primary">
+      <div class="nav-item"><button class="nav-btn" data-mega="m-store" aria-expanded="false">Store</button></div>
+      <div class="nav-item"><button class="nav-btn" data-mega="m-mac" aria-expanded="false">Mac</button></div>
+      <div class="nav-item"><button class="nav-btn" data-mega="m-ipad" aria-expanded="false">iPad</button></div>
+      <div class="nav-item"><button class="nav-btn" data-mega="m-iphone" aria-expanded="false">iPhone</button></div>
+      <div class="nav-item"><button class="nav-btn" data-mega="m-watch" aria-expanded="false">Watch</button></div>
+      <div class="nav-item"><a class="nav-btn" href="#compare">Compare</a></div>
+      <div class="nav-item"><a class="nav-btn" href="#support">Support</a></div>
+    </nav>
+    <div class="nav-right">
+      <button class="icon-btn" id="theme-btn" aria-label="Switch appearance" title="Switch appearance">
+        <svg id="theme-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2 12h2.2M19.8 12H22M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+      </button>
+      <button class="icon-btn" id="search-btn" aria-label="Search (press slash)" title="Search  /">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+      </button>
+      <div class="bag-wrap">
+        <button class="icon-btn" id="bag-btn" aria-label="Shopping bag" aria-expanded="false">
+          <svg viewBox="0 0 24 24"><path d="M6 8h12l1 12H5zM9 8V6a3 3 0 0 1 6 0v2"/></svg>
+        </button>
+        <span class="bag-count" id="bag-count" aria-hidden="true">0</span>
+      </div>
+      <button class="icon-btn" id="nav-toggle" aria-label="Menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="mega" id="m-store"><div class="wide mega-in">
+    <div class="mega-col"><h4>Shop</h4><ul>
+      <li><a href="#lineup">Shop the latest</a></li><li><a href="#configure">Build your own</a></li>
+      <li><a href="#compare">Compare models</a></li><li><a href="#trade">Trade in</a></li></ul></div>
+    <div class="mega-col small"><h4>Quick links</h4><ul>
+      <li><a href="#lineup">Order status</a></li><li><a href="#support">Shopping help</a></li>
+      <li><a href="#support">Financing</a></li><li><a href="#support">Personal setup</a></li></ul></div>
+  </div></div>
+  <div class="mega" id="m-mac"><div class="wide mega-in">
+    <div class="mega-col"><h4>Explore Mac</h4><ul>
+      <li><a href="#lineup" data-goto="mba">MacBook Air</a></li><li><a href="#lineup" data-goto="mbp">MacBook Pro</a></li>
+      <li><a href="#compare">Compare Mac</a></li></ul></div>
+    <div class="mega-col small"><h4>More</h4><ul>
+      <li><a href="#support">macOS 27</a></li><li><a href="#support">Accessories</a></li><li><a href="#trade">Trade in</a></li></ul></div>
+  </div></div>
+  <div class="mega" id="m-ipad"><div class="wide mega-in">
+    <div class="mega-col"><h4>Explore iPad</h4><ul>
+      <li><a href="#lineup" data-goto="ipp">iPad Pro</a></li><li><a href="#lineup" data-goto="ipa">iPad Air</a></li>
+      <li><a href="#compare">Compare iPad</a></li></ul></div>
+    <div class="mega-col small"><h4>More</h4><ul>
+      <li><a href="#support">iPadOS 27</a></li><li><a href="#support">Apple Pencil</a></li><li><a href="#support">Keyboards</a></li></ul></div>
+  </div></div>
+  <div class="mega" id="m-iphone"><div class="wide mega-in">
+    <div class="mega-col"><h4>Explore iPhone</h4><ul>
+      <li><a href="#configure">iPhone 17 Pro</a></li><li><a href="#lineup" data-goto="i17">iPhone 17</a></li>
+      <li><a href="#compare">Compare iPhone</a></li></ul></div>
+    <div class="mega-col small"><h4>More</h4><ul>
+      <li><a href="#support">iOS 27</a></li><li><a href="#trade">Trade in</a></li><li><a href="#support">Switch to iPhone</a></li></ul></div>
+  </div></div>
+  <div class="mega" id="m-watch"><div class="wide mega-in">
+    <div class="mega-col"><h4>Explore Watch</h4><ul>
+      <li><a href="#lineup" data-goto="aw">Watch Series 11</a></li><li><a href="#lineup" data-goto="awu">Watch Ultra 3</a></li>
+      <li><a href="#compare">Compare Watch</a></li></ul></div>
+    <div class="mega-col small"><h4>More</h4><ul>
+      <li><a href="#support">watchOS 27</a></li><li><a href="#support">Bands</a></li><li><a href="#support">Fitness+</a></li></ul></div>
+  </div></div>
+</header>
+
+<div class="mnav" id="mnav">
+  <a href="#lineup">Store</a><a href="#lineup" data-goto="mba">Mac</a><a href="#lineup" data-goto="ipp">iPad</a>
+  <a href="#configure">iPhone</a><a href="#lineup" data-goto="aw">Watch</a><a href="#compare">Compare</a><a href="#support">Support</a>
+</div>
+
+<!-- ============ search ============ -->
+<div class="overlay" id="overlay"></div>
+<div class="search-sheet" id="search-sheet" role="dialog" aria-modal="true" aria-label="Search the store">
+  <div class="wide">
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+      <input id="q" type="text" placeholder="Search products, specs, help…" autocomplete="off" spellcheck="false"
+             role="combobox" aria-expanded="true" aria-controls="s-results" aria-autocomplete="list">
+      <span class="kbd">Esc</span>
+    </div>
+    <div class="chips" id="s-chips">
+      <button class="chip on" data-cat="all" type="button">All</button>
+      <button class="chip" data-cat="iphone" type="button">iPhone</button>
+      <button class="chip" data-cat="mac" type="button">Mac</button>
+      <button class="chip" data-cat="ipad" type="button">iPad</button>
+      <button class="chip" data-cat="watch" type="button">Watch</button>
+      <button class="chip" data-cat="audio" type="button">Audio</button>
+    </div>
+    <p class="s-hint" id="s-hint">Popular right now</p>
+    <ul class="s-results" id="s-results" role="listbox" aria-label="Search results"></ul>
+  </div>
+</div>
+
+<!-- ============ bag ============ -->
+<aside class="bag" id="bag" role="dialog" aria-modal="true" aria-label="Shopping bag">
+  <div class="bag-head">
+    <h3>Bag</h3>
+    <button class="icon-btn" id="bag-close" aria-label="Close bag"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="bag-body" id="bag-body"></div>
+  <div class="bag-foot" id="bag-foot" hidden>
+    <div class="ship">
+      <p id="ship-msg">Add $0 more for free next-day delivery.</p>
+      <div class="ship-bar"><div class="ship-fill" id="ship-fill"></div></div>
+    </div>
+    <div class="row"><span>Subtotal</span><span id="sum-sub">$0.00</span></div>
+    <div class="row"><span>Estimated tax</span><span id="sum-tax">$0.00</span></div>
+    <div class="row"><span>Delivery</span><span id="sum-ship">Free</span></div>
+    <div class="row total"><span>Total</span><span id="sum-total">$0.00</span></div>
+    <button class="btn btn-p btn-lg" id="checkout">Check out</button>
+  </div>
+</aside>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<main id="main">
+<a id="top"></a>
+
+<!-- ============ hero ============ -->
+<section class="hero">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow">New</p>
+    <h1>iPhone 17 Pro</h1>
+    <p class="lede">Forged in titanium. A camera system that sees in the dark. And the first phone with a battery that learns your week.</p>
+    <div class="cta">
+      <a class="btn btn-p btn-lg" href="#configure">Build yours</a>
+      <a class="btn btn-s btn-lg" href="#lineup">See the lineup</a>
+    </div>
+    <p class="price-note">From $999 or $41.62/mo. for 24 mo.<sup>*</sup> Trade in and save up to $630.</p>
+  </div>
+  <div class="hero-stage">
+    <svg viewBox="0 0 120 240" style="--pc:#5b6472" role="img" aria-label="iPhone 17 Pro"><use href="#i-phone"/></svg>
+  </div>
+</section>
+
+<!-- ============ bento ============ -->
+<section class="section" id="lineup">
+  <div class="wide">
+    <div class="sec-head reveal">
+      <p class="eyebrow">The lineup</p>
+      <h2>Everything, in its place.</h2>
+      <p class="lede">Six products, one system. Pick a tile to jump straight to configuring it.</p>
+    </div>
+    <div class="bento">
+      <article class="tile grad tall reveal">
+        <h3>iPhone 17 Pro</h3>
+        <p>Titanium body, 5x tetraprism camera, and Adaptive Power that reshapes your battery around your routine.</p>
+        <div class="links"><a class="link-arrow" href="#configure">Build yours</a><a class="link-arrow" href="#compare">Compare</a></div>
+        <div class="art"><svg viewBox="0 0 120 240" style="--pc:#5b6472" aria-hidden="true"><use href="#i-phone"/></svg></div>
+      </article>
+      <article class="tile tall reveal" id="p-mbp">
+        <h3>MacBook Pro</h3>
+        <p>M5 Pro and M5 Max. Up to 24 hours of battery, and a display that hits 1600 nits in HDR.</p>
+        <div class="links"><a class="link-arrow" href="#compare">Compare</a><button class="link-arrow" data-add="mbp">Add to bag</button></div>
+        <div class="art"><svg viewBox="0 0 260 165" style="--pc:#4a4a50" aria-hidden="true"><use href="#i-laptop"/></svg></div>
+      </article>
+      <article class="tile reveal" id="p-ipp">
+        <h3>iPad Pro</h3>
+        <p>Impossibly thin. Now with a real menu bar and free-form windows.</p>
+        <div class="links"><button class="link-arrow" data-add="ipp">Add to bag</button></div>
+        <div class="art"><svg viewBox="0 0 170 230" style="--pc:#6b7280" aria-hidden="true"><use href="#i-tablet"/></svg></div>
+      </article>
+      <article class="tile reveal" id="p-aw">
+        <h3>Watch Series 11</h3>
+        <p>A coach on your wrist, a sleep score on your nightstand.</p>
+        <div class="links"><button class="link-arrow" data-add="aw">Add to bag</button></div>
+        <div class="art"><svg viewBox="0 0 120 168" style="--pc:#3a3a3f" aria-hidden="true"><use href="#i-watch"/></svg></div>
+      </article>
+      <article class="tile dark span4 reveal" id="p-vp">
+        <h3>Vision Pro</h3>
+        <p>Widgets that stay where you left them, and an ultrawide Mac display that wraps around you.</p>
+        <div class="links"><button class="link-arrow" data-add="vp">Add to bag</button><a class="link-arrow" href="#compare">Compare</a></div>
+        <div class="art"><svg viewBox="0 0 230 120" style="--pc:#c9ccd3" aria-hidden="true"><use href="#i-vision"/></svg></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ carousel ============ -->
+<section class="section" style="background:var(--bg-2)">
+  <div class="wide">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Shop</p>
+      <h2>Ready to ship today.</h2>
+      <p class="lede">Drag, scroll or use the arrows. Every card adds straight to your bag.</p>
+    </div>
+    <div class="carousel reveal">
+      <button class="c-nav c-prev" id="c-prev" aria-label="Previous products"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="track" id="track" tabindex="0" role="region" aria-label="Product carousel"></div>
+      <button class="c-nav c-next" id="c-next" aria-label="More products"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ configurator ============ -->
+<section class="section" id="configure">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Build yours</p>
+      <h2>iPhone 17 Pro, your way.</h2>
+      <p class="lede">Every choice updates the price, the monthly instalment and the render — instantly.</p>
+    </div>
+    <div class="cfg">
+      <div class="cfg-stage reveal">
+        <svg id="cfg-art" viewBox="0 0 120 240" style="--pc:#5b6472" role="img" aria-label="iPhone 17 Pro preview"><use href="#i-phone"/></svg>
+      </div>
+      <form class="reveal" id="cfg-form">
+        <div class="cfg-group">
+          <h4>Finish</h4>
+          <p class="hint" id="cfg-color-name">Natural Titanium</p>
+          <div class="swatches" id="cfg-colors" role="group" aria-label="Choose a finish"></div>
+        </div>
+        <div class="cfg-group">
+          <h4>Size</h4>
+          <p class="hint">Both sizes share the same chip and camera system.</p>
+          <div class="opts" id="cfg-sizes" role="group" aria-label="Choose a size"></div>
+        </div>
+        <div class="cfg-group">
+          <h4>Storage</h4>
+          <p class="hint">How much space do you need?</p>
+          <div class="opts" id="cfg-storage" role="group" aria-label="Choose storage"></div>
+        </div>
+        <div class="cfg-group">
+          <h4>AppleCare+</h4>
+          <p class="hint">Unlimited accidental damage repairs, each subject to a service fee.</p>
+          <div class="opts" id="cfg-care" role="group" aria-label="Choose coverage"></div>
+        </div>
+        <div class="cfg-summary">
+          <div class="cfg-total">
+            <b id="cfg-price">$1,199.00</b>
+            <span class="mo" id="cfg-mo">or $49.95/mo. for 24 mo.</span>
+          </div>
+          <p class="spec-line" id="cfg-line">6.3-inch display · 256GB · No coverage</p>
+          <p class="spec-line" id="cfg-eta">Delivers Tue, 26 Aug · Free delivery</p>
+          <div class="cfg-actions">
+            <button class="btn btn-p btn-lg" type="submit">Add to bag</button>
+            <button class="btn btn-s btn-lg" type="button" id="cfg-reset">Reset</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============ compare ============ -->
+<section class="section" id="compare" style="background:var(--bg-2)">
+  <div class="wide">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Compare</p>
+      <h2>Side by side, no tabs.</h2>
+      <p class="lede">Pick up to three products. The strongest value in each row is marked automatically.</p>
+    </div>
+    <div class="cmp-pick reveal">
+      <select id="cmp-0" aria-label="First product to compare"></select>
+      <select id="cmp-1" aria-label="Second product to compare"></select>
+      <select id="cmp-2" aria-label="Third product to compare"></select>
+    </div>
+    <div class="cmp-scroll reveal">
+      <table id="cmp-table"><thead><tr id="cmp-head"></tr></thead><tbody id="cmp-body"></tbody></table>
+    </div>
+    <p class="cmp-note" id="cmp-mixed" hidden>These are different kinds of product, so only price is marked — a lighter phone isn&rsquo;t a better laptop.</p>
+    <p class="cmp-note">Figures are illustrative and belong to this concept, not to any shipping product.</p>
+  </div>
+</section>
+
+<!-- ============ trade in ============ -->
+<section class="section" id="trade">
+  <div class="wrap center">
+    <div class="sec-head reveal center">
+      <p class="eyebrow">Trade in</p>
+      <h2>Your old one is worth something.</h2>
+      <p class="lede">Pick what you have. The credit applies to your bag total right away.</p>
+    </div>
+    <div class="reveal" style="max-width:460px;margin:0 auto">
+      <select id="trade-sel" aria-label="Select your current device"></select>
+      <p class="spec-line" id="trade-msg" style="margin-top:14px">No trade-in selected.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ why ============ -->
+<section class="section" id="support" style="background:var(--bg-2)">
+  <div class="wide">
+    <div class="sec-head reveal">
+      <p class="eyebrow">Why shop here</p>
+      <h2>Things the real store makes you hunt for.</h2>
+    </div>
+    <div class="strip reveal">
+      <div><div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg></div>
+        <h4>Search that answers</h4><p>Press <span class="kbd">/</span> anywhere. Results rank by what you typed, filter by category, and open with the keyboard.</p></div>
+      <div><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 8h12l1 12H5zM9 8V6a3 3 0 0 1 6 0v2"/></svg></div>
+        <h4>A bag that remembers</h4><p>Quantities, trade-in credit and totals persist across reloads — no account, no tracking.</p></div>
+      <div><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 17V7M10 17V4M16 17v-7M22 17v-4"/></svg></div>
+        <h4>Comparison built in</h4><p>Three products, one table, best-in-row marked for you. No spec sheet archaeology.</p></div>
+      <div><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6 6l1.5 1.5M16.5 16.5 18 18M18 6l-1.5 1.5M7.5 16.5 6 18"/></svg></div>
+        <h4>Dark mode, properly</h4><p>Follows your system, remembers your override, and every surface is tuned for both.</p></div>
+      <div><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/></svg></div>
+        <h4>Keyboard first</h4><p>Arrow keys through search, Esc closes anything, focus rings everywhere, and it all works without a mouse.</p></div>
+      <div><div class="ic"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-8-8"/><path d="M12 8v4l3 2"/></svg></div>
+        <h4>Nothing loads late</h4><p>One file, no fonts to fetch, no scripts from elsewhere. It works with the network off.</p></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wide">
+    <p class="f-note">* Monthly pricing is illustrative and assumes a 24-month, 0% APR instalment on the full price. Trade-in values are examples. Delivery dates are generated from your device clock. Nothing on this page is for sale.</p>
+    <div class="f-cols">
+      <div class="f-col"><h5>Shop</h5><button class="f-toggle" type="button">Shop</button><ul>
+        <li><a href="#lineup">Store</a></li><li><a href="#configure">Build your own</a></li>
+        <li><a href="#compare">Compare</a></li><li><a href="#trade">Trade in</a></li></ul></div>
+      <div class="f-col"><h5>Products</h5><button class="f-toggle" type="button">Products</button><ul>
+        <li><a href="#configure">iPhone</a></li><li><a href="#lineup">Mac</a></li>
+        <li><a href="#lineup">iPad</a></li><li><a href="#lineup">Watch</a></li></ul></div>
+      <div class="f-col"><h5>Account</h5><button class="f-toggle" type="button">Account</button><ul>
+        <li><a href="#top">Sign in</a></li><li><a href="#top">Order status</a></li><li><a href="#top">Saved items</a></li></ul></div>
+      <div class="f-col"><h5>Support</h5><button class="f-toggle" type="button">Support</button><ul>
+        <li><a href="#support">Shopping help</a></li><li><a href="#support">Delivery</a></li>
+        <li><a href="#support">Returns</a></li><li><a href="#support">Contact</a></li></ul></div>
+      <div class="f-col"><h5>About</h5><button class="f-toggle" type="button">About</button><ul>
+        <li><a href="#support">This project</a></li><li><a href="#support">Accessibility</a></li><li><a href="#support">Privacy</a></li></ul></div>
+    </div>
+    <div class="f-bottom">
+      <span>An independent front-end concept. Not affiliated with, endorsed by, or connected to Apple Inc. Product names, prices and specifications here are invented for demonstration, and no goods or services are offered for sale.</span>
+      <span>Built as a single HTML file.</span>
+    </div>
+  </div>
+</footer>
+
+<button class="icon-btn to-top" id="to-top" aria-label="Back to top"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   DATA
+============================================================ */
+var P=[
+ {id:"i17p",name:"iPhone 17 Pro",cat:"iphone",icon:"i-phone",pc:"#5b6472",price:1199,
+  tag:"Titanium. 5x tetraprism camera. Adaptive Power.",
+  specs:{display:'6.3" 120Hz OLED',displayN:6.3,chip:"A19 Pro",chipN:9.6,battery:"33 hrs video",batteryN:33,
+         camera:"48MP · 5x tele",cameraN:48,weight:"187 g",weightN:187,storage:"256GB–1TB"}},
+ {id:"i17",name:"iPhone 17",cat:"iphone",icon:"i-phone",pc:"#7f9fc4",price:899,
+  tag:"The everyday one, now with a 120Hz display.",
+  specs:{display:'6.1" 120Hz OLED',displayN:6.1,chip:"A19",chipN:8.8,battery:"27 hrs video",batteryN:27,
+         camera:"48MP · 2x tele",cameraN:48,weight:"171 g",weightN:171,storage:"128GB–512GB"}},
+ {id:"mbp",name:'MacBook Pro 14"',cat:"mac",icon:"i-laptop",pc:"#4a4a50",price:1999,
+  tag:"M5 Pro, 24-hour battery, 1600-nit HDR.",
+  specs:{display:'14.2" 120Hz mini-LED',displayN:14.2,chip:"M5 Pro",chipN:10,battery:"24 hrs",batteryN:24,
+         camera:"12MP Center Stage",cameraN:12,weight:"1.55 kg",weightN:1550,storage:"512GB–8TB"}},
+ {id:"mba",name:'MacBook Air 13"',cat:"mac",icon:"i-laptop",pc:"#9aa3b0",price:1099,
+  tag:"Fanless, 1.24 kg, 20 hours unplugged.",
+  specs:{display:'13.6" Liquid Retina',displayN:13.6,chip:"M5",chipN:9,battery:"20 hrs",batteryN:20,
+         camera:"12MP Center Stage",cameraN:12,weight:"1.24 kg",weightN:1240,storage:"256GB–2TB"}},
+ {id:"ipp",name:'iPad Pro 13"',cat:"ipad",icon:"i-tablet",pc:"#6b7280",price:1299,
+  tag:"5.1 mm thin. Free-form windows and a menu bar.",
+  specs:{display:'13" tandem OLED',displayN:13,chip:"M5",chipN:9,battery:"12 hrs",batteryN:12,
+         camera:"12MP wide",cameraN:12,weight:"582 g",weightN:582,storage:"256GB–2TB"}},
+ {id:"ipa",name:'iPad Air 11"',cat:"ipad",icon:"i-tablet",pc:"#8fa3bf",price:699,
+  tag:"The sweet spot, with Apple Pencil Pro support.",
+  specs:{display:'11" Liquid Retina',displayN:11,chip:"M4",chipN:8,battery:"11 hrs",batteryN:11,
+         camera:"12MP wide",cameraN:12,weight:"460 g",weightN:460,storage:"128GB–1TB"}},
+ {id:"aw",name:"Watch Series 11",cat:"watch",icon:"i-watch",pc:"#3a3a3f",price:429,
+  tag:"Sleep Score, Workout Buddy, 24-hour battery.",
+  specs:{display:'1.96" LTPO3',displayN:1.96,chip:"S11 SiP",chipN:7,battery:"24 hrs",batteryN:24,
+         camera:"—",cameraN:0,weight:"39 g",weightN:39,storage:"64GB"}},
+ {id:"awu",name:"Watch Ultra 3",cat:"watch",icon:"i-watch",pc:"#8a8a72",price:799,
+  tag:"Titanium, 4000 nits, 72 hours in low power.",
+  specs:{display:'2.12" LTPO3',displayN:2.12,chip:"S11 SiP",chipN:7.5,battery:"42 hrs",batteryN:42,
+         camera:"—",cameraN:0,weight:"61 g",weightN:61,storage:"64GB"}},
+ {id:"apm",name:"AirPods Pro 3",cat:"audio",icon:"i-buds",pc:"#f2f2f4",price:249,
+  tag:"Adaptive audio, live translation, heart-rate sensing.",
+  specs:{display:"—",displayN:0,chip:"H3",chipN:6,battery:"9 hrs (36 with case)",batteryN:36,
+         camera:"—",cameraN:0,weight:"5.3 g each",weightN:5,storage:"—"}},
+ {id:"vp",name:"Vision Pro",cat:"vision",icon:"i-vision",pc:"#c9ccd3",price:3499,
+  tag:"Persistent widgets and an ultrawide Mac display.",
+  specs:{display:"2× 4K micro-OLED",displayN:8,chip:"M5 + R2",chipN:10,battery:"3.5 hrs",batteryN:3.5,
+         camera:"Spatial 18MP",cameraN:18,weight:"600 g",weightN:600,storage:"256GB–1TB"}}
+];
+var BY={}; P.forEach(function(p){BY[p.id]=p});
+
+var HELP=[
+ {t:"Track an order",s:"Order status and delivery updates",href:"#support"},
+ {t:"Trade in your device",s:"Get credit toward something new",href:"#trade"},
+ {t:"Financing and instalments",s:"24 months at 0% APR",href:"#support"},
+ {t:"Returns and refunds",s:"14 days, no questions",href:"#support"},
+ {t:"Compare models",s:"Three products, one table",href:"#compare"},
+ {t:"Accessibility",s:"Keyboard, contrast and motion",href:"#support"}
+];
+
+var TRADE=[
+ {id:"",n:"No trade-in",v:0},
+ {id:"t1",n:"iPhone 15 Pro Max",v:630},
+ {id:"t2",n:"iPhone 15",v:430},
+ {id:"t3",n:"iPhone 13",v:270},
+ {id:"t4",n:'MacBook Air (M2)',v:540},
+ {id:"t5",n:'iPad Pro 11" (M2)',v:390},
+ {id:"t6",n:"Watch Ultra (1st gen)",v:210}
+];
+
+var COLORS=[
+ {id:"nat",n:"Natural Titanium",hex:"#8f8b83",pc:"#8f8b83"},
+ {id:"blu",n:"Deep Blue Titanium",hex:"#2f4a6d",pc:"#2f4a6d"},
+ {id:"wht",n:"White Titanium",hex:"#e6e3dd",pc:"#e6e3dd"},
+ {id:"blk",n:"Black Titanium",hex:"#3a3a3c",pc:"#3a3a3c"},
+ {id:"des",n:"Desert Titanium",hex:"#b79b74",pc:"#b79b74"}
+];
+var SIZES=[
+ {id:"s63",n:'6.3-inch display',sub:"187 g · 33 hrs of video",add:0},
+ {id:"s69",n:'6.9-inch display',sub:"221 g · 39 hrs of video",add:100}
+];
+var STORAGE=[
+ {id:"256",n:"256GB",sub:"Room for about 40,000 photos",add:0},
+ {id:"512",n:"512GB",sub:"Twice the space for ProRes",add:200},
+ {id:"1tb",n:"1TB",sub:"For long-form video work",add:400}
+];
+var CARE=[
+ {id:"none",n:"No coverage",sub:"Standard one-year warranty",add:0},
+ {id:"ac",n:"AppleCare+",sub:"2 years, unlimited accidental damage",add:199},
+ {id:"acl",n:"AppleCare+ with Theft & Loss",sub:"2 years, includes theft and loss",add:269}
+];
+
+var TAX=0.0825, FREE_SHIP=99, SHIP_FEE=9;
+
+/* ============================================================
+   HELPERS
+============================================================ */
+function $(s,c){return (c||document).querySelector(s)}
+function $$(s,c){return [].slice.call((c||document).querySelectorAll(s))}
+function money(n){return "$"+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")}
+function moneyShort(n){return "$"+Math.round(n).toLocaleString("en-US")}
+function svg(icon,pc,cls){
+  return '<svg class="'+(cls||"")+'" viewBox="'+VB[icon]+'" style="--pc:'+pc+'" aria-hidden="true"><use href="#'+icon+'"/></svg>';
+}
+var VB={"i-phone":"0 0 120 240","i-laptop":"0 0 260 165","i-tablet":"0 0 170 230",
+        "i-watch":"0 0 120 168","i-buds":"0 0 150 120","i-vision":"0 0 230 120"};
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];})}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function read(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function reduced(){return window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches}
+
+/* ============================================================
+   TOASTS
+============================================================ */
+var toastBox=$("#toasts");
+function toast(msg,icon){
+  var el=document.createElement("div");
+  el.className="toast";
+  el.innerHTML=(icon!==false?'<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>':"")+esc(msg);
+  toastBox.appendChild(el);
+  setTimeout(function(){
+    el.classList.add("out");
+    setTimeout(function(){el.remove()},320);
+  },2600);
+}
+
+/* ============================================================
+   THEME
+============================================================ */
+var root=document.documentElement, themeIcon=$("#theme-icon");
+var SUN='<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2 12h2.2M19.8 12H22M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/>';
+var MOON='<path d="M21 12.9A9 9 0 1 1 11.1 3a7 7 0 0 0 9.9 9.9z"/>';
+function setTheme(t){
+  root.setAttribute("data-theme",t);
+  themeIcon.innerHTML=t==="dark"?MOON:SUN;
+  $("#theme-btn").setAttribute("aria-label",t==="dark"?"Switch to light appearance":"Switch to dark appearance");
+}
+setTheme(read("st-theme",null)||(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
+$("#theme-btn").addEventListener("click",function(){
+  var t=root.getAttribute("data-theme")==="dark"?"light":"dark";
+  setTheme(t); save("st-theme",t);
+});
+
+/* ============================================================
+   CART
+============================================================ */
+var cart=read("st-cart",[]), tradeId=read("st-trade","");
+if(!Array.isArray(cart)) cart=[];
+
+function cartCount(){return cart.reduce(function(a,i){return a+i.qty},0)}
+function cartSubtotal(){return cart.reduce(function(a,i){return a+i.price*i.qty},0)}
+function tradeValue(){
+  var t=TRADE.filter(function(x){return x.id===tradeId})[0];
+  return t?t.v:0;
+}
+function persist(){save("st-cart",cart);save("st-trade",tradeId)}
+
+function addToCart(item){
+  var key=item.key||item.id;
+  var found=cart.filter(function(i){return i.key===key})[0];
+  if(found) found.qty++;
+  else cart.push({key:key,id:item.id,name:item.name,note:item.note||"",price:item.price,icon:item.icon,pc:item.pc,qty:1});
+  persist(); renderCart(); bump();
+  toast(item.name+" added to your bag");
+}
+function addProduct(id){
+  var p=BY[id]; if(!p) return;
+  addToCart({key:p.id,id:p.id,name:p.name,note:p.specs.chip!=="—"?p.specs.chip:"",price:p.price,icon:p.icon,pc:p.pc});
+}
+function bump(){
+  var b=$("#bag-btn");
+  if(reduced()) return;
+  b.animate([{transform:"scale(1)"},{transform:"scale(1.28)"},{transform:"scale(1)"}],{duration:340,easing:"cubic-bezier(.2,.8,.2,1)"});
+}
+
+var bagBody=$("#bag-body"), bagFoot=$("#bag-foot");
+function renderCart(){
+  var count=cartCount(), badge=$("#bag-count");
+  badge.textContent=count;
+  badge.classList.toggle("show",count>0);
+  $("#bag-btn").setAttribute("aria-label",count?("Shopping bag, "+count+" item"+(count>1?"s":"")):"Shopping bag, empty");
+
+  if(!cart.length){
+    bagBody.innerHTML='<div class="bag-empty">'+
+      '<svg viewBox="0 0 24 24"><path d="M6 8h12l1 12H5zM9 8V6a3 3 0 0 1 6 0v2"/></svg>'+
+      '<p><b>Your bag is empty.</b></p><p style="margin-top:6px;font-size:14px">Anything you add is saved on this device.</p></div>';
+    bagFoot.hidden=true;
+    return;
+  }
+  bagFoot.hidden=false;
+  bagBody.innerHTML=cart.map(function(i){
+    return '<div class="bag-item" data-key="'+esc(i.key)+'">'+
+      '<div class="bag-thumb">'+svg(i.icon,i.pc)+'</div>'+
+      '<div class="bag-info"><b>'+esc(i.name)+'</b>'+(i.note?'<small>'+esc(i.note)+'</small>':"")+
+        '<div class="qty">'+
+          '<button type="button" data-act="dec" aria-label="Decrease quantity of '+esc(i.name)+'">−</button>'+
+          '<span aria-live="off">'+i.qty+'</span>'+
+          '<button type="button" data-act="inc" aria-label="Increase quantity of '+esc(i.name)+'">+</button>'+
+        '</div></div>'+
+      '<div class="bag-right"><b>'+money(i.price*i.qty)+'</b>'+
+        '<button type="button" class="bag-remove" data-act="rm">Remove</button></div></div>';
+  }).join("");
+
+  var sub=cartSubtotal(), credit=Math.min(tradeValue(),sub);
+  var net=sub-credit;
+  var ship=net>=FREE_SHIP||net===0?0:SHIP_FEE;
+  var tax=net*TAX;
+  $("#sum-sub").textContent=money(sub);
+  $("#sum-tax").textContent=money(tax);
+  $("#sum-ship").textContent=ship?money(ship):"Free";
+  $("#sum-total").textContent=money(net+tax+ship);
+
+  var pct=Math.min(net/FREE_SHIP,1)*100;
+  $("#ship-fill").style.width=pct+"%";
+  $("#ship-msg").textContent = credit>0
+    ? "Trade-in credit of "+money(credit)+" applied. Free next-day delivery."
+    : (net>=FREE_SHIP ? "You qualify for free next-day delivery."
+                      : "Add "+money(FREE_SHIP-net)+" more for free next-day delivery.");
+
+  var creditRow=$("#credit-row");
+  if(credit>0){
+    if(!creditRow){
+      creditRow=document.createElement("div");
+      creditRow.className="row"; creditRow.id="credit-row";
+      creditRow.innerHTML='<span>Trade-in credit</span><span id="credit-val"></span>';
+      $("#sum-sub").parentNode.after(creditRow);
+    }
+    $("#credit-val").textContent="−"+money(credit);
+  }else if(creditRow) creditRow.remove();
+}
+
+bagBody.addEventListener("click",function(e){
+  var btn=e.target.closest("[data-act]"); if(!btn) return;
+  var key=btn.closest(".bag-item").getAttribute("data-key");
+  var idx=-1;
+  cart.forEach(function(i,n){if(i.key===key) idx=n});
+  if(idx<0) return;
+  var act=btn.getAttribute("data-act");
+  if(act==="inc") cart[idx].qty++;
+  else if(act==="dec"){ cart[idx].qty--; if(cart[idx].qty<1) cart.splice(idx,1); }
+  else if(act==="rm"){ toast(cart[idx].name+" removed"); cart.splice(idx,1); }
+  persist(); renderCart();
+});
+
+$("#checkout").addEventListener("click",function(){
+  toast("This is a concept — checkout is disabled.",false);
+});
+
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-add]"); if(!b) return;
+  e.preventDefault();
+  addProduct(b.getAttribute("data-add"));
+});
+
+/* ============================================================
+   PANELS (bag + search) with focus handling
+============================================================ */
+var overlay=$("#overlay"), bagEl=$("#bag"), searchEl=$("#search-sheet"), lastFocus=null, openPanel=null;
+
+function focusables(el){
+  return $$('a[href],button:not([disabled]),input,select,[tabindex]:not([tabindex="-1"])',el)
+    .filter(function(n){return n.offsetParent!==null});
+}
+function openP(which){
+  if(openPanel) closeP(true);
+  lastFocus=document.activeElement;
+  openPanel=which;
+  overlay.classList.add("open");
+  document.body.classList.add("locked");
+  if(which==="bag"){
+    bagEl.classList.add("open");
+    $("#bag-btn").setAttribute("aria-expanded","true");
+    $("#bag-close").focus({preventScroll:true});
+  }else{
+    searchEl.classList.add("open");
+    renderSearch();
+    $("#q").focus({preventScroll:true}); $("#q").select();
+  }
+}
+function closeP(silent){
+  if(!openPanel) return;
+  overlay.classList.remove("open");
+  bagEl.classList.remove("open");
+  searchEl.classList.remove("open");
+  $("#bag-btn").setAttribute("aria-expanded","false");
+  document.body.classList.remove("locked");
+  openPanel=null;
+  if(!silent&&lastFocus&&lastFocus.focus) lastFocus.focus();
+}
+$("#bag-btn").addEventListener("click",function(){openPanel==="bag"?closeP():openP("bag")});
+$("#bag-close").addEventListener("click",function(){closeP()});
+$("#search-btn").addEventListener("click",function(){openPanel==="search"?closeP():openP("search")});
+overlay.addEventListener("click",function(){closeP()});
+
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    if(openPanel){closeP();return}
+    if(closeMega()) return;
+    if($("#mnav").classList.contains("open")) toggleMobileNav(false);
+  }
+  var typing=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if(!openPanel&&!typing&&(e.key==="/"||((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"))){
+    e.preventDefault(); openP("search");
+  }
+  if(openPanel&&e.key==="Tab"){
+    var el=openPanel==="bag"?bagEl:searchEl, f=focusables(el);
+    if(!f.length) return;
+    var first=f[0], last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+  }
+});
+
+/* ============================================================
+   MEGA MENU + MOBILE NAV
+============================================================ */
+var megaOpen=null;
+function closeMega(){
+  if(!megaOpen) return false;
+  $("#"+megaOpen).classList.remove("open");
+  var b=$('[data-mega="'+megaOpen+'"]');
+  if(b) b.setAttribute("aria-expanded","false");
+  megaOpen=null; return true;
+}
+function openMega(id){
+  if(megaOpen===id){closeMega();return}
+  closeMega();
+  $("#"+id).classList.add("open");
+  $('[data-mega="'+id+'"]').setAttribute("aria-expanded","true");
+  megaOpen=id;
+}
+$$("[data-mega]").forEach(function(b){
+  b.addEventListener("click",function(e){e.stopPropagation();openMega(b.getAttribute("data-mega"))});
+});
+document.addEventListener("click",function(e){
+  if(megaOpen&&!e.target.closest(".mega")&&!e.target.closest("[data-mega]")) closeMega();
+});
+
+function toggleMobileNav(force){
+  var m=$("#mnav"), open=typeof force==="boolean"?force:!m.classList.contains("open");
+  m.classList.toggle("open",open);
+  $("#nav-toggle").setAttribute("aria-expanded",String(open));
+  document.body.classList.toggle("locked",open);
+}
+$("#nav-toggle").addEventListener("click",function(){toggleMobileNav()});
+$("#mnav").addEventListener("click",function(e){if(e.target.tagName==="A") toggleMobileNav(false)});
+
+/* ============================================================
+   CAROUSEL
+============================================================ */
+var track=$("#track");
+track.innerHTML=P.map(function(p){
+  return '<article class="slide" id="card-'+p.id+'">'+
+    '<span class="badge">'+esc(p.cat==="vision"?"Spatial":p.cat)+'</span>'+
+    '<h3>'+esc(p.name)+'</h3><p class="sub">'+esc(p.tag)+'</p>'+
+    '<div class="art">'+svg(p.icon,p.pc)+'</div>'+
+    '<div class="foot"><span class="price">From '+moneyShort(p.price)+'</span>'+
+    '<button class="btn btn-p btn-sm" data-add="'+p.id+'">Add</button></div></article>';
+}).join("");
+
+function slideStep(){
+  var s=track.querySelector(".slide");
+  return s?s.getBoundingClientRect().width+16:300;
+}
+function updateCNav(){
+  $("#c-prev").disabled=track.scrollLeft<8;
+  $("#c-next").disabled=track.scrollLeft>=track.scrollWidth-track.clientWidth-8;
+}
+$("#c-prev").addEventListener("click",function(){track.scrollBy({left:-slideStep()*2,behavior:"smooth"})});
+$("#c-next").addEventListener("click",function(){track.scrollBy({left:slideStep()*2,behavior:"smooth"})});
+track.addEventListener("scroll",function(){requestAnimationFrame(updateCNav)},{passive:true});
+track.addEventListener("keydown",function(e){
+  if(e.key==="ArrowRight"){e.preventDefault();track.scrollBy({left:slideStep(),behavior:"smooth"})}
+  if(e.key==="ArrowLeft"){e.preventDefault();track.scrollBy({left:-slideStep(),behavior:"smooth"})}
+});
+/* drag to scroll */
+(function(){
+  var down=false,x0=0,l0=0,moved=0;
+  track.addEventListener("pointerdown",function(e){
+    if(e.target.closest("button")) return;
+    down=true;moved=0;x0=e.clientX;l0=track.scrollLeft;track.style.scrollSnapType="none";
+  });
+  track.addEventListener("pointermove",function(e){
+    if(!down) return;
+    var d=e.clientX-x0; moved=Math.abs(d);
+    if(moved>4){track.setPointerCapture(e.pointerId); track.scrollLeft=l0-d;}
+  });
+  ["pointerup","pointercancel","pointerleave"].forEach(function(ev){
+    track.addEventListener(ev,function(){down=false;track.style.scrollSnapType=""});
+  });
+})();
+updateCNav();
+
+/* ============================================================
+   CONFIGURATOR
+============================================================ */
+var cfg={color:"nat",size:"s63",storage:"256",care:"none"};
+var savedCfg=read("st-cfg",null);
+if(savedCfg&&savedCfg.color) cfg=savedCfg;
+
+function optBtn(o,group,active){
+  return '<button type="button" class="opt" role="button" data-group="'+group+'" data-id="'+o.id+'" aria-pressed="'+(active?"true":"false")+'">'+
+    '<b>'+esc(o.n)+'<small>'+esc(o.sub)+'</small></b>'+
+    '<span>'+(o.add?"+"+moneyShort(o.add):"Included")+'</span></button>';
+}
+function renderCfg(){
+  $("#cfg-colors").innerHTML=COLORS.map(function(c){
+    return '<button type="button" class="sw" data-group="color" data-id="'+c.id+'" style="background:'+c.hex+'" '+
+      'aria-pressed="'+(cfg.color===c.id?"true":"false")+'" aria-label="'+esc(c.n)+'" title="'+esc(c.n)+'"></button>';
+  }).join("");
+  $("#cfg-sizes").innerHTML=SIZES.map(function(o){return optBtn(o,"size",cfg.size===o.id)}).join("");
+  $("#cfg-storage").innerHTML=STORAGE.map(function(o){return optBtn(o,"storage",cfg.storage===o.id)}).join("");
+  $("#cfg-care").innerHTML=CARE.map(function(o){return optBtn(o,"care",cfg.care===o.id)}).join("");
+
+  var color=pick(COLORS,cfg.color), size=pick(SIZES,cfg.size), st=pick(STORAGE,cfg.storage), care=pick(CARE,cfg.care);
+  var total=1199+size.add+st.add+care.add;
+
+  $("#cfg-art").style.setProperty("--pc",color.pc);
+  $("#cfg-color-name").textContent=color.n;
+  $("#cfg-price").textContent=money(total);
+  $("#cfg-mo").textContent="or "+money(total/24)+"/mo. for 24 mo.";
+  $("#cfg-line").textContent=size.n+" · "+st.n+" · "+care.n;
+  $("#cfg-eta").textContent=eta()+" · Free delivery";
+  save("st-cfg",cfg);
+}
+function pick(arr,id){return arr.filter(function(o){return o.id===id})[0]||arr[0]}
+function eta(){
+  var d=new Date(); d.setDate(d.getDate()+5);
+  return "Delivers "+d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+}
+$("#cfg-form").addEventListener("click",function(e){
+  var b=e.target.closest("[data-group]"); if(!b) return;
+  cfg[b.getAttribute("data-group")]=b.getAttribute("data-id");
+  renderCfg();
+});
+$("#cfg-form").addEventListener("submit",function(e){
+  e.preventDefault();
+  var color=pick(COLORS,cfg.color), size=pick(SIZES,cfg.size), st=pick(STORAGE,cfg.storage), care=pick(CARE,cfg.care);
+  addToCart({
+    key:"i17p-"+cfg.color+"-"+cfg.size+"-"+cfg.storage+"-"+cfg.care,
+    id:"i17p", name:"iPhone 17 Pro",
+    note:color.n+" · "+size.n.replace("-inch display","″")+" · "+st.n+(care.add?" · "+care.n:""),
+    price:1199+size.add+st.add+care.add, icon:"i-phone", pc:color.pc
+  });
+  openP("bag");
+});
+$("#cfg-reset").addEventListener("click",function(){
+  cfg={color:"nat",size:"s63",storage:"256",care:"none"};
+  renderCfg(); toast("Configuration reset",false);
+});
+renderCfg();
+
+/* ============================================================
+   COMPARE
+============================================================ */
+var ROWS=[
+ {k:"price",label:"Price",get:function(p){return moneyShort(p.price)},num:function(p){return p.price},better:"low",crossOk:true},
+ {k:"display",label:"Display",get:function(p){return p.specs.display},num:function(p){return p.specs.displayN},better:"high"},
+ {k:"chip",label:"Chip",get:function(p){return p.specs.chip},num:function(p){return p.specs.chipN},better:"high"},
+ {k:"battery",label:"Battery",get:function(p){return p.specs.battery},num:function(p){return p.specs.batteryN},better:"high"},
+ {k:"camera",label:"Camera",get:function(p){return p.specs.camera},num:function(p){return p.specs.cameraN},better:"high"},
+ {k:"weight",label:"Weight",get:function(p){return p.specs.weight},num:function(p){return p.specs.weightN},better:"low"},
+ {k:"storage",label:"Storage",get:function(p){return p.specs.storage},num:null}
+];
+var cmpSel=[$("#cmp-0"),$("#cmp-1"),$("#cmp-2")];
+var defaults=["i17p","i17","mbp"];
+cmpSel.forEach(function(sel,i){
+  sel.innerHTML='<option value="">— none —</option>'+P.map(function(p){
+    return '<option value="'+p.id+'">'+esc(p.name)+'</option>'}).join("");
+  sel.value=defaults[i];
+  sel.addEventListener("change",renderCompare);
+});
+function renderCompare(){
+  var chosen=cmpSel.map(function(s){return BY[s.value]}).filter(Boolean);
+  var head=$("#cmp-head"), body=$("#cmp-body");
+  if(!chosen.length){
+    head.innerHTML='<th scope="col">Spec</th>';
+    body.innerHTML='<tr><td style="color:var(--text-2)">Pick at least one product above to build the table.</td></tr>';
+    return;
+  }
+  head.innerHTML='<th scope="col">Spec</th>'+chosen.map(function(p){
+    return '<th scope="col"><div class="cmp-art">'+svg(p.icon,p.pc)+'</div>'+esc(p.name)+'</th>'}).join("");
+  /* Marking a "best" weight or display across a phone and a laptop would be
+     meaningless, so best-in-row only applies within one product category. */
+  var sameCat=chosen.every(function(p){return p.cat===chosen[0].cat});
+  $("#cmp-mixed").hidden=sameCat||chosen.length<2;
+  body.innerHTML=ROWS.map(function(r){
+    var best=null;
+    if(r.num&&chosen.length>1&&(sameCat||r.crossOk)){
+      var vals=chosen.map(r.num).filter(function(v){return typeof v==="number"&&v>0});
+      if(vals.length>1) best=r.better==="low"?Math.min.apply(null,vals):Math.max.apply(null,vals);
+    }
+    return '<tr><th scope="row">'+esc(r.label)+'</th>'+chosen.map(function(p){
+      var isBest=best!==null&&r.num(p)===best;
+      return '<td'+(isBest?' class="best"':'')+'>'+esc(r.get(p))+'</td>';
+    }).join("")+'</tr>';
+  }).join("")+
+  '<tr><th scope="row">Add to bag</th>'+chosen.map(function(p){
+    return '<td><button class="btn btn-p btn-sm" data-add="'+p.id+'">Add</button></td>'}).join("")+'</tr>';
+}
+renderCompare();
+
+/* ============================================================
+   TRADE-IN
+============================================================ */
+var tradeSel=$("#trade-sel");
+tradeSel.innerHTML=TRADE.map(function(t){
+  return '<option value="'+t.id+'">'+esc(t.n)+(t.v?" — up to "+moneyShort(t.v):"")+'</option>'}).join("");
+tradeSel.value=tradeId;
+function renderTrade(){
+  var t=TRADE.filter(function(x){return x.id===tradeId})[0]||TRADE[0];
+  $("#trade-msg").textContent = t.v
+    ? "Estimated credit of "+moneyShort(t.v)+" applies to your bag total."
+    : "No trade-in selected.";
+}
+tradeSel.addEventListener("change",function(){
+  tradeId=tradeSel.value; persist(); renderTrade(); renderCart();
+  var t=TRADE.filter(function(x){return x.id===tradeId})[0];
+  if(t&&t.v) toast("Trade-in credit of "+moneyShort(t.v)+" applied");
+});
+renderTrade();
+
+/* ============================================================
+   SEARCH
+============================================================ */
+var qEl=$("#q"), resEl=$("#s-results"), hintEl=$("#s-hint"), cat="all", cursor=-1, current=[];
+
+function score(hay,q,fuzzy){
+  hay=String(hay).toLowerCase();
+  var i=hay.indexOf(q);
+  if(i===0) return 100;
+  if(i>0) return hay[i-1]===" "?70:40;
+  /* subsequence fallback, names only, and only when the letters land close together */
+  if(!fuzzy||q.length<3) return 0;
+  var pos=0,start=-1;
+  for(var c=0;c<q.length;c++){
+    pos=hay.indexOf(q[c],pos);
+    if(pos<0) return 0;
+    if(start<0) start=pos;
+    pos++;
+  }
+  return (pos-start)<=q.length+3?15:0;
+}
+function results(){
+  var q=qEl.value.trim().toLowerCase();
+  var pool=P.filter(function(p){return cat==="all"||p.cat===cat});
+  var items=pool.map(function(p){
+    return {type:"product",p:p,
+      s:Math.max(score(p.name,q,true)*1.4,score(p.tag,q),score(p.cat,q),score(p.specs.chip,q))};
+  });
+  if(cat==="all"){
+    items=items.concat(HELP.map(function(h){
+      return {type:"help",h:h,s:Math.max(score(h.t,q,true)*1.2,score(h.s,q))};
+    }));
+  }
+  if(!q) return pool.slice(0,6).map(function(p){return {type:"product",p:p,s:1}});
+  return items.filter(function(i){return i.s>0}).sort(function(a,b){return b.s-a.s}).slice(0,8);
+}
+function renderSearch(){
+  current=results(); cursor=-1;
+  var q=qEl.value.trim();
+  hintEl.textContent=q?(current.length+" result"+(current.length===1?"":"s")+' for "'+q+'"'):"Popular right now";
+  if(!current.length){
+    resEl.innerHTML='<li class="s-empty">Nothing matched. Try “pro”, “battery”, “trade in” or “watch”.</li>';
+    return;
+  }
+  resEl.innerHTML=current.map(function(it,i){
+    if(it.type==="product"){
+      var p=it.p;
+      return '<li role="option" aria-selected="false" data-i="'+i+'"><button type="button" data-jump="'+p.id+'">'+
+        '<span class="s-thumb">'+svg(p.icon,p.pc)+'</span>'+
+        '<span class="s-meta"><b>'+esc(p.name)+'</b><span>'+esc(p.tag)+'</span></span>'+
+        '<span class="s-price">'+moneyShort(p.price)+'</span></button></li>';
+    }
+    var h=it.h;
+    return '<li role="option" aria-selected="false" data-i="'+i+'"><a href="'+h.href+'" data-help="1">'+
+      '<span class="s-thumb"><svg viewBox="0 0 24 24" style="stroke:var(--text-3);fill:none;stroke-width:1.7"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.2 2.9c-.6.2-.8.7-.8 1.3M12 17h.01" stroke-linecap="round"/></svg></span>'+
+      '<span class="s-meta"><b>'+esc(h.t)+'</b><span>'+esc(h.s)+'</span></span>'+
+      '<span class="s-price">Help</span></a></li>';
+  }).join("");
+}
+function moveCursor(d){
+  var items=$$("#s-results li[role=option]");
+  if(!items.length) return;
+  if(cursor>=0) items[cursor].setAttribute("aria-selected","false");
+  cursor=(cursor+d+items.length)%items.length;
+  items[cursor].setAttribute("aria-selected","true");
+  items[cursor].scrollIntoView({block:"nearest"});
+}
+function activate(){
+  var items=$$("#s-results li[role=option]");
+  var el=items[cursor<0?0:cursor];
+  if(!el) return;
+  var target=el.querySelector("button,a");
+  if(target) target.click();
+}
+qEl.addEventListener("input",renderSearch);
+qEl.addEventListener("keydown",function(e){
+  if(e.key==="ArrowDown"){e.preventDefault();moveCursor(1)}
+  else if(e.key==="ArrowUp"){e.preventDefault();moveCursor(-1)}
+  else if(e.key==="Enter"){e.preventDefault();activate()}
+});
+$("#s-chips").addEventListener("click",function(e){
+  var c=e.target.closest(".chip"); if(!c) return;
+  $$(".chip",this).forEach(function(x){x.classList.toggle("on",x===c)});
+  cat=c.getAttribute("data-cat");
+  renderSearch(); qEl.focus();
+});
+resEl.addEventListener("click",function(e){
+  var b=e.target.closest("[data-jump]");
+  if(b){
+    var id=b.getAttribute("data-jump");
+    closeP(true);
+    jumpTo(id);
+    return;
+  }
+  if(e.target.closest("[data-help]")) closeP(true);
+});
+function jumpTo(id){
+  var el=$("#card-"+id)||$("#p-"+id)||$("#lineup");
+  if(id==="i17p") el=$("#configure");
+  scrollToEl(el);
+  if(el&&el.classList.contains("slide")&&!reduced()){
+    el.animate([{boxShadow:"0 0 0 0 rgba(0,113,227,0)"},{boxShadow:"0 0 0 5px rgba(0,113,227,.45)"},{boxShadow:"0 0 0 0 rgba(0,113,227,0)"}],{duration:1300});
+    el.scrollIntoView({block:"nearest",inline:"center",behavior:reduced()?"auto":"smooth"});
+  }
+}
+function scrollToEl(el){
+  if(!el) return;
+  var y=el.getBoundingClientRect().top+window.scrollY-(parseInt(getComputedStyle(root).getPropertyValue("--nav-h"),10)+16);
+  window.scrollTo({top:Math.max(y,0),behavior:reduced()?"auto":"smooth"});
+}
+
+/* ============================================================
+   IN-PAGE LINKS
+============================================================ */
+document.addEventListener("click",function(e){
+  var a=e.target.closest('a[href^="#"]'); if(!a) return;
+  var id=a.getAttribute("href").slice(1);
+  if(!id) return;
+  var el=document.getElementById(id); if(!el) return;
+  e.preventDefault();
+  closeMega();
+  var goto=a.getAttribute("data-goto");
+  scrollToEl(el);
+  if(goto) setTimeout(function(){jumpTo(goto)},reduced()?0:420);
+  history.replaceState(null,"","#"+id);
+});
+
+/* ============================================================
+   FOOTER ACCORDION
+============================================================ */
+$$(".f-toggle").forEach(function(b){
+  b.addEventListener("click",function(){b.parentNode.classList.toggle("open")});
+});
+
+/* ============================================================
+   REVEAL + SCROLL CHROME
+============================================================ */
+var reveals=$$(".reveal");
+if("IntersectionObserver" in window){
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(!en.isIntersecting) return;
+      var el=en.target;
+      var sibs=[].slice.call(el.parentNode.children).filter(function(n){return n.classList.contains("reveal")});
+      el.style.transitionDelay=Math.min(sibs.indexOf(el),5)*70+"ms";
+      el.classList.add("in"); io.unobserve(el);
+    });
+  },{threshold:.12,rootMargin:"0px 0px -30px 0px"});
+  reveals.forEach(function(el){io.observe(el)});
+}else reveals.forEach(function(el){el.classList.add("in")});
+
+var toTop=$("#to-top"), tick=false;
+window.addEventListener("scroll",function(){
+  if(tick) return; tick=true;
+  requestAnimationFrame(function(){
+    toTop.classList.toggle("show",window.scrollY>800);
+    tick=false;
+  });
+},{passive:true});
+toTop.addEventListener("click",function(){window.scrollTo({top:0,behavior:reduced()?"auto":"smooth"})});
+window.addEventListener("resize",updateCNav);
+
+/* ============================================================
+   BOOT
+============================================================ */
+renderCart();
+renderSearch();
+})();
+</script>
+</body>
+</html>
