@@ -260,7 +260,7 @@ export async function profile({ settings, account }) {
 
 export async function feed({ settings, account, after }) {
   const { data } = await call(`${base(settings)}/${account.remoteId}/published_posts?${qs({ fields: FB_POST_FIELDS, limit: 24, after, access_token: tokenOf(account) })}`);
-  return { posts: (data.data || []).map(fbItem), next: data.paging?.next ? data.paging?.cursors?.after || null : null };
+  return { posts: (data.data || []).map(fbItem), next: data.paging?.cursors?.after && (data.paging?.next || (data.data || []).length >= 24) ? data.paging.cursors.after : null };
 }
 
 const FB_LABEL = {
