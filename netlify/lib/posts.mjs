@@ -170,6 +170,7 @@ export async function updatePost(id, input) {
   const targets = {};
   for (const accId of post.accountIds) targets[accId] = post.targets?.[accId]?.status === "posted" ? post.targets[accId] : { status: "pending" };
   post.targets = targets;
+  post.retryAt = null;
   if (input.approve) post.approvedAt = new Date().toISOString();
   if (input.needsApproval === true && !input.approve) post.approvedAt = null;
   post.status = deriveStatus(post);
@@ -204,8 +205,9 @@ export async function prepareNow(id, { retry = false } = {}) {
   const prevKey = keyFor(post);
   if (post.status === "publishing") throw new HttpError(400, "This post is already going out.");
   if (retry) {
-    for (const t of Object.values(post.targets || {})) if (t.status === "failed") Object.assign(t, { status: "pending", error: "" });
+    for (const t of Object.values(post.targets || {})) if (t.status === "failed") Object.assign(t, { status: "pending", error: "", tries: 0 });
   }
+  post.retryAt = null;
   const hasPending = Object.values(post.targets || {}).some((t) => t.status === "pending");
   if (!hasPending) throw new HttpError(400, "Nothing left to post for this one.");
   post.scheduledAt = new Date().toISOString();
@@ -249,7 +251,8 @@ export async function duePosts(now = new Date()) {
   const today = istDateKey(now);
   const from = istDateKey(new Date(now.getTime() - 2 * 86400000));
   const posts = await listPosts({ from, to: today });
-  return posts.filter((p) => p.status === "scheduled" && p.scheduledAt && new Date(p.scheduledAt).getTime() <= now.getTime() + 60000);
+  // A post waiting for its automatic retry is due at retryAt, not at its original time.
+  return posts.filter((p) => p.status === "scheduled" && p.scheduledAt && new Date(p.retryAt || p.scheduledAt).getTime() <= now.getTime() + 60000);
 }
 
 export async function claim(postId) {

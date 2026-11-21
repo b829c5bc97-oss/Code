@@ -126,7 +126,12 @@ export function publicAccount(a) {
   let loginNote = "";
   let status = a.status;
   if (a.platform === "manual") loginNote = "Reminder with caption and photo ready";
-  else if (a.platform === "facebook") loginNote = "Page login doesn't expire";
+  else if ((a.platform === "facebook" || a.platform === "instagram") && a.loginEndsAt) {
+    const days = Math.ceil((new Date(a.loginEndsAt).getTime() - now) / 86400000);
+    loginNote = days > 0 ? `Meta asks you to log in again in ${days} days` : "Meta login ended — reconnect";
+    if (days <= 0) status = "expired";
+    else if (days <= 7 && status === "ok") status = "expiring";
+  } else if (a.platform === "facebook") loginNote = "Page login doesn't expire";
   else if (a.platform === "linkedin" && a.tokenExpiresAt) {
     const days = Math.ceil((new Date(a.tokenExpiresAt).getTime() - now) / 86400000);
     loginNote = days > 0 ? `LinkedIn asks again in ${days} days` : "LinkedIn login ended — reconnect";

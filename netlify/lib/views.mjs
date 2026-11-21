@@ -3,6 +3,7 @@
 import { listAccounts, publicAccount } from "./accounts.mjs";
 import { listPosts } from "./posts.mjs";
 import { getJSON } from "./store.mjs";
+import { alertLog } from "./alerts.mjs";
 import { getModel } from "./jobs.mjs";
 import { suggest, bestTimeOfDay, topSlots, HOURS, STARTING_WINDOWS } from "./besttime.mjs";
 import { getSettings, configured } from "./settings.mjs";
@@ -109,6 +110,7 @@ export async function overview() {
     },
     today_posts: todayPosts,
     attention,
+    alerts: (await alertLog()).filter((a) => Date.now() - new Date(a.at).getTime() < 3 * 86400000).slice(0, 6),
     reminders,
     accounts: rows,
     drafts: drafts.filter((p) => p.status === "draft").length,

@@ -309,7 +309,7 @@ async function screenOverview(q) {
     <section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>
     <div class="grid g-2">
       <section class="card"><div class="row between"><h2>Today · ${d.today_posts.length} post${d.today_posts.length === 1 ? "" : "s"}</h2></div><div>${todayRows}</div><a href="#/plan" style="font-size:14px;font-weight:600;text-decoration:none">See the full week →</a></section>
-      <section class="card"><h2>Needs your attention</h2>${attention}</section>
+      <section class="card"><h2>Needs your attention</h2>${attention}${(d.alerts || []).length ? `<h3 style="margin-top:14px">Recent alerts</h3><div class="stack" style="gap:6px">${d.alerts.map((a) => `<div class="small"><b>${esc(a.title)}</b> <span class="muted">· ${esc(whenText(a.at))}${a.sent?.length ? ` · sent by ${esc(a.sent.join(", "))}` : ""}</span><br><span class="muted">${esc(a.text)}</span></div>`).join("")}</div>` : ""}</section>
     </div>
     ${reminders}
     <section class="card"><div class="row between"><h2>All accounts · last 7 days</h2><a href="#/insights" style="font-size:14px;font-weight:600;text-decoration:none">Open insights →</a></div>
@@ -903,7 +903,8 @@ async function screenCreate(q) {
       const a = acc.accounts.find((x) => x.id === id);
       return `<div class="row between" style="border-top:1px solid var(--line-2);padding-top:10px"><span class="row">${badge(a?.platform || "unknown", true)}<b style="font-size:14px">${esc(a?.name || "Removed account")}</b></span>
         <span class="row">${pill(t.status)}${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600">Open post</a>` : ""}</span></div>
-        ${t.error ? `<p class="note bad">${esc(t.error)}</p>` : ""}${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}`;
+        ${t.status === "pending" && t.retryAt ? `<p class="note warn">First try didn't work (${esc(t.reason || t.lastError || "")}). Social HQ tries again at ${esc(time(t.retryAt))}.</p>` : ""}
+        ${t.error ? `<p class="note bad">${t.reason ? `<b>${esc(t.reason)}</b><br>${t.fix ? `What to do: ${esc(t.fix)}<br>` : ""}<span class="small">Exact message: ${esc(t.error)}</span>` : esc(t.error)}</p>` : ""}${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}`;
     }).join("");
     $("#c-status").innerHTML = `<section class="card tight"><h3>Where this post stands</h3>${rows}</section>`;
   }
@@ -1739,6 +1740,11 @@ function growth(hist) {
 
 // ---------- Settings ----------
 const GUIDE = {
+  alerts: `<p class="muted">When a post fails, Social HQ tries once more 10 minutes later. If it still fails, or an account's login is about to end, you get told — on every channel you set up here. Alerts also show on the Overview screen.</p>
+    <ol class="muted"><li><b>WhatsApp (free):</b> save <b>+34 694 25 79 72</b> in your phone as "CallMeBot" and send it this WhatsApp message: <code>I allow callmebot to send me messages</code>. It replies with a key. Put your number and that key below.</li>
+    <li><b>Phone notification (free):</b> install the <b>ntfy</b> app, tap <b>+</b>, and subscribe to a private name only you know (for example <code>socialhq-pratham-7391</code>). Type the same name below.</li>
+    <li><b>Email:</b> uses the Resend key in "Reminder emails" further down; leave the address empty to use the reminder address.</li></ol>
+    <p class="row" style="gap:8px"><button class="btn sm" type="button" id="test-alert">Send a test alert</button><span class="muted small" id="test-alert-out"></span></p>`,
   instagram: `<ol class="muted"><li>Open <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">Meta for Developers → My Apps</a>, create an app with the use cases <b>Manage messaging & content on Instagram</b> and <b>Manage everything on your Page</b>, and connect it to your business portfolio.</li><li>Copy the <b>App ID</b> and <b>App secret</b> (App settings → Basic) here. Facebook Pages uses the same two, so you only type them once.</li><li>Under <b>Instagram → API setup with Unified login</b>, create a configuration, add the redirect address below, and paste the <b>Configuration ID</b> here.</li><li>Under <b>App roles → Roles</b>, add each Instagram account as an <b>Instagram tester</b>, then accept the invite in each account (Instagram app → Settings → Website permissions → Apps and websites → Tester invites).</li></ol>`,
   facebook: `<ol class="muted"><li>Leave App ID and secret empty if you filled them in for Instagram above.</li><li>Under <b>Facebook Login for Business → Configurations</b>, create one with a <b>User access token</b> and the Page permissions, and paste its <b>Configuration ID</b> here.</li><li>Under <b>Facebook Login for Business → Settings</b>, add the redirect address shown below.</li></ol>`,
   linkedin: `<ol class="muted"><li>Open <a href="https://www.linkedin.com/developers/apps" target="_blank" rel="noopener">LinkedIn Developers</a>, create an app linked to the LIFTLINE page.</li><li>Under <b>Products</b>, add <b>Sign In with LinkedIn using OpenID Connect</b> and <b>Share on LinkedIn</b>.</li><li>Under <b>Auth</b>, copy the Client ID and secret here and add the redirect address below.</li><li>For company pages, LinkedIn must approve the Community Management API (separate app). Tick "Company pages" only after that.</li></ol>`,
@@ -1747,7 +1753,7 @@ const GUIDE = {
   reminders: `<p class="muted">Optional. Make a free <a href="https://resend.com" target="_blank" rel="noopener">Resend</a> account, create an API key, and paste it here with your email. Without it, reminders still show on the Overview screen.</p>`,
   general: `<p class="muted">Leave as it is unless Claude tells you to change it.</p>`,
 };
-const FIELD_LABEL = { appId: "App ID", appSecret: "App secret", clientId: "Client ID", clientSecret: "Client secret", orgAccess: "Company pages approved by LinkedIn", version: "LinkedIn API version (YYYYMM)", sandbox: "Sandbox (pins visible only to you)", resendKey: "Resend API key", to: "Send reminders to (email)", from: "From (optional)", graphVersion: "Meta Graph API version", configId: "Configuration ID" };
+const FIELD_LABEL = { appId: "App ID", appSecret: "App secret", clientId: "Client ID", clientSecret: "Client secret", orgAccess: "Company pages approved by LinkedIn", version: "LinkedIn API version (YYYYMM)", sandbox: "Sandbox (pins visible only to you)", resendKey: "Resend API key", to: "Send reminders to (email)", from: "From (optional)", graphVersion: "Meta Graph API version", configId: "Configuration ID", whatsappPhone: "WhatsApp number for alerts (with country code, e.g. +918800835120)", callmebotKey: "CallMeBot key (from the WhatsApp reply)", ntfyTopic: "Phone notification channel (ntfy app)", email: "Email alerts to (uses the Resend key above)", loginDays: "Warn this many days before a login ends" };
 
 function claudeCard(sec) {
   return `<section class="card" id="claude"><h2>Claude</h2>
@@ -1870,7 +1876,7 @@ function confirmBox(text) {
 async function screenSettings(q) {
   const s = await api("GET", "/api/settings");
   const missing = q.get("missing");
-  const sections = ["instagram", "facebook", "linkedin", "youtube", "pinterest", "reminders", "general"];
+  const sections = ["alerts", "instagram", "facebook", "linkedin", "youtube", "pinterest", "reminders", "general"];
   const sec = await api("GET", "/api/security");
   main(`
     <header class="head"><div><p class="sub">Platform keys, reminders and your password</p><h1>Settings</h1></div></header>
@@ -1896,6 +1902,17 @@ async function screenSettings(q) {
       <div class="stack" style="gap:0">${sec.events.length ? sec.events.map((e) => `<div class="row" style="gap:10px;padding:8px 0;border-top:1px solid var(--line-2);align-items:flex-start"><span class="muted small" style="flex:0 0 132px">${esc(whenText(e.at))}</span><span style="flex:1 1 220px;min-width:0"><b style="font-weight:600">${esc(e.text)}</b><br><span class="muted small">${esc([e.device, e.where, e.ip].filter(Boolean).join(" · "))}</span></span></div>`).join("") : '<p class="muted">Nothing yet.</p>'}</div></section>
     <section class="card"><h2>Change password</h2><form class="grid g-3" id="pw-form" style="gap:10px"><label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label><label class="f">New password (8+ characters)<input type="password" name="next" required minlength="8" autocomplete="new-password"></label>${sec.twoStep ? '<label class="f">6-digit code<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>' : ""}<div class="row" style="grid-column:1/-1"><button class="btn sm primary" type="submit">Change password</button></div></form></section>`);
   wireSecurity(sec);
+  const ta = $("#test-alert");
+  if (ta) ta.onclick = async () => {
+    const out = $("#test-alert-out");
+    out.textContent = "Sending…";
+    try {
+      const r = await api("POST", "/api/alerts/test");
+      out.textContent = r.sent?.length ? `Sent by ${r.sent.join(", ")}.${r.errors?.length ? " Problem: " + r.errors.join("; ") : ""}` : r.errors?.length ? r.errors.join("; ") : "No channel set up yet. Fill one in, press Save, then try again.";
+    } catch (e) {
+      out.textContent = e.message;
+    }
+  };
   if (missing && $(`#sec-${missing}`)) $(`#sec-${missing}`).scrollIntoView?.();
   $$("[data-copytext]").forEach((b) => (b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copytext); toast("Copied"); }));
   $$("form[data-sec]").forEach((f) => (f.onsubmit = async (e) => {

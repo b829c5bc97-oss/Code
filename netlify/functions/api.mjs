@@ -18,6 +18,8 @@ import { listRules, createRule, updateRule, deleteRule, getLog, testComment, run
 import { cacheAvatar, readAvatar, refreshAvatars } from "../lib/avatars.mjs";
 import { analysisFor } from "../lib/analysis.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
+import { sendAlert, alertLog } from "../lib/alerts.mjs";
+import { checkLogins } from "../lib/logincheck.mjs";
 
 function siteUrl(req, context) {
   return (env("URL") || context?.site?.url || new URL(req.url).origin).replace(/\/$/, "");
@@ -221,6 +223,13 @@ route("PUT", "/api/settings", async ({ req, context }) => {
   await logEvent("settings", `Changed settings: ${Object.keys(patch || {}).join(", ")}`, req);
   return json(await publicSettings(siteUrl(req, context)));
 });
+// ---------- Alerts ----------
+route("GET", "/api/alerts", async () => json({ alerts: await alertLog() }));
+route("POST", "/api/alerts/test", async ({ req, context }) =>
+  json(await sendAlert(await getSettings(), { title: "Test alert", text: "Alerts are working. Social HQ will message you here when a post fails or an account's login is about to end.", link: siteUrl(req, context) }))
+);
+route("POST", "/api/alerts/check-logins", async ({ req, context }) => json(await checkLogins({ siteUrl: siteUrl(req, context) })));
+
 route("GET", "/api/health", async () => {
   const s = await getSettings();
   return json({

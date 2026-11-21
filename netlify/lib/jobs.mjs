@@ -1,11 +1,14 @@
 // Background work: publishing posts and collecting insights.
 
 import { getPost, savePost, overallStatus, duePosts, claim, releaseClaim, listPosts } from "./posts.mjs";
+
+const RETRY_MINUTES = 10;
 import { getAccount, saveAccount, listAccounts } from "./accounts.mjs";
 import { getSettings } from "./settings.mjs";
 import { readAll, deleteMedia } from "./media.mjs";
 import { platforms } from "./platforms/index.mjs";
 import { sendReminder } from "./notify.mjs";
+import { explain, alertPostFailed, alertPostRetrying } from "./alerts.mjs";
 import { model } from "./besttime.mjs";
 import { getJSON, setJSON } from "./store.mjs";
 import { internalSecret } from "./crypto.mjs";
@@ -32,6 +35,8 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
   post = await savePost(post);
   const settings = await getSettings();
   const ctx = makeCtx(siteUrl);
+  const failures = [];
+  const retrying = [];
 
   for (const accId of post.accountIds) {
     const target = post.targets[accId] || { status: "pending" };
@@ -68,19 +73,50 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
         await saveAccount(fresh);
       }
     } catch (e) {
-      post.targets[accId] = { status: "failed", error: errMessage(e), at: new Date().toISOString() };
-      if (e.authProblem) {
+      const why = explain(e, account.platform);
+      const tries = target.tries || 0;
+      if (why.retry && tries < 1) {
+        // One automatic retry, 10 minutes later. Most network and "busy" errors clear by then.
+        const retryAt = new Date(Date.now() + RETRY_MINUTES * 60000).toISOString();
+        post.targets[accId] = { status: "pending", tries: tries + 1, retryAt, lastError: errMessage(e), reason: why.reason };
+        retrying.push({ account, why, retryAt });
+      } else {
+        post.targets[accId] = { status: "failed", error: errMessage(e), reason: why.reason, fix: why.fix, tries: tries + 1, at: new Date().toISOString() };
+        failures.push({ account, why, retried: tries >= 1 });
+      }
+      if (why.kind === "login") {
         account.status = "error";
-        account.lastError = errMessage(e);
+        account.lastError = why.reason;
         await saveAccount(account);
       }
     }
     await savePost(post);
   }
 
-  post.status = overallStatus(post);
-  post.publishedAt = new Date().toISOString();
-  await savePost(post);
+  const waiting = Object.values(post.targets).filter((t) => t.status === "pending" && t.retryAt);
+  if (waiting.length) {
+    post.status = "scheduled";
+    post.retryAt = waiting.map((t) => t.retryAt).sort()[0];
+    post.retryRound = (post.retryRound || 0) + 1;
+    await savePost(post);
+    await releaseClaim(post.id);
+  } else {
+    post.retryAt = null;
+    post.status = overallStatus(post);
+    post.publishedAt = new Date().toISOString();
+    await savePost(post);
+  }
+  for (const r of retrying) {
+    try {
+      await alertPostRetrying(settings, { post, account: r.account, why: r.why, siteUrl, retryAt: r.retryAt });
+    } catch (_) { /* alerts never block publishing */ }
+  }
+  for (const f of failures) {
+    try {
+      await alertPostFailed(settings, { post, account: f.account, why: f.why, siteUrl, retried: f.retried });
+    } catch (_) { /* alerts never block publishing */ }
+  }
+  if (waiting.length) return post;
 
   // Free storage once everything is out and nothing needs a manual repost.
   const allPosted = Object.values(post.targets).every((t) => t.status === "posted");
@@ -195,6 +231,17 @@ export async function collectInsights({ only, platformsOverride } = {}) {
       const { refreshCompetitors } = await import("./competitors.mjs");
       await refreshCompetitors();
     } catch (_) { /* competitor numbers are a bonus; never fail the run */ }
+    // Once a day: check every login and warn before one ends.
+    try {
+      const last = await getJSON("meta/logincheck");
+      if (!last || Date.now() - new Date(last.at).getTime() > 20 * 3600000) {
+        const { checkLogins } = await import("./logincheck.mjs");
+        const r = await checkLogins({ siteUrl: (process.env.URL || "").replace(/\/$/, "") });
+        await setJSON("meta/logincheck", { at: new Date().toISOString(), ...r });
+      }
+    } catch (e) {
+      console.error("Login check failed:", errMessage(e));
+    }
   }
   await setJSON("meta/insights-run", { at: new Date().toISOString(), results });
   return results;

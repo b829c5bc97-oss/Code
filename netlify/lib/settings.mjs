@@ -18,6 +18,7 @@ export const SECTIONS = {
   youtube: { label: "YouTube (Google Cloud)", fields: { clientId: {}, clientSecret: { secret: true } } },
   pinterest: { label: "Pinterest", fields: { appId: {}, appSecret: { secret: true }, sandbox: { bool: true } } },
   reminders: { label: "Reminder emails (Resend)", fields: { resendKey: { secret: true }, to: {}, from: {} } },
+  alerts: { label: "Failure alerts", fields: { whatsappPhone: {}, callmebotKey: { secret: true }, ntfyTopic: {}, email: {}, loginDays: {} } },
   claude: { label: "Claude connection", fields: { requireApproval: { bool: true } } },
   general: { label: "General", fields: { graphVersion: {} } },
 };
@@ -26,6 +27,7 @@ const DEFAULTS = {
   linkedin: { version: "202608", orgAccess: false },
   pinterest: { sandbox: true },
   claude: { requireApproval: false },
+  alerts: { loginDays: "7" },
   general: { graphVersion: "v25.0" },
 };
 
