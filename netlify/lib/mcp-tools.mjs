@@ -9,6 +9,7 @@ import { getSettings } from "./settings.mjs";
 import { HttpError, istDateKey, istToDate, istParts, addDaysKey, clean } from "./util.mjs";
 import { logEvent } from "./audit.mjs";
 import { countVotes, getLatestMediaId } from "./votes.mjs";
+import { timingOf } from "./posts.mjs";
 import { listInbox, addToInbox, importFromLink, mediaForIds, doorKey, removeFromInbox } from "./door.mjs";
 
 const MAX_IMPORT = 80 * 1024 * 1024;
@@ -31,12 +32,16 @@ function ist(iso) {
 }
 
 function postView(p, byId) {
+  const t = timingOf(p);
+  const status = t.overdueMin > 0 ? "overdue_not_posted" : p.status;
   return {
     id: p.id,
-    status: p.status,
+    status,
     when: ist(p.scheduledAt),
+    warning: t.overdueMin > 0 ? `NOT POSTED YET: its time passed ${t.overdueMin} minutes ago and nothing went out. Do not tell Pratham it is live.` : undefined,
+    went_out_late: t.lateMin > 10 ? `Went out ${t.lateMin} minutes after its planned time (at ${ist(t.wentOutAt)}).` : undefined,
     type: p.type,
-    accounts: p.accountIds.map((id) => ({ id, name: byId[id]?.name || id, platform: byId[id]?.platform || "removed", status: p.targets?.[id]?.status || "pending", url: p.targets?.[id]?.url || undefined, error: p.targets?.[id]?.error || undefined })),
+    accounts: p.accountIds.map((id) => ({ id, name: byId[id]?.name || id, platform: byId[id]?.platform || "removed", status: p.targets?.[id]?.status || "pending", posted_at: p.targets?.[id]?.status === "posted" && p.targets[id].at ? ist(p.targets[id].at) : undefined, url: p.targets?.[id]?.url || undefined, error: p.targets?.[id]?.error || undefined, note: p.targets?.[id]?.note || p.targets?.[id]?.reason || undefined })),
     caption: (p.caption || "").slice(0, 400),
     captions: Object.keys(p.captions || {}).length ? p.captions : undefined,
     title: p.title || undefined,

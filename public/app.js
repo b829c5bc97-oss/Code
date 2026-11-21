@@ -89,6 +89,28 @@ function avatar(a, size = 30) {
 function pill(status, text) {
   return `<span class="pill p-${esc(status)}">${esc(text || STATUS_TEXT[status] || status)}</span>`;
 }
+// The honest status of a post: "Overdue · not posted" when its time has passed and nothing went out,
+// and the real time it went out (with how late) instead of only the planned time.
+function timingOfPost(p, now = Date.now()) {
+  const planned = p.scheduledAt ? new Date(p.scheduledAt).getTime() : 0;
+  let wentOut = 0;
+  for (const t of Object.values(p.targets || {})) if (t.status === "posted" && t.at) wentOut = Math.max(wentOut, new Date(t.at).getTime());
+  const waiting = p.retryAt && new Date(p.retryAt).getTime() > now;
+  const overdueMin = planned && ["scheduled", "publishing"].includes(p.status) && !waiting ? Math.round((now - planned) / 60000) : 0;
+  return { overdueMin: overdueMin > 10 ? overdueMin : 0, wentOut, lateMin: wentOut && planned ? Math.round((wentOut - planned) / 60000) : 0 };
+}
+function lateText(min) {
+  return min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min} min`;
+}
+function statusHtml(p, { link = false } = {}) {
+  const t = timingOfPost(p);
+  const tag = (cls, text) => (link ? `<a class="pill p-${cls}" style="text-decoration:none" href="#/create?id=${esc(p.id)}">${esc(text)}</a>` : `<span class="pill p-${cls}">${esc(text)}</span>`);
+  if (t.overdueMin) return `${tag("failed", "Overdue · not posted")}<span class="muted small" style="display:block;text-align:right">${esc(lateText(t.overdueMin))} late</span>`;
+  const main = tag(p.status, STATUS_TEXT[p.status] || p.status);
+  if (t.wentOut && t.lateMin > 10) return `${main}<span class="small" style="display:block;text-align:right;color:var(--bad,#C0392B)">went out ${esc(time(new Date(t.wentOut).toISOString()))} · ${esc(lateText(t.lateMin))} late</span>`;
+  if (p.status === "scheduled" && p.retryAt) return `${main}<span class="muted small" style="display:block;text-align:right">trying again ${esc(time(p.retryAt))}</span>`;
+  return main;
+}
 const ICON = {
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   cal: '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
@@ -281,7 +303,7 @@ async function screenOverview(q) {
           <span class="t">${esc(time(p.scheduledAt))}</span>
           ${badge(plats[0] || "unknown")}
           <div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(names)}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>
-          <a class="pill p-${esc(p.status)}" style="text-decoration:none" href="#/create?id=${esc(p.id)}">${esc(STATUS_TEXT[p.status] || p.status)}</a>
+          <div>${statusHtml(p, { link: true })}</div>
         </div>`;
       }).join("")
     : `<p class="muted">Nothing goes out today. <a href="#/create">Create a post</a>.</p>`;
@@ -310,6 +332,7 @@ async function screenOverview(q) {
     <section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>
     <div class="grid g-2">
       <section class="card"><div class="row between"><h2>Today · ${d.today_posts.length} post${d.today_posts.length === 1 ? "" : "s"}</h2></div><div>${todayRows}</div><a href="#/plan" style="font-size:14px;font-weight:600;text-decoration:none">See the full week →</a></section>
+      ${d.posting ? `<p class="small" style="margin:0 0 -6px;color:${d.posting.ok ? "var(--good,#1E7B4F)" : "var(--bad,#C0392B)"}"><b>${d.posting.ok ? "● Automatic posting is running" : "● Automatic posting is NOT running"}</b> <span class="muted">· last check ${d.posting.minutesAgo === null ? "never" : `${d.posting.minutesAgo} min ago`}</span></p>` : ""}
       <section class="card"><h2>Needs your attention</h2>${attention}${(d.alerts || []).length ? `<h3 style="margin-top:14px">Recent alerts</h3><div class="stack" style="gap:6px">${d.alerts.map((a) => `<div class="small"><b>${esc(a.title)}</b> <span class="muted">· ${esc(whenText(a.at))}${a.sent?.length ? ` · sent by ${esc(a.sent.join(", "))}` : ""}</span><br><span class="muted">${esc(a.text)}</span></div>`).join("")}</div>` : ""}</section>
     </div>
     ${reminders}
@@ -388,7 +411,7 @@ async function screenPlan(q) {
         <div class="row between" style="gap:6px"><span class="pt">${esc(time(p.scheduledAt))}</span><span class="row" style="gap:3px">${plats.map((x) => badge(x, true)).join("")}</span></div>
         <span class="pb">${esc(brands)} · ${esc(typeLabel(p.type))}</span>
         <span class="pc">${esc(p.caption || p.title || "(no caption)")}</span>
-        ${pill(p.status)}
+        <div>${statusHtml(p)}</div>
       </a>`;
     }).join("");
     return `<div class="day ${day.date === today ? "today" : ""}">
@@ -539,7 +562,7 @@ async function screenMonth(q) {
     const box = $("#mday-list");
     box.hidden = false;
     box.innerHTML = `<div class="row between"><h2>${esc(dayName(fromIST(dk, "12:00")))}</h2>${dk >= today ? `<a class="btn sm primary" href="#/create?date=${dk}">+ Add post</a>` : ""}</div>
-      ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="${p.live ? `#/account?id=${encodeURIComponent(p.id)}` : `#/create?id=${esc(p.id)}`}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>${pill(p.status)}</a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
+      ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="${p.live ? `#/account?id=${encodeURIComponent(p.id)}` : `#/create?id=${esc(p.id)}`}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div><div>${p.live ? pill(p.status) : statusHtml(p)}</div></a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
     $$(".mcell.sel").forEach((x) => x.classList.remove("sel"));
     cell.classList.add("sel");
     if (window.innerWidth < 760) box.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
@@ -558,6 +581,7 @@ async function screenCreate(q) {
   let readOnly = false;
   if (q.get("id")) {
     const p = await api("GET", `/api/posts/${q.get("id")}`);
+    C.post = p;
     Object.assign(C, {
       id: p.id, accountIds: p.accountIds, type: p.type, caption: p.caption, captions: p.captions || {}, title: p.title, link: p.link, boardIds: p.boardIds || {},
       firstComment: p.firstComment, alsoStory: p.alsoStory, aiGenerated: p.aiGenerated, trial: p.trial || "", cover: p.cover ? { ...p.cover, preview: p.cover.mediaId ? `/m/${p.cover.mediaId}.jpg` : "" } : null, ytPrivacy: p.ytPrivacy, ytMadeForKids: p.ytMadeForKids,
@@ -582,7 +606,7 @@ async function screenCreate(q) {
 
   main(`
     <header class="head"><div><p class="sub">${C.id ? "Edit a post" : "One post, many accounts — each at its perfect time"}</p><h1>${C.id ? "Post" : "Create post"}</h1></div>
-      ${C.id ? `<div class="row">${pill(C.status)}</div>` : ""}</header>
+      ${C.id ? `<div class="row">${C.post ? statusHtml(C.post) : pill(C.status)}</div>` : ""}</header>
     <div id="c-status"></div>
     <div class="grid g-2">
       <div class="stack">
@@ -1213,7 +1237,7 @@ async function screenAccount(q) {
       ? `<div class="card">${d.hq.map((p) => `<div class="list-row" style="grid-template-columns:150px minmax(0,1fr) auto">
           <span class="t" style="font-size:13px">${esc(whenText(p.at))}</span>
           <div style="min-width:0"><div class="what" style="white-space:normal">${esc(typeLabel(p.type))} · ${esc(p.caption || "(no caption)")}</div></div>
-          <span class="row" style="gap:6px">${p.url ? `<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">View ↗</a>` : ""}<a class="pill p-${esc(p.status)}" style="text-decoration:none" href="#/create?id=${esc(p.id)}">${esc(STATUS_TEXT[p.status] || p.status)}</a></span>
+          <span class="row" style="gap:6px">${p.url ? `<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">View ↗</a>` : ""}<div>${statusHtml(p, { link: true })}</div></span>
         </div>`).join("")}</div>`
       : `<div class="card"><p class="muted">Nothing planned for this account in Social HQ yet.</p><a class="btn primary" style="align-self:flex-start" href="#/create?account=${encodeURIComponent(a.id)}">+ Create a post</a></div>`;
     return;

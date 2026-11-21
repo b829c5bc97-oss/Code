@@ -5,7 +5,7 @@
 import { waitUntil } from "@vercel/functions";
 import { handle as apiHandle } from "../netlify/functions/api.mjs";
 import { handle as mcpHandle } from "../netlify/functions/mcp.mjs";
-import { runScheduler, publishPost, collectInsights } from "../netlify/lib/jobs.mjs";
+import { runScheduler, publishPost, collectInsights, runWatchdog } from "../netlify/lib/jobs.mjs";
 import { runAutoReplies } from "../netlify/lib/autoreply.mjs";
 import { safeEqual, internalSecret } from "../netlify/lib/crypto.mjs";
 import { env } from "../netlify/lib/util.mjs";
@@ -45,6 +45,7 @@ async function internal(req, path) {
       scheduler: () => runScheduler(site),
       autoreply: () => runAutoReplies(),
       insights: () => collectInsights({}),
+      watchdog: () => runWatchdog(site),
     }[job];
     if (!work) return ok({ error: "unknown job" }, 404);
     waitUntil(work().catch((e) => console.error(`Cron ${job} error`, e)));

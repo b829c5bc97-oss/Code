@@ -94,6 +94,30 @@ function normalise(input, accountsById) {
   };
 }
 
+// How the post's timing really went: when each account actually got it, how late, and whether a
+// still-"scheduled" post is overdue (its time has passed and nothing went out).
+export const OVERDUE_MIN = 10;
+export function timingOf(post, now = new Date()) {
+  const planned = post.scheduledAt ? new Date(post.scheduledAt).getTime() : null;
+  const out = { overdueMin: 0, lateMin: 0, wentOutAt: null, perAccount: {} };
+  if (!planned) return out;
+  for (const [id, t] of Object.entries(post.targets || {})) {
+    if (t.status === "posted" && t.at) {
+      const at = new Date(t.at).getTime();
+      const late = Math.max(0, Math.round((at - planned) / 60000));
+      out.perAccount[id] = { wentOutAt: new Date(at).toISOString(), lateMin: late };
+      if (!out.wentOutAt || at > new Date(out.wentOutAt).getTime()) out.wentOutAt = new Date(at).toISOString();
+      out.lateMin = Math.max(out.lateMin, late);
+    }
+  }
+  const waitingRetry = post.retryAt && new Date(post.retryAt).getTime() > now.getTime();
+  if (["scheduled", "publishing"].includes(post.status) && !waitingRetry) {
+    const over = Math.round((now.getTime() - planned) / 60000);
+    if (over > OVERDUE_MIN) out.overdueMin = over;
+  }
+  return out;
+}
+
 // The post as one account should get it: that account's saved caption ending, AI label and
 // Trial Reel defaults applied (a post can switch a Trial Reel off with trial: "off").
 export function forAccount(post, account) {

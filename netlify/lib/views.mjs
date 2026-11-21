@@ -4,6 +4,7 @@ import { listAccounts, publicAccount } from "./accounts.mjs";
 import { listPosts } from "./posts.mjs";
 import { getJSON } from "./store.mjs";
 import { alertLog } from "./alerts.mjs";
+import { timingOf } from "./posts.mjs";
 import { getModel } from "./jobs.mjs";
 import { suggest, bestTimeOfDay, topSlots, HOURS, STARTING_WINDOWS } from "./besttime.mjs";
 import { getSettings, configured } from "./settings.mjs";
@@ -32,6 +33,7 @@ function followerChange(hist, days) {
 function publicPost(p, byId) {
   return {
     ...p,
+    timing: timingOf(p),
     accounts: p.accountIds.map((id) => {
       const a = byId[id];
       return a ? { id, name: a.name, platform: a.platform, brand: a.brand, handle: a.handle } : { id, name: "Removed account", platform: "unknown", brand: "" };
@@ -81,6 +83,12 @@ export async function overview() {
     }
   }
   const attention = [];
+  const beat = await getJSON("meta/scheduler-run");
+  const silentMin = beat?.at ? Math.round((now.getTime() - new Date(beat.at).getTime()) / 60000) : null;
+  const posting = { lastRunAt: beat?.at || null, minutesAgo: silentMin, ok: silentMin !== null && silentMin <= 15 };
+  if (!posting.ok) attention.push({ kind: "failed", title: "Automatic posting is NOT running", detail: silentMin === null ? "The posting timer has never run here." : `It last ran ${silentMin} minutes ago, so scheduled posts aren't going out.`, action: "Open Overview", href: "#/overview" });
+  const overdue = recent.filter((p) => timingOf(p, now).overdueMin > 0);
+  if (overdue.length) attention.push({ kind: "failed", title: `${overdue.length} post${overdue.length > 1 ? "s are" : " is"} overdue — not posted yet`, detail: "Its time has passed and it hasn't gone out. Social HQ keeps trying; open it to see why.", action: "Open", href: `#/create?id=${overdue[0].id}` });
   if (needsOk.length) attention.push({ kind: "ok", title: `${needsOk.length} post${needsOk.length > 1 ? "s" : ""} need your OK`, detail: "Approve them and they go out at their set time.", action: "Review", href: "#/plan" });
   if (failed.length) attention.push({ kind: "failed", title: `${failed.length} post${failed.length > 1 ? "s" : ""} didn't go out`, detail: failed[0] ? firstError(failed[0]) : "", action: "See what happened", href: `#/create?id=${failed[0].id}` });
   if (reminders.length) attention.push({ kind: "reminder", title: `${reminders.length} reminder post${reminders.length > 1 ? "s" : ""} to do by hand`, detail: "Facebook doesn't let any app post to personal profiles. Copy the caption, download the media, post, then tick it off.", action: "Open reminders", href: "#/overview?reminders=1" });
@@ -109,6 +117,7 @@ export async function overview() {
       newFollowers7: rows.some((r) => typeof r.change7 === "number") ? sum(rows.map((r) => r.change7)) : null,
     },
     today_posts: todayPosts,
+    posting,
     attention,
     alerts: (await alertLog()).filter((a) => Date.now() - new Date(a.at).getTime() < 3 * 86400000).slice(0, 6),
     reminders,

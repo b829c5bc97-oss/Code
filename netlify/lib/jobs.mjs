@@ -181,7 +181,44 @@ export async function runScheduler(siteUrl, now = new Date()) {
       if (await triggerPublish(siteUrl, p.id)) fired.push(p.id);
     }
   }
+  // Heartbeat: the Overview shows "Automatic posting: running" from this, and the watchdog alerts if it stops.
+  await setJSON("meta/scheduler-run", { at: now.toISOString(), due: due.length, fired: fired.length });
   return fired;
+}
+
+// Watchdog (its own timer): tells you at once if automatic posting has stopped or a post is overdue,
+// and gives overdue posts another push. This is what would have caught the missed 6 PM and 8 PM posts.
+export async function runWatchdog(siteUrl, now = new Date()) {
+  const { timingOf } = await import("./posts.mjs");
+  const settings = await getSettings();
+  const beat = await getJSON("meta/scheduler-run");
+  const silentMin = beat?.at ? Math.round((now.getTime() - new Date(beat.at).getTime()) / 60000) : null;
+  const from = istDateKey(new Date(now.getTime() - 2 * 86400000));
+  const posts = await listPosts({ from, to: istDateKey(now) });
+  const overdue = posts.filter((p) => timingOf(p, now).overdueMin > 0);
+  const out = { silentMin, overdue: overdue.length, alerted: [] };
+  if (silentMin === null || silentMin > 15) {
+    const r = await sendAlert(settings, {
+      key: `posting-stopped-${istDateKey(now)}-${Math.floor(now.getTime() / 3600000)}`,
+      title: "Automatic posting has stopped",
+      text: silentMin === null ? "The posting timer has never run on this site." : `The posting timer last ran ${silentMin} minutes ago. Scheduled posts won't go out until it runs again.`,
+      link: `${siteUrl}/#/overview`,
+    });
+    if (!r.skipped) out.alerted.push("stopped");
+  }
+  for (const p of overdue) {
+    const mins = timingOf(p, now).overdueMin;
+    const r = await sendAlert(settings, {
+      key: `overdue-${p.id}`,
+      title: `Post is ${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`} late and not out yet`,
+      text: `${(p.caption || p.title || "").replace(/\s+/g, " ").slice(0, 70)}\nSocial HQ is trying it again now.`,
+      link: `${siteUrl}/#/create?id=${p.id}`,
+    });
+    if (!r.skipped) out.alerted.push(p.id);
+  }
+  if (overdue.length) out.fired = await runScheduler(siteUrl, now);
+  await setJSON("meta/watchdog-run", { at: now.toISOString(), ...out });
+  return out;
 }
 
 export async function collectInsights({ only, platformsOverride } = {}) {
