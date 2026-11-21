@@ -132,8 +132,10 @@ export async function insights({ account }) {
       const { data: pl } = await call(`https://www.googleapis.com/youtube/v3/playlistItems?${qs({ part: "contentDetails", playlistId: uploads, maxResults: 20 })}`, { headers: auth });
       const ids = (pl.items || []).map((i) => i.contentDetails.videoId).join(",");
       if (ids) {
-        const { data: vids } = await call(`https://www.googleapis.com/youtube/v3/videos?${qs({ part: "snippet,statistics", id: ids })}`, { headers: auth });
+        const { data: vids } = await call(`https://www.googleapis.com/youtube/v3/videos?${qs({ part: "snippet,statistics,status", id: ids })}`, { headers: auth });
         for (const v of vids.items || []) {
+          // Private videos (including ones scheduled in YouTube Studio) are not live, so they must not show as "Posted".
+          if (v.status?.privacyStatus === "private") continue;
           const s = v.statistics || {};
           const likes = Number(s.likeCount || 0), comments = Number(s.commentCount || 0);
           posts.push({ id: v.id, title: v.snippet.title, type: "Video", url: `https://www.youtube.com/watch?v=${v.id}`, at: v.snippet.publishedAt, thumb: v.snippet.thumbnails?.medium?.url || "", views: Number(s.viewCount || 0), likes, comments, reach: 0, interactions: likes + comments });
