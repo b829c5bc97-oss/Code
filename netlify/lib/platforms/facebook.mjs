@@ -213,3 +213,92 @@ export async function insights({ settings, account }) {
     posts,
   };
 }
+
+// ---------- Account page: profile, every past post, one post's numbers ----------
+const FB_POST_FIELDS = "id,message,created_time,permalink_url,full_picture,status_type,attachments{media_type,type,media,url,subattachments},reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),shares";
+
+function fbType(p) {
+  const a = p.attachments?.data?.[0];
+  const t = (a?.media_type || a?.type || p.status_type || "").toLowerCase();
+  if (t.includes("reel")) return "Reel";
+  if (t.includes("video")) return "Video";
+  if (t.includes("album")) return "Album";
+  if (t.includes("photo") || p.full_picture) return "Photo";
+  if (t.includes("link") || t.includes("share")) return "Link";
+  return "Post";
+}
+function fbItem(p) {
+  return {
+    id: p.id,
+    type: fbType(p),
+    caption: p.message || "",
+    url: p.permalink_url || "",
+    at: p.created_time,
+    thumb: p.full_picture || "",
+    likes: p.reactions?.summary?.total_count ?? null,
+    comments: p.comments?.summary?.total_count ?? null,
+    shares: p.shares?.count ?? 0,
+  };
+}
+
+export async function profile({ settings, account }) {
+  const { data: page } = await call(`${base(settings)}/${account.remoteId}?${qs({ fields: "name,username,about,link,fan_count,followers_count,picture.type(large){url}", access_token: tokenOf(account) })}`);
+  return {
+    name: page.name,
+    handle: page.username ? "@" + page.username : account.handle,
+    avatar: page.picture?.data?.url || account.avatar || "",
+    bio: page.about || "",
+    website: "",
+    link: page.link || `https://www.facebook.com/${account.remoteId}`,
+    linkLabel: "Open on Facebook",
+    counts: [
+      { label: "Followers", value: page.followers_count ?? null },
+      { label: "Likes", value: page.fan_count ?? null },
+    ],
+  };
+}
+
+export async function feed({ settings, account, after }) {
+  const { data } = await call(`${base(settings)}/${account.remoteId}/published_posts?${qs({ fields: FB_POST_FIELDS, limit: 24, after, access_token: tokenOf(account) })}`);
+  return { posts: (data.data || []).map(fbItem), next: data.paging?.next ? data.paging?.cursors?.after || null : null };
+}
+
+const FB_LABEL = {
+  post_impressions_unique: "People reached",
+  post_impressions: "Impressions",
+  post_media_view: "Views",
+  post_total_media_view_unique: "People who viewed",
+  post_clicks: "Clicks",
+  post_video_views: "Video views (3s+)",
+  post_video_avg_time_watched: "Avg. watch time",
+};
+
+export async function postDetail({ settings, account, postId }) {
+  const token = tokenOf(account);
+  const { data: p } = await call(`${base(settings)}/${encodeURIComponent(postId)}?${qs({ fields: FB_POST_FIELDS, access_token: token })}`);
+  const item = fbItem(p);
+  const wanted = ["post_impressions_unique", "post_media_view", "post_total_media_view_unique", "post_impressions", "post_clicks"];
+  if (item.type === "Video" || item.type === "Reel") wanted.push("post_video_views", "post_video_avg_time_watched");
+  const got = {};
+  await Promise.all(wanted.map(async (m) => {
+    try {
+      const { data } = await call(`${base(settings)}/${encodeURIComponent(postId)}/insights?${qs({ metric: m, access_token: token })}`);
+      const row = (data.data || [])[0];
+      if (row) got[m] = row.values?.[0]?.value ?? 0;
+    } catch (_) { /* Meta no longer offers this one */ }
+  }));
+  const stats = [];
+  for (const m of wanted) {
+    if (got[m] === undefined || typeof got[m] === "object") continue;
+    if (m === "post_video_avg_time_watched") stats.push({ key: m, label: FB_LABEL[m], value: null, text: `${Math.round(got[m] / 1000)}s` });
+    else stats.push({ key: m, label: FB_LABEL[m], value: got[m] });
+  }
+  stats.push({ key: "reactions", label: "Reactions", value: item.likes ?? 0 }, { key: "comments", label: "Comments", value: item.comments ?? 0 }, { key: "shares", label: "Shares", value: item.shares ?? 0 });
+  const reach = got.post_impressions_unique || got.post_total_media_view_unique || 0;
+  const inter = (item.likes || 0) + (item.comments || 0) + (item.shares || 0) + (got.post_clicks || 0);
+  const a = p.attachments?.data?.[0];
+  const subs = a?.subattachments?.data || [];
+  const media = (subs.length ? subs : a ? [a] : []).map((x) => ({ kind: /video/i.test(x.media_type || x.type || "") ? "video" : "image", url: x.media?.source || x.media?.image?.src || "", thumb: x.media?.image?.src || "" })).filter((x) => x.thumb || x.url);
+  if (!media.length && item.thumb) media.push({ kind: "image", url: item.thumb, thumb: item.thumb });
+  return { ...item, media, stats, engagementRate: reach ? inter / reach : null, note: "", linkLabel: "Open on Facebook" };
+}

@@ -196,5 +196,54 @@ a.chip.on { color: #fff; }
   .list-row > :last-child { grid-column: 3; justify-self: start; }
 }
 
+/* Account page */
+.acc-open { text-decoration: none; color: inherit; min-width: 0; }
+.acc-open:hover b { color: var(--blue); }
+.av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--ground); flex: 0 0 auto; }
+.prof-top { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.prof-av { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--ground); flex: 0 0 auto; border: 1px solid var(--line); }
+.prof-av.ph { display: flex; align-items: center; justify-content: center; }
+.prof-name { font-size: 26px; overflow-wrap: anywhere; }
+.prof-counts { display: flex; flex-wrap: wrap; gap: 24px; }
+.prof-counts div { display: flex; flex-direction: column; }
+.prof-counts b { font-family: "Space Grotesk", Inter, sans-serif; font-size: 22px; }
+.prof-counts span { font-size: 12px; color: var(--quiet); font-weight: 600; }
+.prof-bio { white-space: pre-wrap; font-size: 14px; color: var(--ink-2); line-height: 1.5; max-width: 640px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.ptile { position: relative; aspect-ratio: 4 / 5; border: 0; padding: 0; border-radius: 12px; overflow: hidden; background: #1C2132; cursor: pointer; display: block; width: 100%; }
+.ptile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.ptile:hover img { transform: scale(1.03); }
+.ptile .ptxt { position: absolute; inset: 0; padding: 14px; color: #fff; font-size: 13px; line-height: 1.4; text-align: left; overflow: hidden; background: linear-gradient(160deg, #2848E8, #121624); }
+.ptile .ptype { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px; }
+.ptile .pstat { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px; padding: 26px 10px 8px; color: #fff; font-size: 12px; font-weight: 700; background: linear-gradient(transparent, rgba(0,0,0,.75)); text-align: left; }
+.ptile .pdate { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,.9); color: var(--ink); font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px; }
+.sheet-wrap { position: fixed; inset: 0; background: rgba(10,12,20,.55); z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.sheet { background: #fff; border-radius: 18px; width: 100%; max-width: 980px; max-height: calc(100vh - 40px); overflow: auto; padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.sheet-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
+.sheet-media { display: flex; flex-direction: column; gap: 8px; }
+.sheet-media img, .sheet-media video { width: 100%; max-height: 70vh; object-fit: contain; background: #0E1120; border-radius: 12px; display: block; }
+.sheet-media img.mini { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.pst-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.pst { background: var(--ground); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pst .v { font-family: "Space Grotesk", Inter, sans-serif; font-size: 22px; font-weight: 700; }
+.pst .l { font-size: 12px; color: var(--quiet); font-weight: 600; }
+.cap { white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .pgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .ptile { border-radius: 6px; }
+  .ptile .pdate { display: none; }
+  .ptile .ptype { font-size: 10px; top: 4px; right: 4px; padding: 2px 5px; }
+  .ptile .pstat { gap: 6px; font-size: 10px; padding: 18px 5px 4px; }
+  .prof-av { width: 72px; height: 72px; }
+  .prof-name { font-size: 22px; }
+  .prof-counts { gap: 18px; }
+  .sheet-wrap { padding: 0; align-items: flex-end; }
+  .sheet { border-radius: 18px 18px 0 0; max-height: 92vh; padding: 14px 14px 20px; }
+  .sheet-body { grid-template-columns: 1fr; }
+  .sheet-media img, .sheet-media video { max-height: 50vh; }
+  .pst-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pst .v { font-size: 18px; }
+}
+
 /* The hidden attribute must win over display rules on classes like .f and .note */
 [hidden] { display: none !important; }

@@ -240,9 +240,9 @@ async function render() {
     }
   }
   const { path, q } = parseHash();
-  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/insights": screenInsights, "/settings": screenSettings };
+  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/insights": screenInsights, "/settings": screenSettings };
   const fn = screens[path] || screenOverview;
-  shell(screens[path] ? path : "/overview");
+  shell(path === "/account" ? "/accounts" : screens[path] ? path : "/overview");
   try {
     await fn(q);
   } catch (e) {
@@ -286,7 +286,7 @@ async function screenOverview(q) {
       </div>`).join("")}</section>`
     : "";
   const rows = d.accounts.map((a) => `<tr>
-      <td><div class="acc-cell">${badge(a.platform, true)}<div><div class="n">${esc(a.name)}</div><div class="h">${esc(a.handle || PLATFORM[a.platform].name)}</div></div></div></td>
+      <td><a class="acc-cell" style="text-decoration:none;color:inherit" href="${a.platform === "manual" ? "#/accounts" : `#/account?id=${encodeURIComponent(a.id)}`}">${badge(a.platform, true)}<div><div class="n">${esc(a.name)}</div><div class="h">${esc(a.handle || PLATFORM[a.platform].name)}</div></div></a></td>
       <td><b>${a.platform === "manual" ? "—" : num(a.followers)}</b></td>
       <td>${a.platform === "manual" ? "—" : num(a.reach7)}</td>
       <td class="${a.change7 > 0 ? "up" : a.change7 < 0 ? "down" : ""}">${signed(a.change7)}</td>
@@ -864,6 +864,11 @@ async function screenAccounts(q) {
     ${msg}
     <section class="card"><div class="stack" style="gap:4px"><h2>Connect an account</h2><p class="muted">You log in on the platform's own page. Social HQ never sees your password. On Meta's screen you can tick several Instagram accounts or Facebook Pages at once. If one is missing, press Connect again and pick it.</p></div>
       <div class="row">${connectBtn("instagram", "Instagram")}${connectBtn("facebook", "Facebook Pages")}${connectBtn("linkedin", "LinkedIn")}${connectBtn("youtube", "YouTube")}${connectBtn("pinterest", "Pinterest")}</div>
+      <form class="row" id="link-form" style="border-top:1px solid var(--line-2);padding-top:14px"><b style="font-size:13px">Account signed in on another browser or phone?</b>
+        <select name="p" style="max-width:180px">${["instagram", "facebook", "linkedin", "youtube", "pinterest"].filter((p) => d.configured[p]).map((p) => `<option value="${p}">${esc(PLATFORM[p].name)}</option>`).join("")}</select>
+        <button class="btn sm" type="submit">Make a connect link</button>
+        <input type="text" id="link-out" readonly hidden style="flex:1 1 260px" aria-label="Connect link"></form>
+      <p class="muted small" style="margin:0">Open the link there. It works once, for 15 minutes.</p>
       <form class="row" id="rem-form" style="border-top:1px solid var(--line-2);padding-top:14px"><b style="font-size:13px">Facebook personal profile (reminders):</b>
         <input type="text" name="name" placeholder="Profile name" required style="max-width:220px"><input type="text" name="brand" placeholder="Brand" value="Personal" style="max-width:160px"><button class="btn sm" type="submit">Add</button></form>
     </section>
@@ -875,15 +880,28 @@ async function screenAccounts(q) {
     <datalist id="brand-list">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
     <section class="grid g-2">${Object.entries(groups).map(([brand, list]) => `<div class="card"><div class="row between"><h2>${esc(brand)}</h2><span class="muted small">${list.length} account${list.length === 1 ? "" : "s"}</span></div>
       ${list.map((a) => `<div class="stack" style="gap:8px;border-top:1px solid var(--line-2);padding-top:12px">
-        <div class="row between"><span class="row">${badge(a.platform)}<span class="stack" style="gap:2px"><b style="font-size:14px">${esc(a.name)}</b><span class="muted small">${esc(a.handle || "")}</span></span></span><span class="row">${statusOf(a)}</span></div>
+        <div class="row between"><a class="row acc-open" href="#/account?id=${encodeURIComponent(a.id)}">${a.avatar ? `<img class="av" src="${esc(a.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge(a.platform)}<span class="stack" style="gap:2px"><b style="font-size:14px">${esc(a.name)}</b><span class="muted small">${esc(PLATFORM[a.platform]?.name || "")} · ${esc(a.handle || "")}</span></span></a><span class="row">${statusOf(a)}</span></div>
         <span class="muted small">${esc(a.loginNote)}</span>${a.lastError ? `<p class="note bad">${esc(a.lastError)}</p>` : ""}
         <div class="row" style="gap:8px">
           <label class="f" style="flex:1 1 140px">Brand<input type="text" list="brand-list" data-brand="${esc(a.id)}" value="${esc(a.brand)}"></label>
           <label class="f" style="flex:0 1 130px">Posts a week target<input type="number" min="0" max="21" data-cad="${esc(a.id)}" value="${a.cadence || 0}"></label>
           ${a.platform === "pinterest" ? `<label class="f" style="flex:1 1 160px">Default board<select data-board="${esc(a.id)}">${(a.meta.boards || []).map((b) => `<option value="${esc(b.id)}" ${b.id === a.meta.defaultBoardId ? "selected" : ""}>${esc(b.name)}</option>`).join("") || '<option value="">No boards</option>'}</select></label>` : ""}
         </div>
-        <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
+        <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm primary" href="#/account?id=${encodeURIComponent(a.id)}">Open account · posts &amp; insights</a><a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
       </div>`).join("")}</div>`).join("") || `<p class="muted">No accounts yet.</p>`}</section>`);
+  $("#link-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const p = new FormData(e.target).get("p");
+    if (!p) return toast("Add app keys in Settings first", true);
+    try {
+      const r = await api("GET", `/api/oauth/${p}/start?link=1`);
+      const out = $("#link-out");
+      out.hidden = false;
+      out.value = r.url;
+      out.select();
+      try { await navigator.clipboard.writeText(r.url); toast("Link copied"); } catch (_) { toast("Link ready: copy it from the box"); }
+    } catch (err) { toast(err.message, true); }
+  };
   $("#rem-form").onsubmit = async (e) => {
     e.preventDefault();
     await api("POST", "/api/accounts/reminder", Object.fromEntries(new FormData(e.target)));
@@ -900,6 +918,128 @@ async function screenAccounts(q) {
     toast("Removed");
     render();
   }));
+}
+
+// ---------- One account: profile, every past post, each post's numbers ----------
+const POST_ICON = { Reel: "▶ Reel", Video: "▶ Video", Short: "▶ Short", Carousel: "▣ Carousel", Album: "▣ Album", Story: "◷ Story" };
+async function screenAccount(q) {
+  const id = q.get("id");
+  if (!id) return (location.hash = "#/accounts");
+  main(`<p class="muted">Opening the account…</p>`);
+  const [d, ins] = await Promise.all([api("GET", `/api/accounts/${encodeURIComponent(id)}/profile`), api("GET", `/api/insights/${encodeURIComponent(id)}`).catch(() => null)]);
+  const a = d.account;
+  const P = d.profile || { name: a.name, handle: a.handle, avatar: a.avatar, bio: "", counts: [], link: "", linkLabel: "" };
+  const L = ins?.latest;
+  const kpis = L ? L.kpis : [];
+  const tab = q.get("tab") === "hq" ? "hq" : "posts";
+  const tabLink = (t, label) => `<button type="button" class="${tab === t ? "on" : ""}" data-tab="${t}">${label}</button>`;
+  main(`
+    <div class="row"><a class="btn sm" href="#/accounts">← All accounts</a></div>
+    <section class="card prof">
+      <div class="prof-top">
+        ${P.avatar ? `<img class="prof-av" src="${esc(P.avatar)}" alt="" referrerpolicy="no-referrer">` : `<div class="prof-av ph">${badge(a.platform)}</div>`}
+        <div class="stack" style="gap:8px;min-width:0;flex:1 1 260px">
+          <div class="row" style="gap:8px">${badge(a.platform, true)}<h1 class="prof-name">${esc(P.name || a.name)}</h1>${pill(a.status)}</div>
+          <span class="muted">${esc(P.handle || a.handle || "")} · Brand: ${esc(a.brand)}</span>
+          ${P.counts.length ? `<div class="prof-counts">${P.counts.map((c) => `<div><b>${esc(num(c.value))}</b><span>${esc(c.label)}</span></div>`).join("")}</div>` : ""}
+          ${P.bio ? `<p class="prof-bio">${esc(P.bio)}</p>` : ""}
+          ${P.website ? `<a href="${esc(P.website)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600">${esc(P.website.replace(/^https?:\/\//, ""))}</a>` : ""}
+          <div class="row" style="gap:8px">
+            <a class="btn sm primary" href="#/create?account=${encodeURIComponent(a.id)}">+ New post</a>
+            ${P.link ? `<a class="btn sm" href="${esc(P.link)}" target="_blank" rel="noopener">${esc(P.linkLabel || "Open")} ↗</a>` : ""}
+            <a class="btn sm" href="#/insights?id=${encodeURIComponent(a.id)}">Growth &amp; best times</a>
+          </div>
+        </div>
+      </div>
+      ${d.error ? `<p class="note warn">Could not load live profile: ${esc(d.error)}</p>` : ""}
+    </section>
+    ${kpis.length ? `<section class="grid g-kpi">${kpis.map((k) => `<div class="kpi"><span class="l">${esc(k.label)}</span><span class="v">${esc(num(k.value))}</span><span class="s">${esc(k.period)}</span></div>`).join("")}</section>` : ""}
+    <div class="seg" role="tablist" style="align-self:flex-start">${tabLink("posts", "Posts on the account")}${tabLink("hq", `Planned in Social HQ (${d.hq.length})`)}</div>
+    <section id="acc-body"></section>`);
+  $$("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = `#/account?id=${encodeURIComponent(id)}${b.dataset.tab === "hq" ? "&tab=hq" : ""}`)));
+  const body = $("#acc-body");
+  if (tab === "hq") {
+    body.innerHTML = d.hq.length
+      ? `<div class="card">${d.hq.map((p) => `<div class="list-row" style="grid-template-columns:150px minmax(0,1fr) auto">
+          <span class="t" style="font-size:13px">${esc(whenText(p.at))}</span>
+          <div style="min-width:0"><div class="what" style="white-space:normal">${esc(typeLabel(p.type))} · ${esc(p.caption || "(no caption)")}</div></div>
+          <span class="row" style="gap:6px">${p.url ? `<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">View ↗</a>` : ""}<a class="pill p-${esc(p.status)}" style="text-decoration:none" href="#/create?id=${esc(p.id)}">${esc(STATUS_TEXT[p.status] || p.status)}</a></span>
+        </div>`).join("")}</div>`
+      : `<div class="card"><p class="muted">Nothing planned for this account in Social HQ yet.</p><a class="btn primary" style="align-self:flex-start" href="#/create?account=${encodeURIComponent(a.id)}">+ Create a post</a></div>`;
+    return;
+  }
+  body.innerHTML = `<div class="pgrid" id="pgrid"></div><p class="muted" id="feed-msg">Loading posts…</p><div class="row" style="justify-content:center"><button class="btn" id="more" type="button" hidden>Load older posts</button></div>`;
+  const all = [];
+  let next = null;
+  const tile = (p, i) => `<button type="button" class="ptile" data-i="${i}" aria-label="${esc(p.type)} from ${esc(dayName(p.at))}">
+      ${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc((p.caption || p.title || p.type).slice(0, 120))}</span>`}
+      ${POST_ICON[p.type] ? `<span class="ptype">${esc(POST_ICON[p.type])}</span>` : ""}
+      <span class="pstat">${p.views !== undefined && p.views !== null && a.platform === "youtube" ? `<span>👁 ${esc(num(p.views))}</span>` : ""}${p.likes !== null && p.likes !== undefined ? `<span>♥ ${esc(num(p.likes))}</span>` : ""}${p.comments !== null && p.comments !== undefined ? `<span>💬 ${esc(num(p.comments))}</span>` : ""}</span>
+      <span class="pdate">${esc(dayName(p.at))}</span>
+    </button>`;
+  async function load() {
+    const msg = $("#feed-msg"), more = $("#more");
+    try {
+      const r = await api("GET", `/api/accounts/${encodeURIComponent(id)}/feed${next ? `?after=${encodeURIComponent(next)}` : ""}`);
+      const start = all.length;
+      all.push(...r.posts);
+      next = r.next;
+      $("#pgrid").insertAdjacentHTML("beforeend", r.posts.map((p, k) => tile(p, start + k)).join(""));
+      msg.hidden = all.length > 0;
+      msg.textContent = all.length ? "" : "No posts on this account yet.";
+      if (r.saved && all.length) { msg.hidden = false; msg.textContent = "These are the latest posts Social HQ saved. Full browsing for this platform comes soon."; }
+      more.hidden = !next;
+      $$("#pgrid .ptile").forEach((b) => (b.onclick = () => openPost(all[+b.dataset.i])));
+    } catch (e) {
+      msg.hidden = false;
+      msg.className = "note bad";
+      msg.textContent = `Could not load posts: ${e.message}`;
+    }
+  }
+  $("#more").onclick = async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "Loading…";
+    await load();
+    e.target.disabled = false;
+    e.target.textContent = "Load older posts";
+  };
+  async function openPost(p) {
+    const sheet = document.createElement("div");
+    sheet.className = "sheet-wrap";
+    sheet.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Post details"><div class="row between"><b>${esc(POST_ICON[p.type] || p.type)} · ${esc(whenText(p.at))}</b><button class="btn sm" type="button" data-close>Close ✕</button></div><p class="muted">Loading this post's numbers…</p></div>`;
+    document.body.appendChild(sheet);
+    document.body.style.overflow = "hidden";
+    const close = () => { sheet.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    sheet.onclick = (e) => { if (e.target === sheet || e.target.closest("[data-close]")) close(); };
+    if (!d.canBrowse) {
+      sheet.querySelector(".sheet").innerHTML = postHtml({ ...p, media: p.thumb ? [{ kind: "image", url: p.thumb, thumb: p.thumb }] : [], stats: [["Views", p.views], ["Likes", p.likes], ["Comments", p.comments], ["Reach", p.reach]].filter(([, v]) => v !== undefined && v !== null).map(([label, value]) => ({ label, value })) });
+      return;
+    }
+    try {
+      const full = await api("GET", `/api/accounts/${encodeURIComponent(id)}/feed/${encodeURIComponent(p.id)}`);
+      if (document.body.contains(sheet)) sheet.querySelector(".sheet").innerHTML = postHtml(full);
+    } catch (e) {
+      sheet.querySelector(".sheet").innerHTML = postHtml({ ...p, media: p.thumb ? [{ kind: "image", url: p.thumb, thumb: p.thumb }] : [], stats: [], note: `Could not load the numbers: ${e.message}` });
+    }
+  }
+  function postHtml(x) {
+    const m = (x.media || [])[0];
+    const visual = m ? (m.kind === "video" && m.url ? `<video src="${esc(m.url)}" poster="${esc(m.thumb || "")}" controls playsinline preload="none"></video>` : `<img src="${esc(m.url || m.thumb)}" alt="" referrerpolicy="no-referrer">`) : "";
+    const more = (x.media || []).length > 1 ? `<div class="row" style="gap:6px">${x.media.slice(1, 10).map((c) => `<img class="mini" src="${esc(c.thumb || c.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join("")}</div>` : "";
+    return `<div class="row between"><b>${esc(POST_ICON[x.type] || x.type)} · ${esc(whenText(x.at))}</b><button class="btn sm" type="button" data-close>Close ✕</button></div>
+      <div class="sheet-body">
+        <div class="sheet-media">${visual}${more}</div>
+        <div class="stack" style="gap:14px;min-width:0">
+          ${(x.stats || []).length ? `<div class="pst-grid">${x.stats.map((s) => `<div class="pst"><span class="v">${esc(s.text || num(s.value))}</span><span class="l">${esc(s.label)}</span></div>`).join("")}${x.engagementRate !== null && x.engagementRate !== undefined ? `<div class="pst"><span class="v">${esc(pct(x.engagementRate))}</span><span class="l">Engagement rate</span></div>` : ""}</div>` : ""}
+          ${x.note ? `<p class="note">${esc(x.note)}</p>` : ""}
+          ${x.caption ? `<div class="stack" style="gap:6px"><h3>Caption</h3><p class="cap">${esc(x.caption)}</p></div>` : ""}
+          ${x.url ? `<a class="btn sm" style="align-self:flex-start" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.linkLabel || "Open post")} ↗</a>` : ""}
+        </div>
+      </div>`;
+  }
+  await load();
 }
 
 // ---------- Insights ----------
@@ -927,7 +1067,7 @@ async function screenInsights(q) {
   const cmp = list.accounts.slice().sort((a, b) => (b.growth28 ?? -1e9) - (a.growth28 ?? -1e9));
   main(`
     <header class="head"><div><p class="sub">${L ? `Updated ${esc(whenText(L.at))}` : "Not collected yet"} · numbers refresh every 6 hours</p><h1>Insights</h1></div>
-      <button class="btn" id="refresh" type="button">Refresh now</button></header>
+      <div class="row"><a class="btn" href="#/account?id=${encodeURIComponent(id)}">Open account · all posts</a><button class="btn" id="refresh" type="button">Refresh now</button></div></header>
     <div class="row" role="group" aria-label="Pick an account">${list.accounts.map((a) => `<a class="acc-chip ${a.id === id ? "on" : ""}" style="text-decoration:none;color:inherit" href="#/insights?id=${encodeURIComponent(a.id)}">${badge(a.platform, true)}${esc(a.platform === "instagram" ? a.handle || a.name : a.name)}</a>`).join("")}</div>
     ${L?.limited ? `<p class="note">${esc(L.limited)}</p>` : ""}
     ${L ? `<section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>` : `<p class="note">No numbers yet for this account. Press "Refresh now" and come back in a minute.</p>`}

@@ -160,3 +160,107 @@ export async function insights({ account }) {
     posts,
   };
 }
+
+// ---------- Account page: profile, every past video, one video's numbers ----------
+function ytAuth(account) {
+  return { Authorization: `Bearer ${tokenOf(account)}` };
+}
+function ytThumb(sn) {
+  const t = sn?.thumbnails || {};
+  return (t.medium || t.high || t.default || {}).url || "";
+}
+function isoSeconds(d) {
+  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(d || "");
+  if (!m) return 0;
+  return (+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + (+m[3] || 0) * 60 + (+m[4] || 0);
+}
+function ytItem(v) {
+  const s = v.statistics || {};
+  const secs = isoSeconds(v.contentDetails?.duration);
+  const short = secs > 0 && secs <= 180;
+  return {
+    id: v.id,
+    type: short ? "Short" : "Video",
+    caption: [v.snippet?.title, v.snippet?.description].filter(Boolean).join("\n\n"),
+    title: v.snippet?.title || "",
+    url: short ? `https://www.youtube.com/shorts/${v.id}` : `https://www.youtube.com/watch?v=${v.id}`,
+    at: v.snippet?.publishedAt,
+    thumb: ytThumb(v.snippet),
+    views: Number(s.viewCount || 0),
+    likes: s.likeCount === undefined ? null : Number(s.likeCount),
+    comments: s.commentCount === undefined ? null : Number(s.commentCount),
+    privacy: v.status?.privacyStatus || "",
+  };
+}
+
+export async function profile({ account }) {
+  const { data } = await call(`https://www.googleapis.com/youtube/v3/channels?${qs({ part: "snippet,statistics", mine: "true" })}`, { headers: ytAuth(account) });
+  const ch = data.items?.[0] || {};
+  const st = ch.statistics || {};
+  return {
+    name: ch.snippet?.title || account.name,
+    handle: ch.snippet?.customUrl || account.handle,
+    avatar: ytThumb(ch.snippet) || account.avatar || "",
+    bio: ch.snippet?.description || "",
+    website: "",
+    link: ch.snippet?.customUrl ? `https://www.youtube.com/${ch.snippet.customUrl}` : `https://www.youtube.com/channel/${account.remoteId}`,
+    linkLabel: "Open on YouTube",
+    counts: [
+      { label: "Videos", value: Number(st.videoCount || 0) },
+      { label: "Subscribers", value: st.hiddenSubscriberCount ? null : Number(st.subscriberCount || 0) },
+      { label: "Total views", value: Number(st.viewCount || 0) },
+    ],
+  };
+}
+
+export async function feed({ account, after }) {
+  const auth = ytAuth(account);
+  let uploads = account.meta?.uploads;
+  if (!uploads) {
+    const { data } = await call(`https://www.googleapis.com/youtube/v3/channels?${qs({ part: "contentDetails", mine: "true" })}`, { headers: auth });
+    uploads = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  }
+  if (!uploads) return { posts: [], next: null };
+  const { data: pl } = await call(`https://www.googleapis.com/youtube/v3/playlistItems?${qs({ part: "contentDetails", playlistId: uploads, maxResults: 24, pageToken: after })}`, { headers: auth });
+  const ids = (pl.items || []).map((i) => i.contentDetails.videoId).join(",");
+  if (!ids) return { posts: [], next: null };
+  const { data: vids } = await call(`https://www.googleapis.com/youtube/v3/videos?${qs({ part: "snippet,statistics,contentDetails,status", id: ids })}`, { headers: auth });
+  return { posts: (vids.items || []).map(ytItem), next: pl.nextPageToken || null };
+}
+
+export async function postDetail({ account, postId }) {
+  const auth = ytAuth(account);
+  const { data } = await call(`https://www.googleapis.com/youtube/v3/videos?${qs({ part: "snippet,statistics,contentDetails,status", id: postId })}`, { headers: auth });
+  const v = data.items?.[0];
+  if (!v) throw new PlatformError("This video was not found on the channel.");
+  const item = ytItem(v);
+  const stats = [
+    { key: "views", label: "Views", value: item.views },
+    { key: "likes", label: "Likes", value: item.likes },
+    { key: "comments", label: "Comments", value: item.comments },
+  ];
+  let note = "";
+  try {
+    const { data: r } = await call(`https://youtubeanalytics.googleapis.com/v2/reports?${qs({
+      ids: "channel==MINE",
+      startDate: (item.at || "2006-01-01").slice(0, 10),
+      endDate: ymd(new Date()),
+      metrics: "estimatedMinutesWatched,averageViewDuration,averageViewPercentage,shares,subscribersGained",
+      filters: `video==${postId}`,
+    })}`, { headers: auth });
+    const row = r.rows?.[0];
+    if (row) {
+      stats.push(
+        { key: "minutes", label: "Watch time", value: null, text: row[0] >= 60 ? `${Math.round(row[0] / 60)} h` : `${Math.round(row[0])} min` },
+        { key: "avd", label: "Avg. view duration", value: null, text: row[1] >= 60 ? `${Math.floor(row[1] / 60)}m ${Math.round(row[1] % 60)}s` : `${Math.round(row[1])}s` },
+        { key: "avp", label: "Avg. % watched", value: null, text: `${Math.round(row[2])}%` },
+        { key: "shares", label: "Shares", value: row[3] },
+        { key: "subs", label: "Subscribers gained", value: row[4] },
+      );
+    }
+  } catch (_) {
+    note = "Watch-time numbers come from YouTube Analytics and can take a day or two to appear.";
+  }
+  const inter = (item.likes || 0) + (item.comments || 0);
+  return { ...item, media: [{ kind: "image", url: item.thumb.replace("mqdefault", "hqdefault"), thumb: item.thumb }], stats, engagementRate: item.views ? inter / item.views : null, note, linkLabel: "Open on YouTube" };
+}

@@ -12,6 +12,7 @@ import { platforms } from "../lib/platforms/index.mjs";
 import { sign, verify, randomId, internalSecret } from "../lib/crypto.mjs";
 import { overview, plan, suggestions, insightsList, insightsDetail } from "../lib/views.mjs";
 import { triggerPublish } from "../lib/jobs.mjs";
+import { getJSON, setJSON, del } from "../lib/store.mjs";
 
 function siteUrl(req, context) {
   return (env("URL") || context?.site?.url || new URL(req.url).origin).replace(/\/$/, "");
@@ -141,23 +142,100 @@ route("POST", "/api/accounts/:id/boards", async ({ params }) => {
   return json(publicAccount(account));
 });
 
+// ---------- One account's own page: profile, past posts, one post's numbers ----------
+async function liveAccount(id) {
+  const a = await getAccount(id);
+  const settings = await getSettings();
+  const p = platforms[a.platform];
+  if (!p) return { account: a, settings, p: null };
+  const { account, changed } = await p.ensureToken({ account: a, settings });
+  if (changed) await saveAccount(account);
+  return { account, settings, p };
+}
+function istKey(d) {
+  return new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);
+}
+route("GET", "/api/accounts/:id/profile", async ({ params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  const today = new Date();
+  const posts = await listPosts({ from: istKey(new Date(today.getTime() - 30 * 86400000)), to: istKey(new Date(today.getTime() + 60 * 86400000)), drafts: true });
+  const mine = posts.filter((x) => (x.accountIds || []).includes(account.id) || x.targets?.[account.id]).map((x) => ({
+    id: x.id,
+    at: x.targets?.[account.id]?.at || x.scheduledAt,
+    status: x.targets?.[account.id]?.status || x.status,
+    url: x.targets?.[account.id]?.url || "",
+    type: x.type,
+    caption: (x.captions?.[account.platform] || x.caption || x.title || "").slice(0, 140),
+  })).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  let profile = null, error = "";
+  if (p?.profile) {
+    try { profile = await p.profile({ settings, account }); } catch (e) { error = errMessage(e); }
+  }
+  return json({ account: publicAccount(account), profile, error, hq: mine, canBrowse: !!p?.feed });
+});
+route("GET", "/api/accounts/:id/feed", async ({ params, url }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  if (!p?.feed) {
+    const latest = await getJSON(`ins/${account.id}/latest`);
+    return json({ posts: (latest?.posts || []).map((x) => ({ ...x, caption: x.title || "" })), next: null, saved: true });
+  }
+  return json(await p.feed({ settings, account, after: url.searchParams.get("after") || undefined }));
+});
+route("GET", "/api/accounts/:id/feed/:postId", async ({ params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  if (!p?.postDetail) throw new HttpError(400, "Post details for this platform come soon.");
+  return json(await p.postDetail({ settings, account, postId: params.postId }));
+});
+
 // ---------- Connecting accounts (OAuth) ----------
-route("GET", "/api/oauth/:platform/start", async ({ req, params, context }) => {
+route("GET", "/api/oauth/:platform/start", async ({ req, params, context, url }) => {
   const p = platforms[params.platform];
   if (!p) throw new HttpError(404, "Unknown platform.");
   const settings = await getSettings();
-  if (!configured(settings, params.platform)) return redirect(`/#/settings?missing=${params.platform}`);
-  const state = sign({ p: params.platform, n: randomId(8), exp: Date.now() + 15 * 60000 }, "oauth");
-  return redirect(p.authUrl({ settings, redirectUri: `${siteUrl(req, context)}/api/oauth/${params.platform}/callback`, state }));
+  const asLink = url.searchParams.get("link") === "1";
+  if (!configured(settings, params.platform)) {
+    if (asLink) throw new HttpError(400, "Add this platform's app keys in Settings first.");
+    return redirect(`/#/settings?missing=${params.platform}`);
+  }
+  // Each login link works once and for 15 minutes. Only a logged-in owner can make one,
+  // so the link can also be opened in another browser or phone that is signed in to the account.
+  const n = randomId(12);
+  const exp = Date.now() + 15 * 60000;
+  await setJSON(`oauthstate/${n}`, { p: params.platform, exp });
+  const state = sign({ p: params.platform, n, exp }, "oauth");
+  const target = p.authUrl({ settings, redirectUri: `${siteUrl(req, context)}/api/oauth/${params.platform}/callback`, state });
+  if (asLink) return json({ url: target, expiresAt: new Date(exp).toISOString() });
+  return redirect(target);
 });
+
+function doneHtml(ok, text) {
+  const safe = String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Social HQ</title>
+<style>body{font:16px system-ui,-apple-system,Segoe UI,sans-serif;background:#F6F7FB;color:#14172B;display:grid;place-items:center;min-height:100vh;margin:0;padding:20px}
+.c{background:#fff;border:1px solid #E3E6F0;border-radius:16px;padding:28px;max-width:420px;text-align:center}h1{font-size:20px;margin:0 0 8px}p{color:#5B6178;margin:0}</style></head>
+<body><div class="c"><h1>${ok ? "Connected ✓" : "Not connected"}</h1><p>${safe}</p><p style="margin-top:12px">You can close this tab.</p></div></body></html>`, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'" },
+  });
+}
 
 route("GET", "/api/oauth/:platform/callback", async ({ req, params, context }) => {
   const url = new URL(req.url);
   const platform = params.platform;
-  const back = (q) => redirect(`/#/accounts?${q}`);
+  let loggedIn = true;
+  try { await requireAuth(req); } catch (_) { loggedIn = false; }
+  const back = (q) => {
+    if (loggedIn) return redirect(`/#/accounts?${q}`);
+    const sp = new URLSearchParams(q);
+    return sp.get("connected") ? doneHtml(true, `Social HQ now has: ${sp.get("connected")}.`) : doneHtml(false, sp.get("error") || "Something went wrong.");
+  };
   try {
+    if (!platforms[platform]) return back("error=" + encodeURIComponent("Unknown platform."));
     const st = verify(url.searchParams.get("state"), "oauth");
-    if (!st || st.p !== platform) return back("error=" + encodeURIComponent("That login link expired. Press Connect again."));
+    if (!st || st.p !== platform || !st.n) return back("error=" + encodeURIComponent("That login link expired. Press Connect again."));
+    const key = `oauthstate/${st.n}`;
+    if (!(await getJSON(key))) return back("error=" + encodeURIComponent("That login link was already used. Press Connect again."));
+    await del(key);
     const err = url.searchParams.get("error_description") || url.searchParams.get("error_message") || url.searchParams.get("error");
     if (err) return back("error=" + encodeURIComponent(`${platform}: ${err}`));
     const code = url.searchParams.get("code");
@@ -169,12 +247,12 @@ route("GET", "/api/oauth/:platform/callback", async ({ req, params, context }) =
       const saved = await upsertConnected(acc);
       names.push(saved.name);
     }
-    await logEvent("account", `Connected ${platform}: ${names.join(", ")}`, req);
+    await logEvent("account", `Connected ${platform}: ${names.join(", ")}${loggedIn ? "" : " (link opened in another browser)"}`, req);
     return back("connected=" + encodeURIComponent(names.join(", ")));
   } catch (e) {
     return back("error=" + encodeURIComponent(`${platform}: ${errMessage(e)}`));
   }
-});
+}, { open: true });
 
 // ---------- Posts ----------
 route("GET", "/api/posts", async ({ url }) => {

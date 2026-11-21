@@ -273,3 +273,131 @@ export async function insights({ settings, account }) {
     posts,
   };
 }
+
+// ---------- Account page: profile, every past post, one post's numbers ----------
+const IG_POST_FIELDS = "id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count";
+
+function igType(m) {
+  if (m.media_product_type === "REELS") return "Reel";
+  if (m.media_product_type === "STORY") return "Story";
+  if (m.media_type === "CAROUSEL_ALBUM") return "Carousel";
+  if (m.media_type === "VIDEO") return "Video";
+  return "Photo";
+}
+function igItem(m) {
+  return {
+    id: m.id,
+    type: igType(m),
+    caption: m.caption || "",
+    url: m.permalink || "",
+    at: m.timestamp,
+    thumb: m.thumbnail_url || (m.media_type !== "VIDEO" ? m.media_url : "") || "",
+    likes: m.like_count ?? null,
+    comments: m.comments_count ?? null,
+  };
+}
+
+export async function profile({ settings, account }) {
+  const { data: me } = await call(`${base(settings)}/${account.remoteId}?${qs({ fields: "id,username,name,biography,website,profile_picture_url,followers_count,follows_count,media_count", access_token: tokenOf(account) })}`);
+  return {
+    name: me.name || me.username,
+    handle: me.username ? "@" + me.username : account.handle,
+    avatar: me.profile_picture_url || account.avatar || "",
+    bio: me.biography || "",
+    website: me.website || "",
+    link: me.username ? `https://www.instagram.com/${me.username}/` : "",
+    linkLabel: "Open on Instagram",
+    counts: [
+      { label: "Posts", value: me.media_count ?? null },
+      { label: "Followers", value: me.followers_count ?? null },
+      { label: "Following", value: me.follows_count ?? null },
+    ],
+  };
+}
+
+export async function feed({ settings, account, after }) {
+  const { data } = await call(`${base(settings)}/${account.remoteId}/media?${qs({ fields: IG_POST_FIELDS, limit: 24, after, access_token: tokenOf(account) })}`);
+  return { posts: (data.data || []).map(igItem), next: data.paging?.next ? data.paging?.cursors?.after || null : null };
+}
+
+const IG_LABEL = {
+  reach: "Accounts reached",
+  views: "Views",
+  likes: "Likes",
+  comments: "Comments",
+  shares: "Shares",
+  saved: "Saves",
+  total_interactions: "Interactions",
+  profile_visits: "Profile visits",
+  follows: "Follows",
+  ig_reels_avg_watch_time: "Avg. watch time",
+  ig_reels_video_view_total_time: "Total watch time",
+  replies: "Replies",
+  navigation: "Taps (back, forward, exit)",
+};
+
+// Meta refuses the whole request if one metric doesn't fit the post type, so ask in one go
+// and, if that fails, one metric at a time and keep whatever comes back.
+async function metaMetrics(url, token, metrics) {
+  const read = (rows) => {
+    const out = {};
+    for (const x of rows || []) out[x.name] = x.values?.[0]?.value ?? x.total_value?.value ?? 0;
+    return out;
+  };
+  try {
+    const { data } = await call(`${url}?${qs({ metric: metrics.join(","), access_token: token })}`);
+    return read(data.data);
+  } catch (e) {
+    if (e.authProblem && e.status === 401) throw e;
+    const parts = await Promise.all(metrics.map(async (m) => {
+      try {
+        const { data } = await call(`${url}?${qs({ metric: m, access_token: token })}`);
+        return read(data.data);
+      } catch (_) {
+        return {};
+      }
+    }));
+    return Object.assign({}, ...parts);
+  }
+}
+
+function msText(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+export async function postDetail({ settings, account, postId }) {
+  const token = tokenOf(account);
+  const { data: m } = await call(`${base(settings)}/${encodeURIComponent(postId)}?${qs({ fields: IG_POST_FIELDS + ",children{media_type,media_url,thumbnail_url}", access_token: token })}`);
+  const item = igItem(m);
+  const kind = igType(m);
+  const metrics = kind === "Reel"
+    ? ["reach", "views", "likes", "comments", "shares", "saved", "total_interactions", "ig_reels_avg_watch_time", "ig_reels_video_view_total_time"]
+    : kind === "Story"
+      ? ["reach", "views", "replies", "shares", "total_interactions", "navigation"]
+      : ["reach", "views", "likes", "comments", "shares", "saved", "total_interactions", "profile_visits", "follows"];
+  const got = await metaMetrics(`${base(settings)}/${encodeURIComponent(postId)}/insights`, token, metrics);
+  if (got.likes === undefined && m.like_count !== undefined) got.likes = m.like_count;
+  if (got.comments === undefined && m.comments_count !== undefined) got.comments = m.comments_count;
+  const stats = metrics.filter((k) => got[k] !== undefined).map((k) => ({
+    key: k,
+    label: IG_LABEL[k] || k,
+    value: k.includes("watch_time") || k.includes("view_total_time") ? null : got[k],
+    text: k.includes("watch_time") || k.includes("view_total_time") ? msText(got[k]) : null,
+  }));
+  const reach = got.reach || 0;
+  const inter = got.total_interactions ?? ((got.likes || 0) + (got.comments || 0) + (got.shares || 0) + (got.saved || 0));
+  const media = (m.children?.data || []).map((c) => ({ kind: c.media_type === "VIDEO" ? "video" : "image", url: c.media_url || "", thumb: c.thumbnail_url || c.media_url || "" }));
+  if (!media.length) media.push({ kind: m.media_type === "VIDEO" ? "video" : "image", url: m.media_url || "", thumb: item.thumb });
+  return {
+    ...item,
+    media,
+    stats,
+    engagementRate: reach ? inter / reach : null,
+    note: stats.length ? "" : "Instagram did not share numbers for this post (posts from before the account became a business account have none).",
+    linkLabel: "Open on Instagram",
+  };
+}

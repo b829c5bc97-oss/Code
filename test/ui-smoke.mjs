@@ -8,6 +8,7 @@ import { handle } from "../netlify/functions/api.mjs";
 import { upsertConnected, addReminderAccount } from "../netlify/lib/accounts.mjs";
 import { collectInsights } from "../netlify/lib/jobs.mjs";
 import { createPost } from "../netlify/lib/posts.mjs";
+import { platforms } from "../netlify/lib/platforms/index.mjs";
 
 const BASE = "https://hq.test";
 let cookie = "";
@@ -34,6 +35,16 @@ await collectInsights({ platformsOverride: { instagram: fake, pinterest: { ...fa
 const soon = new Date(Date.now() + 3 * 3600000).toISOString();
 await createPost({ accountIds: ["instagram-1", rem.id], type: "post", caption: "Hello", media: [{ id: "m1", kind: "image", name: "a.jpg", size: 10, mime: "image/jpeg" }], scheduledAt: soon, approve: true });
 await createPost({ accountIds: ["instagram-1"], type: "post", caption: "draft" });
+
+// Fake live account data for the account page.
+platforms.instagram = {
+  ...platforms.instagram,
+  ensureToken: async ({ account }) => ({ account, changed: false }),
+  profile: async () => ({ name: "LIFTLINE", handle: "@info.liftline", avatar: "", bio: "Compact electric lifts", website: "https://liftline.in", link: "https://www.instagram.com/info.liftline/", linkLabel: "Open on Instagram", counts: [{ label: "Posts", value: 31 }, { label: "Followers", value: 1200 }, { label: "Following", value: 40 }] }),
+  feed: async ({ after }) => ({ posts: [{ id: after ? "m3" : "m1", type: "Reel", caption: "Lift demo", url: "https://instagram.com/p/1", at: new Date().toISOString(), thumb: "", likes: 12, comments: 3 }, { id: after ? "m4" : "m2", type: "Photo", caption: "Warehouse", url: "https://instagram.com/p/2", at: new Date().toISOString(), thumb: "https://x.test/a.jpg", likes: 5, comments: 0 }], next: after ? null : "CUR" }),
+  postDetail: async ({ postId }) => ({ id: postId, type: "Reel", caption: "Lift demo", url: "https://instagram.com/p/1", at: new Date().toISOString(), media: [{ kind: "video", url: "https://x.test/v.mp4", thumb: "" }], stats: [{ label: "Accounts reached", value: 900 }, { label: "Avg. watch time", value: null, text: "7s" }], engagementRate: 0.05, note: "", linkLabel: "Open on Instagram" }),
+};
+platforms.youtube = { ...platforms.youtube, ensureToken: async ({ account }) => ({ account, changed: false }), profile: async () => { throw new Error("offline"); }, feed: async () => ({ posts: [], next: null }) };
 
 const errors = [];
 const vc = new VirtualConsole();
@@ -78,6 +89,22 @@ console.log("✓ create: Pinterest board picker");
 await visit("#/accounts", "Connect an account");
 await visit("#/accounts?error=instagram%3A%20denied", "denied");
 await visit("#/insights", "Perfect time to post");
+await visit("#/account?id=instagram-1", "Posts on the account");
+await wait(300);
+assert.equal(w.document.querySelectorAll("#pgrid .ptile").length, 2, "first page of posts shows");
+assert.ok(w.document.querySelector("#main").textContent.includes("Compact electric lifts"));
+w.document.querySelector("#more").click();
+await wait(500);
+assert.equal(w.document.querySelectorAll("#pgrid .ptile").length, 4, "older posts load");
+w.document.querySelector("#pgrid .ptile").click();
+await wait(500);
+assert.ok(w.document.querySelector(".sheet").textContent.includes("Accounts reached"), "post numbers show");
+assert.ok(w.document.querySelector(".sheet").textContent.includes("7s"));
+w.document.querySelector(".sheet [data-close]").click();
+assert.equal(w.document.querySelector(".sheet"), null, "post sheet closes");
+console.log("✓ account page: posts grid, load more, post numbers");
+await visit("#/account?id=instagram-1&tab=hq", "Planned in Social HQ");
+await visit("#/account?id=youtube-UC1", "No posts on this account yet");
 await visit("#/settings", "Redirect address");
 await visit("#/settings?missing=youtube", "Add the YouTube keys");
 
