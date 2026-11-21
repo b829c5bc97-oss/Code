@@ -83,11 +83,31 @@ function normalise(input, accountsById) {
     aiGenerated: !!input.aiGenerated,
     ytPrivacy: ["public", "unlisted", "private"].includes(input.ytPrivacy) ? input.ytPrivacy : "public",
     ytMadeForKids: !!input.ytMadeForKids,
+    trial: ["manual", "auto", "off"].includes(input.trial) ? input.trial : "",
+    cover: input.cover && (input.cover.mediaId || Number(input.cover.atSec) > 0)
+      ? { mediaId: clean(input.cover.mediaId, 60) || "", atSec: Math.max(0, Math.min(Number(input.cover.atSec) || 0, 900)) }
+      : null,
     media,
     scheduledAt,
     needsApproval: !!input.needsApproval,
     note: clean(input.note, 300),
   };
+}
+
+// The post as one account should get it: that account's saved caption ending, AI label and
+// Trial Reel defaults applied (a post can switch a Trial Reel off with trial: "off").
+export function forAccount(post, account) {
+  const d = account?.defaults || {};
+  const platform = account?.platform;
+  const out = { ...post, captions: { ...(post.captions || {}) } };
+  const ending = (d.captionEnding || "").trim();
+  if (ending && ["instagram", "facebook", "youtube", "linkedin", "pinterest"].includes(platform)) {
+    const base = (out.captions[platform] || out.caption || "").trim();
+    if (!base.includes(ending)) out.captions[platform] = base ? `${base}\n\n${ending}` : ending;
+  }
+  if (d.aiLabel) out.aiGenerated = true;
+  out.trial = post.trial === "off" ? "" : post.trial || (post.type === "reel" && platform === "instagram" ? d.trial || "" : "");
+  return out;
 }
 
 // Returns a list of plain-language problems; empty = ready to schedule.
@@ -109,6 +129,7 @@ export function problems(post, accountsById) {
         if (post.type === "reel" && videos.length !== 1) out.push(`${name}: a Reel needs exactly one video.`);
         if (post.type === "story" && post.media.length !== 1) out.push(`${name}: a Story needs exactly one photo or video.`);
         if ((post.type === "post" || post.type === "text") && post.media.length > 1) out.push(`${name}: pick "Carousel" to post more than one photo.`);
+        if (["manual", "auto"].includes(post.trial) && !(post.type === "reel" && videos.length === 1)) out.push(`${name}: a Trial Reel must be a Reel with one video.`);
         break;
       case "youtube":
         if (videos.length !== 1) out.push(`${name}: YouTube needs exactly one video.`);

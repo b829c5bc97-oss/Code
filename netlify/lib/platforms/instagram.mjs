@@ -139,14 +139,25 @@ async function permalink(settings, account, mediaId) {
   }
 }
 
+// Extra Reel settings: AI info label, Trial Reel (shown to non-followers first), cover.
+function reelExtras(post, ctx) {
+  const x = {};
+  if (post.aiGenerated) x.is_ai_generated = "true";
+  if (post.trial) x.trial_params = JSON.stringify({ graduation_strategy: post.trial === "auto" ? "SS_PERFORMANCE" : "MANUAL" });
+  if (post.cover?.mediaId) x.cover_url = ctx.publicUrl(post.cover.mediaId);
+  else if (Number(post.cover?.atSec) > 0) x.thumb_offset = String(Math.round(Number(post.cover.atSec) * 1000));
+  return x;
+}
+
 export async function publish({ settings, account, post, ctx }) {
   const caption = captionFor(post, "instagram");
   const media = post.media;
   let creationId;
   const isStory = post.type === "story";
+  const ai = post.aiGenerated ? { is_ai_generated: "true" } : {};
 
   if (isStory) {
-    const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES" });
+    const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES", ...ai });
     await waitReady(settings, account, c.id);
     creationId = c.id;
   } else if (post.type === "carousel" || media.length > 1) {
@@ -156,15 +167,15 @@ export async function publish({ settings, account, post, ctx }) {
       children.push(c.id);
     }
     for (const id of children) await waitReady(settings, account, id);
-    const parent = await createContainer(settings, account, { media_type: "CAROUSEL", children: children.join(","), caption });
+    const parent = await createContainer(settings, account, { media_type: "CAROUSEL", children: children.join(","), caption, ...ai });
     await waitReady(settings, account, parent.id);
     creationId = parent.id;
   } else if (media[0].kind === "video") {
-    const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "REELS", caption, share_to_feed: "true" });
+    const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "REELS", caption, share_to_feed: "true", ...reelExtras(post, ctx) });
     await waitReady(settings, account, c.id);
     creationId = c.id;
   } else {
-    const c = await mediaContainer(settings, account, media[0], ctx, { caption });
+    const c = await mediaContainer(settings, account, media[0], ctx, { caption, ...ai });
     await waitReady(settings, account, c.id);
     creationId = c.id;
   }
@@ -181,7 +192,7 @@ export async function publish({ settings, account, post, ctx }) {
     }
   }
   // Instagram's API has no "share Reel to Story" button, so the same file (the first one of a carousel) is posted as a Story.
-  if (post.alsoStory && !isStory && media.length >= 1) {
+  if (post.alsoStory && !isStory && !post.trial && media.length >= 1) {
     try {
       const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES" });
       await waitReady(settings, account, c.id);

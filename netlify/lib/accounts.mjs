@@ -54,6 +54,8 @@ export async function upsertConnected({ platform, kind, remoteId, name, handle, 
     avatar: avatar || existing?.avatar || "",
     brand: existing?.brand || guessBrand(name || handle || ""),
     cadence: existing?.cadence || 0,
+    defaults: existing?.defaults || {},
+    avatarCached: existing?.avatarCached, avatarType: existing?.avatarType, avatarAt: existing?.avatarAt,
     token: token ? encrypt(token) : existing?.token || null,
     refreshToken: refreshToken ? encrypt(refreshToken) : existing?.refreshToken || null,
     tokenExpiresAt: tokenExpiresAt || null,
@@ -95,6 +97,13 @@ export async function updateAccount(id, patch) {
   if (patch.name !== undefined) a.name = clean(patch.name, 80).trim() || a.name;
   if (patch.cadence !== undefined) a.cadence = Math.max(0, Math.min(21, parseInt(patch.cadence, 10) || 0));
   if (patch.boardId !== undefined) a.meta = { ...(a.meta || {}), defaultBoardId: clean(patch.boardId, 40) };
+  if (patch.defaults && typeof patch.defaults === "object") {
+    const d = { ...(a.defaults || {}) };
+    if (patch.defaults.captionEnding !== undefined) d.captionEnding = clean(patch.defaults.captionEnding, 1500);
+    if (patch.defaults.aiLabel !== undefined) d.aiLabel = !!patch.defaults.aiLabel;
+    if (patch.defaults.trial !== undefined) d.trial = ["manual", "auto"].includes(patch.defaults.trial) ? patch.defaults.trial : "";
+    a.defaults = d;
+  }
   return await saveAccount(a);
 }
 
@@ -151,6 +160,7 @@ export function publicAccount(a) {
     avatar: a.avatarCached ? `/m/av/${encodeURIComponent(a.id)}?v=${a.avatarCached}` : a.avatar || "",
     brand: a.brand,
     cadence: a.cadence || 0,
+    defaults: a.defaults || {},
     status,
     lastError: a.lastError || "",
     loginNote,

@@ -548,7 +548,7 @@ async function screenMonth(q) {
 // ---------- Create / edit post ----------
 let C = null;
 function blankPost() {
-  return { id: null, accountIds: [], type: "post", caption: "", captions: {}, title: "", link: "", boardIds: {}, firstComment: "", alsoStory: false, aiGenerated: false, ytPrivacy: "public", ytMadeForKids: false, media: [], needsApproval: false, date: "", time: "", slot: -1, suggestions: [], tab: "all", status: null, targets: {}, uploading: 0 };
+  return { id: null, accountIds: [], type: "post", caption: "", captions: {}, title: "", link: "", boardIds: {}, firstComment: "", alsoStory: false, aiGenerated: false, trial: "", cover: null, ytPrivacy: "public", ytMadeForKids: false, media: [], needsApproval: false, date: "", time: "", slot: -1, suggestions: [], tab: "all", status: null, targets: {}, uploading: 0 };
 }
 
 async function screenCreate(q) {
@@ -559,7 +559,7 @@ async function screenCreate(q) {
     const p = await api("GET", `/api/posts/${q.get("id")}`);
     Object.assign(C, {
       id: p.id, accountIds: p.accountIds, type: p.type, caption: p.caption, captions: p.captions || {}, title: p.title, link: p.link, boardIds: p.boardIds || {},
-      firstComment: p.firstComment, alsoStory: p.alsoStory, aiGenerated: p.aiGenerated, ytPrivacy: p.ytPrivacy, ytMadeForKids: p.ytMadeForKids,
+      firstComment: p.firstComment, alsoStory: p.alsoStory, aiGenerated: p.aiGenerated, trial: p.trial || "", cover: p.cover ? { ...p.cover, preview: p.cover.mediaId ? `/m/${p.cover.mediaId}.jpg` : "" } : null, ytPrivacy: p.ytPrivacy, ytMadeForKids: p.ytMadeForKids,
       media: p.media, needsApproval: p.needsApproval && !p.approvedAt, status: p.status, targets: p.targets || {}, mediaDeleted: p.mediaDeleted,
       date: p.scheduledAt ? istKey(p.scheduledAt) : "", time: p.scheduledAt ? istHM(p.scheduledAt) : "",
     });
@@ -645,7 +645,10 @@ async function screenCreate(q) {
     $$("#c-accounts [data-acc]").forEach((b) => (b.onclick = () => {
       if (readOnly) return;
       const id = b.dataset.acc;
-      C.accountIds = C.accountIds.includes(id) ? C.accountIds.filter((x) => x !== id) : [...C.accountIds, id];
+      const adding = !C.accountIds.includes(id);
+      C.accountIds = adding ? [...C.accountIds, id] : C.accountIds.filter((x) => x !== id);
+      // An account set to "always add the AI label" switches the label on for this post.
+      if (adding && acc.accounts.find((x) => x.id === id)?.defaults?.aiLabel) C.aiGenerated = true;
       renderAccounts();
       renderTabs();
       renderExtra();
@@ -725,8 +728,50 @@ async function screenCreate(q) {
     const storyPlats = ["instagram", "facebook"].filter((p) => plats.includes(p));
     if (storyPlats.length && C.type !== "story" && C.type !== "pin") h += `<label class="check"><input type="checkbox" id="o-story" ${C.alsoStory ? "checked" : ""}> Also share it to the ${storyPlats.map((p) => (p === "instagram" ? "Instagram" : "Facebook")).join(" and ")} Story <span class="muted small">(${C.media.length > 1 ? "the first photo or video" : "same photo or video"}, posted right after)</span></label>`;
     if (plats.some((p) => ["instagram", "facebook"].includes(p))) h += `<label class="f" style="grid-column:1/-1">First comment (Instagram and Facebook)<input type="text" id="o-comment" value="${esc(C.firstComment)}" placeholder="e.g. Get a quote at liftline.in"></label>`;
-    if (plats.includes("youtube")) h += `<label class="check"><input type="checkbox" id="o-ai" ${C.aiGenerated ? "checked" : ""}> Video has realistic AI-made content (YouTube label)</label>`;
+    if (plats.some((p) => ["instagram", "youtube"].includes(p))) h += `<label class="check"><input type="checkbox" id="o-ai" ${C.aiGenerated ? "checked" : ""}> Made with AI — add the AI label <span class="muted small">(Instagram "AI info" and YouTube "altered or synthetic"; needed for realistic AI voices or video)</span></label>`;
+    const hasVideo = C.media.some((m) => m.kind === "video");
+    if (plats.includes("instagram") && C.type === "reel") h += `<label class="f">Trial Reel (Instagram)<select id="o-trial">
+        <option value="" ${!C.trial ? "selected" : ""}>Use the account's setting</option>
+        <option value="off" ${C.trial === "off" ? "selected" : ""}>Normal Reel</option>
+        <option value="manual" ${C.trial === "manual" ? "selected" : ""}>Trial: show to non-followers first, I decide later</option>
+        <option value="auto" ${C.trial === "auto" ? "selected" : ""}>Trial: share to followers automatically if it does well</option></select></label>`;
+    if (hasVideo && plats.some((p) => ["instagram", "facebook", "youtube"].includes(p)) && C.type !== "story") h += `<div class="f" style="grid-column:1/-1"><span>Cover</span>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          ${C.cover?.preview ? `<img src="${esc(C.cover.preview)}" alt="" style="width:48px;height:85px;object-fit:cover;border-radius:6px">` : ""}
+          <label class="btn sm">${C.cover?.mediaId ? "Change cover photo" : "Upload a cover photo"}<input type="file" id="o-cover" accept="image/*" class="sr"></label>
+          <span class="muted small">or use the frame at</span>
+          <input type="number" id="o-cover-at" min="0" max="900" step="0.5" value="${C.cover?.atSec || ""}" placeholder="sec" style="width:80px">
+          <span class="muted small">seconds</span>
+          ${C.cover ? `<button class="btn sm" type="button" id="o-cover-clear">No cover (first frame)</button>` : ""}
+        </div><span class="muted small">Without a cover, Instagram uses the first frame. A 9:16 photo works best.</span></div>`;
     $("#c-opts").innerHTML = h;
+    const tr = $("#o-trial");
+    if (tr) tr.onchange = () => (C.trial = tr.value);
+    const cf = $("#o-cover");
+    if (cf) cf.onchange = async () => {
+      const f = cf.files[0];
+      if (!f) return;
+      C.uploading++;
+      try {
+        const item = {};
+        const up = await uploadFile(f, () => {}, item);
+        C.cover = { mediaId: up.id, atSec: 0, preview: URL.createObjectURL(f) };
+        toast("Cover added");
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        C.uploading--;
+        renderOpts();
+      }
+    };
+    const ca = $("#o-cover-at");
+    if (ca) ca.onchange = () => {
+      const v = Number(ca.value);
+      C.cover = v > 0 ? { mediaId: "", atSec: v } : C.cover?.mediaId ? C.cover : null;
+      renderOpts();
+    };
+    const cc = $("#o-cover-clear");
+    if (cc) cc.onclick = () => { C.cover = null; renderOpts(); };
     const s = $("#o-story");
     if (s) s.onchange = () => (C.alsoStory = s.checked);
     const c = $("#o-comment");
@@ -743,7 +788,7 @@ async function screenCreate(q) {
         ${m.warn ? `<span class="small" style="color:var(--amber)">${esc(m.warn)}</span>` : ""}</div>
       ${readOnly ? "" : `<div class="row" style="gap:4px">${i > 0 ? `<button class="btn sm" data-up="${i}" type="button" aria-label="Move up">↑</button>` : ""}<button class="btn sm danger" data-rm="${i}" type="button">Remove</button></div>`}
     </div>`).join("") + (C.mediaDeleted ? `<p class="note">The files were deleted after posting to save space.</p>` : "");
-    $$("[data-rm]").forEach((b) => (b.onclick = () => { C.media.splice(Number(b.dataset.rm), 1); renderMedia(); renderPreview(); }));
+    $$("[data-rm]").forEach((b) => (b.onclick = () => { C.media.splice(Number(b.dataset.rm), 1); renderMedia(); renderOpts(); renderPreview(); }));
     $$("[data-up]").forEach((b) => (b.onclick = () => { const i = Number(b.dataset.up); [C.media[i - 1], C.media[i]] = [C.media[i], C.media[i - 1]]; renderMedia(); renderPreview(); }));
     $("#c-drop").hidden = readOnly;
   }
@@ -767,6 +812,7 @@ async function screenCreate(q) {
       } finally {
         C.uploading--;
         renderMedia();
+        renderOpts();
         renderPreview();
       }
     }
@@ -848,6 +894,7 @@ async function screenCreate(q) {
     const body = {
       accountIds: C.accountIds, type: C.type, caption: C.caption, captions: C.captions, title: C.title, link: C.link, boardIds: C.boardIds,
       firstComment: C.firstComment, alsoStory: C.alsoStory, aiGenerated: C.aiGenerated, ytPrivacy: C.ytPrivacy, ytMadeForKids: C.ytMadeForKids,
+      trial: C.trial || "", cover: C.cover ? { mediaId: C.cover.mediaId || "", atSec: C.cover.atSec || 0 } : null,
       media: C.media.filter((m) => m.id).map(({ id, kind, name, size, mime }) => ({ id, kind, name, size, mime })),
       needsApproval: C.needsApproval,
     };
@@ -1036,6 +1083,12 @@ async function screenAccounts(q) {
           <label class="f" style="flex:0 1 130px">Posts a week target<input type="number" min="0" max="21" data-cad="${esc(a.id)}" value="${a.cadence || 0}"></label>
           ${a.platform === "pinterest" ? `<label class="f" style="flex:1 1 160px">Default board<select data-board="${esc(a.id)}">${(a.meta.boards || []).map((b) => `<option value="${esc(b.id)}" ${b.id === a.meta.defaultBoardId ? "selected" : ""}>${esc(b.name)}</option>`).join("") || '<option value="">No boards</option>'}</select></label>` : ""}
         </div>
+        ${a.platform !== "manual" ? `<details class="acc-defaults"><summary class="small" style="font-weight:600;cursor:pointer">Every post on this account${a.defaults?.captionEnding || a.defaults?.aiLabel || a.defaults?.trial ? " · set" : ""}</summary>
+          <div class="stack" style="gap:8px;margin-top:8px">
+            <label class="f">Caption ending — added to the end of every caption (hashtags, "Follow @…")<textarea rows="3" data-ending="${esc(a.id)}" placeholder="e.g. Follow @liftlinemachines for more 🏗️&#10;#electricforklift #godown #warehouse">${esc(a.defaults?.captionEnding || "")}</textarea></label>
+            ${["instagram", "youtube"].includes(a.platform) ? `<label class="check"><input type="checkbox" data-ailabel="${esc(a.id)}" ${a.defaults?.aiLabel ? "checked" : ""}> Always add the AI label (our videos use AI voices)</label>` : ""}
+            ${a.platform === "instagram" ? `<label class="f">Reels on this account<select data-trial="${esc(a.id)}"><option value="" ${!a.defaults?.trial ? "selected" : ""}>Normal Reels</option><option value="manual" ${a.defaults?.trial === "manual" ? "selected" : ""}>Trial Reels — non-followers first, I decide</option><option value="auto" ${a.defaults?.trial === "auto" ? "selected" : ""}>Trial Reels — share to followers automatically if they do well</option></select></label>` : ""}
+          </div></details>` : ""}
         <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm primary" href="#/account?id=${encodeURIComponent(a.id)}">Open account · posts &amp; insights</a><a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
       </div>`).join("")}</div>`).join("") || `<p class="muted">No accounts yet.</p>`}</section>`);
   $("#go-connect").onclick = (e) => { e.preventDefault(); $("#connect").scrollIntoView?.({ behavior: "smooth" }); };
@@ -1060,6 +1113,9 @@ async function screenAccounts(q) {
   };
   $$("[data-brand]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.brand}`, { brand: i.value }); toast("Saved"); state.accounts = null; }));
   $$("[data-cad]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.cad}`, { cadence: i.value }); toast("Saved"); }));
+  $$("[data-ending]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.ending}`, { defaults: { captionEnding: i.value } }); toast("Caption ending saved"); state.accounts = null; }));
+  $$("[data-ailabel]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.ailabel}`, { defaults: { aiLabel: i.checked } }); toast("Saved"); state.accounts = null; }));
+  $$("[data-trial]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.trial}`, { defaults: { trial: i.value } }); toast("Saved"); state.accounts = null; }));
   $$("select[data-board]").forEach((s) => (s.onchange = async () => { await api("PATCH", `/api/accounts/${s.dataset.board}`, { boardId: s.value }); toast("Saved"); }));
   $$("[data-refresh]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/accounts/${b.dataset.refresh}/boards`); toast("Boards refreshed"); render(); } catch (e) { toast(e.message, true); } }));
   $$("[data-del]").forEach((b) => (b.onclick = async () => {

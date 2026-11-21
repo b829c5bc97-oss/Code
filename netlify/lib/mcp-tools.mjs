@@ -83,6 +83,10 @@ const POST_FIELDS = {
   title: { type: "string", description: "YouTube title (needed for YouTube)." },
   link: { type: "string", description: "Link for Pinterest pins or Facebook link posts." },
   first_comment: { type: "string", description: "Posted as the first comment (Instagram, Facebook)." },
+  ai_label: { type: "boolean", description: "Add the AI label (Instagram 'AI info', YouTube synthetic media). Use for realistic AI voices/video. Accounts can also have it always on." },
+  trial: { type: "string", enum: ["", "manual", "auto", "off"], description: "Instagram Trial Reel: manual = non-followers first, decide later; auto = share to followers if it performs; off = normal Reel even if the account defaults to trials." },
+  cover_at_sec: { type: "number", description: "Use the video frame at this many seconds as the Reel/YouTube cover." },
+  cover_media_id: { type: "string", description: "Media id of an uploaded photo to use as the cover." },
   also_story: { type: "boolean", description: "Also share the same photo/video (first one of a carousel) to the Instagram and Facebook Page Story." },
   media_urls: { type: "array", items: { type: "string" }, description: "Public https links to photos/videos to attach, in order. Instagram photos must be JPEG. Max 80 MB each." },
   media_ids: { type: "array", items: { type: "string" }, description: "Ids of media already in Social HQ (from get_post), to reuse." },
@@ -210,6 +214,9 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
         link: args.link,
         firstComment: args.first_comment,
         alsoStory: !!args.also_story,
+        aiGenerated: !!args.ai_label,
+        trial: args.trial || "",
+        cover: args.cover_media_id || args.cover_at_sec ? { mediaId: args.cover_media_id || "", atSec: Number(args.cover_at_sec) || 0 } : null,
         media,
         scheduledAt,
         needsApproval: !!settings.claude?.requireApproval,
@@ -227,6 +234,9 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
       for (const [k, f] of [["caption", "caption"], ["title", "title"], ["link", "link"], ["first_comment", "firstComment"], ["note", "note"]]) if (typeof args[k] === "string") patch[f] = args[k];
       if (args.captions) patch.captions = captionsArg(args.captions);
       if (typeof args.also_story === "boolean") patch.alsoStory = args.also_story;
+      if (typeof args.ai_label === "boolean") patch.aiGenerated = args.ai_label;
+      if (typeof args.trial === "string") patch.trial = args.trial;
+      if (args.cover_media_id || args.cover_at_sec) patch.cover = { mediaId: args.cover_media_id || "", atSec: Number(args.cover_at_sec) || 0 };
       if (args.media_urls || args.media_ids) {
         const { media, warnings } = await buildMedia(args, current.media);
         patch.media = media;

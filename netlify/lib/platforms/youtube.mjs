@@ -100,8 +100,21 @@ export async function publish({ account, post, ctx }) {
     timeout: 840000,
   });
   const url = post.type === "short" ? `https://www.youtube.com/shorts/${data.id}` : `https://www.youtube.com/watch?v=${data.id}`;
-  const note = data.status?.privacyStatus === "private" && post.ytPrivacy !== "private" ? "Uploaded as Private: Google has not finished checking the app yet." : "";
-  return { remoteId: data.id, url, note };
+  const notes = [];
+  if (data.status?.privacyStatus === "private" && post.ytPrivacy !== "private") notes.push("Uploaded as Private: Google has not finished checking the app yet.");
+  // Custom cover (YouTube only allows custom thumbnails on phone-verified channels).
+  if (post.cover?.mediaId) {
+    try {
+      await call(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?${qs({ videoId: data.id, uploadType: "media" })}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokenOf(account)}`, "content-type": "image/jpeg" },
+        body: await ctx.bytes(post.cover.mediaId),
+      });
+    } catch (e) {
+      notes.push(`Cover not set: ${e.message}`);
+    }
+  }
+  return { remoteId: data.id, url, note: notes.join(" ") };
 }
 
 export async function insights({ account }) {

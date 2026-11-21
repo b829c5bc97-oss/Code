@@ -1,6 +1,6 @@
 // Background work: publishing posts and collecting insights.
 
-import { getPost, savePost, overallStatus, duePosts, claim, releaseClaim, listPosts } from "./posts.mjs";
+import { getPost, savePost, overallStatus, duePosts, claim, releaseClaim, listPosts, forAccount } from "./posts.mjs";
 
 const RETRY_MINUTES = 10;
 import { getAccount, saveAccount, listAccounts } from "./accounts.mjs";
@@ -65,7 +65,7 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
     try {
       const { account: fresh, changed } = await p.ensureToken({ account, settings });
       if (changed) await saveAccount(fresh);
-      const res = await p.publish({ settings, account: fresh, post, ctx });
+      const res = await p.publish({ settings, account: fresh, post: forAccount(post, fresh), ctx });
       post.targets[accId] = { status: "posted", remoteId: res.remoteId || "", url: res.url || "", note: res.note || "", at: new Date().toISOString() };
       if (fresh.status !== "ok" && fresh.status !== "reminder") {
         fresh.status = "ok";

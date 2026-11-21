@@ -127,10 +127,18 @@ export async function publish({ settings, account, post, ctx }) {
   const video = media.find((m) => m.kind === "video");
   const images = media.filter((m) => m.kind === "image");
 
+  let coverNote = "";
   if (video && (post.type === "reel" || post.type === "short")) {
     const r = await phasedVideo(settings, account, video, ctx, "video_reels", { video_state: "PUBLISHED", description: message });
     postId = r.postId || r.videoId;
     url = `https://www.facebook.com/reel/${r.videoId}`;
+    if (post.cover?.mediaId) {
+      try {
+        await multipart(`${base(settings)}/${r.videoId}/thumbnails`, { access_token: token, is_preferred: "true" }, { field: "source", bytes: await ctx.bytes(post.cover.mediaId), mime: "image/jpeg", name: "cover.jpg" });
+      } catch (e) {
+        coverNote = `Cover not set: ${e.message}`;
+      }
+    }
   } else if (video) {
     const { data } = await multipart(
       `${base(settings)}/${account.remoteId}/videos`,
@@ -157,7 +165,7 @@ export async function publish({ settings, account, post, ctx }) {
     url = await permalink(settings, account, postId);
   }
 
-  const notes = [];
+  const notes = coverNote ? [coverNote] : [];
   if (post.firstComment && postId) {
     try {
       await call(`${base(settings)}/${postId}/comments`, { method: "POST", form: { message: post.firstComment, access_token: token } });
