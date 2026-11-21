@@ -8,6 +8,7 @@ import { initUpload, putPart, completeUpload, CHUNK_SIZE } from "./media.mjs";
 import { getSettings } from "./settings.mjs";
 import { HttpError, istDateKey, istToDate, istParts, addDaysKey, clean } from "./util.mjs";
 import { logEvent } from "./audit.mjs";
+import { countVotes, getLatestMediaId } from "./votes.mjs";
 
 const MAX_IMPORT = 80 * 1024 * 1024;
 
@@ -143,6 +144,12 @@ export const TOOLS = [
     annotations: { destructiveHint: true },
   },
   {
+    name: "count_votes",
+    description: "Count the A/B votes in the comments of an Instagram post (e.g. Mystery Choices: which door won). One vote per person; if someone changes their mind their latest comment counts. Without post_id it counts the account's newest post.",
+    inputSchema: { type: "object", properties: { account_id: { type: "string" }, post_id: { type: "string", description: "Instagram media id (from get_insights topPosts or the post link). Optional." }, options: { type: "array", items: { type: "string" }, description: "The choices, default [\"A\", \"B\"]." } }, required: ["account_id"] },
+    annotations: { readOnlyHint: true },
+  },
+  {
     name: "get_insights",
     description: "How the accounts are doing. Without account_id: followers, 28-day reach, engagement and growth for every account. With account_id: that account's numbers, top posts and best posting hours.",
     inputSchema: { type: "object", properties: { account_id: { type: "string" } } },
@@ -253,6 +260,12 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
       const p = await deletePost(clean(args.post_id, 40));
       await logEvent("claude", `${who} deleted a ${p.type}${p.scheduledAt ? ` planned for ${ist(p.scheduledAt)}` : ""}`, req, { postId: p.id });
       return { deleted: p.id };
+    }
+    case "count_votes": {
+      const acc = clean(args.account_id, 80);
+      const media = clean(args.post_id, 60) || (await getLatestMediaId(acc));
+      const v = await countVotes(acc, media, { options: Array.isArray(args.options) ? args.options : undefined });
+      return { post_id: media, winner: v.winner, tie: v.tie, votes: v.counts, percent: v.percent, people_voted: v.voters, comments_read: v.comments, not_a_vote: v.ignored };
     }
     case "get_insights": {
       if (!args.account_id) {

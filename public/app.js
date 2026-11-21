@@ -1270,6 +1270,7 @@ async function screenAccount(q) {
       if (document.body.contains(sheet)) {
         sheet.querySelector(".sheet").innerHTML = postHtml(full);
         loadPostComments(sheet, p.id);
+        wireVotes(sheet, p.id);
       }
     } catch (e) {
       sheet.querySelector(".sheet").innerHTML = postHtml({ ...p, media: p.thumb ? [{ kind: "image", url: p.thumb, thumb: p.thumb }] : [], stats: [], note: `Could not load the numbers: ${e.message}` });
@@ -1287,9 +1288,31 @@ async function screenAccount(q) {
           ${x.note ? `<p class="note">${esc(x.note)}</p>` : ""}
           ${x.caption ? `<div class="stack" style="gap:6px"><h3>Caption</h3><p class="cap">${esc(x.caption)}</p></div>` : ""}
           ${x.url ? `<a class="btn sm" style="align-self:flex-start" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.linkLabel || "Open post")} ↗</a>` : ""}
+          ${a.platform === "instagram" ? `<div class="stack votes-box" style="gap:8px" data-votes="${esc(x.id)}"><div class="row between"><h3>Votes</h3><button class="btn sm" type="button" data-count-votes>Count A / B votes</button></div><div class="votes-out muted small">One vote per person — if someone changes their mind, their latest comment counts.</div></div>` : ""}
           ${a.platform === "instagram" ? `<div class="stack" style="gap:8px"><h3>Comments</h3><div class="post-cm" data-post="${esc(x.id)}"><p class="muted small">Loading comments…</p></div></div>` : ""}
         </div>
       </div>`;
+  }
+  function votesHtml(v) {
+    const bars = v.options.map((o) => `<div class="row" style="gap:8px;align-items:center"><b style="width:28px">${esc(o)}</b><div class="bar" style="flex:1"><span style="width:${v.percent[o]}%"></span></div><span style="width:110px;text-align:right">${v.counts[o]} vote${v.counts[o] === 1 ? "" : "s"} · ${v.percent[o]}%</span></div>`).join("");
+    const head = v.voters ? (v.tie ? `It's a tie so far (${v.voters} people voted).` : `<b>${esc(v.winner)} wins</b> — ${v.voters} people voted.`) : "No votes yet.";
+    return `<p style="margin:0">${head}</p>${bars}<span class="muted small">Counted ${esc(whenText(v.at))} from ${v.comments} comments · ${v.ignored} comment${v.ignored === 1 ? "" : "s"} weren't a clear vote.</span>`;
+  }
+  function wireVotes(sheet, postId) {
+    const box = sheet.querySelector("[data-votes]");
+    if (!box) return;
+    const out = box.querySelector(".votes-out");
+    const run = async (fresh) => {
+      out.innerHTML = fresh ? "Counting…" : out.innerHTML;
+      try {
+        const v = await api(fresh ? "POST" : "GET", `/api/votes/${encodeURIComponent(id)}/${encodeURIComponent(postId)}`);
+        if (v && v.options) out.innerHTML = votesHtml(v);
+      } catch (e) {
+        if (fresh) out.textContent = e.message;
+      }
+    };
+    box.querySelector("[data-count-votes]").onclick = () => run(true);
+    run(false);
   }
   async function loadPostComments(sheet, postId) {
     const holder = sheet.querySelector(".post-cm");

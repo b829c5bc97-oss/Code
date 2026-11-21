@@ -19,6 +19,7 @@ import { cacheAvatar, readAvatar, refreshAvatars } from "../lib/avatars.mjs";
 import { analysisFor } from "../lib/analysis.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 import { sendAlert, alertLog } from "../lib/alerts.mjs";
+import { countVotes, savedVotes } from "../lib/votes.mjs";
 import { checkLogins } from "../lib/logincheck.mjs";
 
 function siteUrl(req, context) {
@@ -231,6 +232,13 @@ route("PUT", "/api/settings", async ({ req, context }) => {
   await logEvent("settings", `Changed settings: ${Object.keys(patch || {}).join(", ")}`, req);
   return json(await publicSettings(siteUrl(req, context)));
 });
+// ---------- Vote counter (this-or-that posts) ----------
+route("GET", "/api/votes/:acc/:media", async ({ params }) => json((await savedVotes(params.acc, params.media)) || {}));
+route("POST", "/api/votes/:acc/:media", async ({ req, params }) => {
+  const b = await readJSON(req).catch(() => ({}));
+  return json(await countVotes(params.acc, params.media, { options: Array.isArray(b?.options) ? b.options : undefined }));
+});
+
 // ---------- Alerts ----------
 route("GET", "/api/alerts", async () => json({ alerts: await alertLog() }));
 route("POST", "/api/alerts/test", async ({ req, context }) =>
