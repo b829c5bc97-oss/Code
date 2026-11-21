@@ -430,17 +430,25 @@ async function screenMonth(q) {
   const gridFrom = addDays(first, -lead);
   const cells = Math.ceil((lead + lastDay) / 7) * 7;
   const gridTo = addDays(gridFrom, cells - 1);
-  const [acc, posts] = await Promise.all([accounts(), api("GET", `/api/posts?from=${gridFrom}&to=${gridTo}`)]);
+  const [acc, posts, live] = await Promise.all([accounts(), api("GET", `/api/posts?from=${gridFrom}&to=${gridTo}`), api("GET", `/api/published?from=${gridFrom}&to=${gridTo}`).catch(() => [])]);
   const byId = Object.fromEntries(acc.accounts.map((a) => [a.id, a]));
   const brands = [...new Set(acc.accounts.map((a) => a.brand))].sort();
   const mine = posts.filter((p) => p.scheduledAt && (brand === "All" || (p.accountIds || []).some((id) => byId[id]?.brand === brand)));
   const byDay = {};
   for (const p of mine) (byDay[istKey(p.scheduledAt)] = byDay[istKey(p.scheduledAt)] || []).push(p);
+  // Posts already live on the accounts (also ones made outside Social HQ), shown as "Posted".
+  const sentIds = new Set(mine.flatMap((p) => Object.values(p.targets || {}).map((t) => t.url).filter(Boolean)));
+  for (const l of live) {
+    if (brand !== "All" && l.brand !== brand) continue;
+    if (l.url && sentIds.has(l.url)) continue;
+    (byDay[istKey(l.at)] = byDay[istKey(l.at)] || []).push({ live: true, id: l.accountId, scheduledAt: l.at, status: "done", accountIds: [l.accountId], caption: l.title, type: (l.type || "post").toLowerCase(), url: l.url, stat: l.reach || l.views || l.interactions });
+  }
   const monthName = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(first + "T12:00:00Z"));
   const prevM = addDays(first, -1).slice(0, 7), nextM = addDays(last, 1).slice(0, 7);
   const link = (m, b) => `#/plan?view=month&month=${m}&brand=${encodeURIComponent(b)}`;
   const chip = (p) => {
     const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean);
+    if (p.live) return `<a class="mchip st-done live" href="#/account?id=${encodeURIComponent(p.id)}" title="${esc((accs[0]?.name || "") + " · " + (p.caption || ""))}"><b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${accs.map((a) => badge(a.platform, true).replace('class="badge', 'class="badge xs')).join("")}<span>${esc((accs[0]?.name || "") + (p.stat ? ` · ${num(p.stat)}` : ""))}</span></a>`;
     const plats = [...new Set(accs.map((a) => a.platform))];
     const movable = MOVABLE.includes(p.status);
     return `<a class="mchip st-${esc(p.status)}" href="#/create?id=${esc(p.id)}" ${movable ? `draggable="true" data-move="${esc(p.id)}" data-at="${esc(p.scheduledAt)}"` : ""} title="${esc((accs.map((a) => a.name).join(", ") || "") + " · " + (p.caption || p.title || ""))}">
@@ -458,8 +466,9 @@ async function screenMonth(q) {
     </div>`;
   }
   const total = mine.filter((p) => istKey(p.scheduledAt).slice(0, 7) === month).length;
+  const liveCount = Object.values(byDay).flat().filter((p) => p.live && istKey(p.scheduledAt).slice(0, 7) === month).length;
   main(`
-    <header class="head"><div><p class="sub">${total} post${total === 1 ? "" : "s"} planned in ${esc(monthName)} · drag a post to another day to move it</p><h1>Month plan</h1></div>
+    <header class="head"><div><p class="sub">${total} planned · ${liveCount} already posted in ${esc(monthName)} · drag a planned post to another day to move it</p><h1>Month plan</h1></div>
       <div class="row">
         <div class="seg"><button type="button" id="to-week">Week</button><button type="button" class="on">Month</button></div>
         <div class="row" style="gap:4px;background:#fff;border:1px solid #D9DCE3;border-radius:10px;padding:3px">
@@ -524,7 +533,7 @@ async function screenMonth(q) {
     const box = $("#mday-list");
     box.hidden = false;
     box.innerHTML = `<div class="row between"><h2>${esc(dayName(fromIST(dk, "12:00")))}</h2>${dk >= today ? `<a class="btn sm primary" href="#/create?date=${dk}">+ Add post</a>` : ""}</div>
-      ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="#/create?id=${esc(p.id)}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>${pill(p.status)}</a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
+      ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="${p.live ? `#/account?id=${encodeURIComponent(p.id)}` : `#/create?id=${esc(p.id)}`}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>${pill(p.status)}</a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
     $$(".mcell.sel").forEach((x) => x.classList.remove("sel"));
     cell.classList.add("sel");
     if (window.innerWidth < 760) box.scrollIntoView?.({ behavior: "smooth", block: "nearest" });

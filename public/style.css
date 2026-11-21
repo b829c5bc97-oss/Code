@@ -298,6 +298,7 @@ a.chip.on { color: #fff; }
 .mchip.st-done, .mchip.st-posted { border-left-color: var(--green); }
 .mchip.st-failed, .mchip.st-partial { border-left-color: var(--red); }
 .mchip.st-draft { border-left-color: #9AA1AE; }
+.mchip.live { background: #F3FAF6; }
 .mchip.st-reminder { border-left-color: var(--purple); }
 .mdots { display: none; gap: 3px; flex-wrap: wrap; }
 .mdots i, i.lg { width: 8px; height: 8px; border-radius: 50%; background: #1D3FD0; display: inline-block; }

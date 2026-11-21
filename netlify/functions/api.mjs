@@ -189,6 +189,23 @@ route("GET", "/api/accounts/:id/feed/:postId", async ({ params }) => {
   return json(await p.postDetail({ settings, account, postId: params.postId }));
 });
 
+// Posts already live on the platforms (from the 6-hourly insights), for the month calendar.
+route("GET", "/api/published", async ({ url }) => {
+  const from = url.searchParams.get("from") || "", to = url.searchParams.get("to") || "";
+  const out = [];
+  for (const a of await listAccounts()) {
+    if (a.platform === "manual") continue;
+    const latest = await getJSON(`ins/${a.id}/latest`);
+    for (const p of latest?.posts || []) {
+      if (!p.at) continue;
+      const d = new Date(new Date(p.at).getTime() + 330 * 60000).toISOString().slice(0, 10);
+      if ((from && d < from) || (to && d > to)) continue;
+      out.push({ accountId: a.id, platform: a.platform, brand: a.brand, name: a.name, at: p.at, type: p.type, title: p.title || "", url: p.url || "", reach: p.reach || 0, views: p.views || 0, interactions: p.interactions || 0 });
+    }
+  }
+  return json(out);
+});
+
 // ---------- Auto-replies ----------
 route("GET", "/api/autoreplies", async () => json({ rules: await listRules(), log: await getLog(), lastRun: await getJSON("auto/run") }));
 route("POST", "/api/autoreplies", async ({ req }) => {

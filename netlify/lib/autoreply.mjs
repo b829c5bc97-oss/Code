@@ -114,7 +114,10 @@ export async function testComment({ text, accountId }) {
 export async function runAutoReplies({ platformsOverride, now = Date.now() } = {}) {
   const impl = platformsOverride || platforms;
   const rules = (await listRules()).filter((r) => r.on);
-  if (!rules.length) return { checked: 0, replied: 0 };
+  if (!rules.length) {
+    await setJSON("auto/run", { at: new Date().toISOString(), accounts: 0, replied: 0 });
+    return { checked: 0, replied: 0 };
+  }
   const settings = await getSettings();
   const wanted = new Set(rules.flatMap((r) => r.accountIds));
   const accounts = (await listAccounts()).filter((a) => a.platform === "instagram" && wanted.has(a.id));
