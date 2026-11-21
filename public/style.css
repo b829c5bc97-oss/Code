@@ -352,3 +352,7 @@ a.ptile { text-decoration: none; }
 
 /* The hidden attribute must win over display rules on classes like .f and .note */
 [hidden] { display: none !important; }
+
+/* Private upload page */
+.door { max-width: 720px; margin: 0 auto; padding: 32px 18px 60px; display: flex; flex-direction: column; gap: 16px; }
+.drop.over { border-color: var(--blue, #2848E8); background: #EEF1FF; }

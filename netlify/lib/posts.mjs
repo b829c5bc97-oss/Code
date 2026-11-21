@@ -176,7 +176,18 @@ export async function createPost(input) {
     const p = problems(post, byId);
     if (p.length) throw new HttpError(400, p.join(" "), { problems: p });
   }
-  return await savePost(post);
+  const saved = await savePost(post);
+  await clearInbox(post);
+  return saved;
+}
+
+// Files used in a post leave the Inbox.
+async function clearInbox(post) {
+  for (const m of [...(post.media || []), ...(post.cover?.mediaId ? [{ id: post.cover.mediaId }] : [])]) {
+    try {
+      await del(`inbox/${m.id}`);
+    } catch (_) { /* not from the Inbox */ }
+  }
 }
 
 export async function updatePost(id, input) {
@@ -200,7 +211,9 @@ export async function updatePost(id, input) {
     if (p.length) throw new HttpError(400, p.join(" "), { problems: p });
   }
   await del(`lock/${post.id}`);
-  return await savePost(post, prevKey);
+  const saved = await savePost(post, prevKey);
+  await clearInbox(post);
+  return saved;
 }
 
 export async function deletePost(id) {

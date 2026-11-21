@@ -590,6 +590,8 @@ async function screenCreate(q) {
         <section class="card"><h2>3. Photo, video and caption</h2>
           <div id="c-media" class="stack" style="gap:10px"></div>
           <label class="drop" id="c-drop"><input type="file" id="c-file" accept="image/*,video/*" multiple class="sr">Click to add photos or a video (or drop them here)</label>
+          <div class="row" style="gap:8px"><button class="btn sm" type="button" id="c-inbox-btn">Add from Inbox</button><span class="muted small" id="c-inbox-count"></span></div>
+          <div id="c-inbox" class="stack" style="gap:6px" hidden></div>
           <div class="row between"><label for="c-caption" style="font-size:13px;font-weight:700">Caption</label><div class="seg" id="c-tabs" role="group" aria-label="Edit caption for"></div></div>
           <textarea id="c-caption" rows="7"></textarea>
           <div class="row between muted small"><span id="c-cap-note">Same caption for every account. Use the tabs to change it for one platform.</span><span id="c-len"></span></div>
@@ -955,6 +957,36 @@ async function screenCreate(q) {
     }).join("");
     $("#c-status").innerHTML = `<section class="card tight"><h3>Where this post stands</h3>${rows}</section>`;
   }
+
+  // Files sent through the private upload door wait in the Inbox.
+  let inboxFiles = [];
+  api("GET", "/api/inbox-files").then((r) => {
+    inboxFiles = r.files || [];
+    const n = $("#c-inbox-count");
+    if (n) n.textContent = inboxFiles.length ? `${inboxFiles.length} file${inboxFiles.length === 1 ? "" : "s"} waiting` : "Inbox is empty";
+  }).catch(() => {});
+  const ib = $("#c-inbox-btn");
+  if (ib) ib.onclick = () => {
+    const box = $("#c-inbox");
+    box.hidden = !box.hidden;
+    box.innerHTML = inboxFiles.length ? inboxFiles.map((f) => `<div class="file-row"><div class="thumb">${f.kind === "image" ? `<img class="thumb" src="/m/${esc(f.id)}.jpg" alt="">` : "VIDEO"}</div>
+      <div class="stack" style="gap:2px;flex:1 1 auto;min-width:0"><b class="small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</b><span class="muted small">${(f.size / 1048576).toFixed(1)} MB · sent ${esc(whenText(f.at))}${f.caption ? ` · "${esc(f.caption.slice(0, 60))}"` : ""}</span></div>
+      <button class="btn sm" type="button" data-inbox-add="${esc(f.id)}">Add</button></div>`).join("") : '<p class="muted small">Nothing in the Inbox. Send files with the private upload link in Settings.</p>';
+    $$("[data-inbox-add]").forEach((b) => (b.onclick = () => {
+      const f = inboxFiles.find((x) => x.id === b.dataset.inboxAdd);
+      if (!f || C.media.some((m) => m.id === f.id)) return;
+      C.media.push({ id: f.id, kind: f.kind, name: f.name, size: f.size, mime: f.mime, progress: 1, preview: f.kind === "image" ? `/m/${f.id}.jpg` : "" });
+      if (f.caption && !C.caption) { C.caption = f.caption; fillCaption(); }
+      if (C.type === "post" && f.kind === "video") C.type = "reel";
+      if (C.type === "post" && C.media.length > 1) C.type = "carousel";
+      b.disabled = true;
+      b.textContent = "Added";
+      renderType();
+      renderMedia();
+      renderOpts();
+      renderPreview();
+    }));
+  };
 
   renderAccounts();
   renderType();
@@ -1957,11 +1989,22 @@ async function screenSettings(q) {
   const missing = q.get("missing");
   const sections = ["alerts", "instagram", "facebook", "linkedin", "youtube", "pinterest", "reminders", "general"];
   const sec = await api("GET", "/api/security");
+  const door = await api("GET", "/api/door").catch(() => null);
   main(`
     <header class="head"><div><p class="sub">Platform keys, reminders and your password</p><h1>Settings</h1></div></header>
     ${missing ? `<p class="note warn">Add the ${esc(PLATFORM[missing]?.name || missing)} keys below first, then press Connect on the Accounts screen.</p>` : ""}
     <section class="card tight"><h3>Your Social HQ address</h3><code>${esc(s.siteUrl)}</code></section>
     ${claudeCard(sec)}
+    ${door ? `<section class="card" id="door"><h2>Private upload door</h2>
+      <p class="muted">A secret link for sending finished videos and photos straight into the Social HQ Inbox — from your phone, another computer, or another Claude chat — without logging in. Whoever has it can send files, but can't see, change or post anything. ${door.inbox ? `<b>${door.inbox} file${door.inbox === 1 ? "" : "s"} waiting in the Inbox.</b>` : ""}</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><code style="max-width:100%;overflow:hidden;text-overflow:ellipsis">${esc(door.page)}</code><button class="btn sm" type="button" data-copytext="${esc(door.page)}">Copy link</button><a class="btn sm" href="${esc(door.page)}" target="_blank" rel="noopener">Open</a><button class="btn sm" type="button" id="door-new">Make a new link</button></div>
+      <details style="margin-top:8px"><summary class="small" style="font-weight:600;cursor:pointer">For Claude chats and scripts</summary>
+        <p class="muted small">In any Claude chat with the Social HQ connector: "put this video in Social HQ" — Claude can use <b>import_link</b> with a Google Drive or Dropbox link, then schedule it with the file from <b>inbox_files</b>. Scripts can send files directly:</p>
+        <pre class="small" style="white-space:pre-wrap;word-break:break-all">1. POST ${esc(door.api)}/start   {"name":"reel.mp4","size":12345678,"mime":"video/mp4"}  → {id, chunks, chunkSize}
+2. PUT  ${esc(door.api)}/part/{id}/{0..chunks-1}   (raw bytes, 3 MB each)
+3. POST ${esc(door.api)}/finish/{id}   {"caption":"…"}
+or: POST ${esc(door.api)}/link   {"url":"https://drive.google.com/…","caption":"…"}</pre></details>
+    </section>` : ""}
     ${securityCard(sec)}
     ${sections.map((sec) => {
       const def = s[sec];
@@ -1981,6 +2024,13 @@ async function screenSettings(q) {
       <div class="stack" style="gap:0">${sec.events.length ? sec.events.map((e) => `<div class="row" style="gap:10px;padding:8px 0;border-top:1px solid var(--line-2);align-items:flex-start"><span class="muted small" style="flex:0 0 132px">${esc(whenText(e.at))}</span><span style="flex:1 1 220px;min-width:0"><b style="font-weight:600">${esc(e.text)}</b><br><span class="muted small">${esc([e.device, e.where, e.ip].filter(Boolean).join(" · "))}</span></span></div>`).join("") : '<p class="muted">Nothing yet.</p>'}</div></section>
     <section class="card"><h2>Change password</h2><form class="grid g-3" id="pw-form" style="gap:10px"><label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label><label class="f">New password (8+ characters)<input type="password" name="next" required minlength="8" autocomplete="new-password"></label>${sec.twoStep ? '<label class="f">6-digit code<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>' : ""}<div class="row" style="grid-column:1/-1"><button class="btn sm primary" type="submit">Change password</button></div></form></section>`);
   wireSecurity(sec);
+  const dn = $("#door-new");
+  if (dn) dn.onclick = async () => {
+    if (!confirm("Make a new upload link? The old link stops working straight away.")) return;
+    await api("POST", "/api/door/rotate");
+    toast("New link made");
+    render();
+  };
   const ta = $("#test-alert");
   if (ta) ta.onclick = async () => {
     const out = $("#test-alert-out");

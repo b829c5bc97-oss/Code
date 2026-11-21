@@ -9,6 +9,7 @@ import { getSettings } from "./settings.mjs";
 import { HttpError, istDateKey, istToDate, istParts, addDaysKey, clean } from "./util.mjs";
 import { logEvent } from "./audit.mjs";
 import { countVotes, getLatestMediaId } from "./votes.mjs";
+import { listInbox, addToInbox, importFromLink, mediaForIds, doorKey, removeFromInbox } from "./door.mjs";
 
 const MAX_IMPORT = 80 * 1024 * 1024;
 
@@ -89,8 +90,8 @@ const POST_FIELDS = {
   cover_at_sec: { type: "number", description: "Use the video frame at this many seconds as the Reel/YouTube cover." },
   cover_media_id: { type: "string", description: "Media id of an uploaded photo to use as the cover." },
   also_story: { type: "boolean", description: "Also share the same photo/video (first one of a carousel) to the Instagram and Facebook Page Story." },
-  media_urls: { type: "array", items: { type: "string" }, description: "Public https links to photos/videos to attach, in order. Instagram photos must be JPEG. Max 80 MB each." },
-  media_ids: { type: "array", items: { type: "string" }, description: "Ids of media already in Social HQ (from get_post), to reuse." },
+  media_urls: { type: "array", items: { type: "string" }, description: "Links to photos/videos to attach, in order: any public https link, Google Drive share links ('Anyone with the link') or Dropbox links. Up to 500 MB each. Instagram photos must be JPEG." },
+  media_ids: { type: "array", items: { type: "string" }, description: "Ids of files already in Social HQ — from inbox_files (files sent through the private upload door), import_link, or get_post." },
   when: { type: "string", description: "When to post: \"YYYY-MM-DD HH:mm\" in India time (IST). Leave empty to save as a draft. Use best_times to pick a good slot." },
   note: { type: "string", description: "Private note shown in Social HQ." },
 };
@@ -144,6 +145,17 @@ export const TOOLS = [
     annotations: { destructiveHint: true },
   },
   {
+    name: "inbox_files",
+    description: "Files waiting in the Social HQ Inbox (sent through the private upload door or a link), with their media ids. Use the ids in create_post media_ids, newest first. Also returns the private upload link.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: "import_link",
+    description: "Download a finished photo or video into the Social HQ Inbox from a link: Google Drive share link (sharing 'Anyone with the link'), Dropbox link, or any public https link. Up to 500 MB. Returns the media id for create_post.",
+    inputSchema: { type: "object", properties: { url: { type: "string" }, name: { type: "string", description: "File name to show (optional)." }, caption: { type: "string", description: "Caption or note to keep with the file (optional)." } }, required: ["url"] },
+  },
+  {
     name: "count_votes",
     description: "Count the A/B votes in the comments of an Instagram post (e.g. Mystery Choices: which door won). One vote per person; if someone changes their mind their latest comment counts. Without post_id it counts the account's newest post.",
     inputSchema: { type: "object", properties: { account_id: { type: "string" }, post_id: { type: "string", description: "Instagram media id (from get_insights topPosts or the post link). Optional." }, options: { type: "array", items: { type: "string" }, description: "The choices, default [\"A\", \"B\"]." } }, required: ["account_id"] },
@@ -165,11 +177,12 @@ async function buildMedia(args, existing = []) {
   const media = [];
   const warnings = [];
   for (const id of args.media_ids || []) {
-    const found = existing.find((m) => m.id === id);
+    const found = existing.find((m) => m.id === id) || (await mediaForIds([id]))[0];
     if (found) media.push(found);
+    else warnings.push(`No file with id ${id} — use inbox_files to see what's there.`);
   }
   for (const url of (args.media_urls || []).slice(0, 10)) {
-    const m = await importMedia(String(url));
+    const m = await importFromLink(String(url));
     if (m.warn) warnings.push(m.warn);
     media.push({ id: m.id, kind: m.kind, name: m.name, size: m.size, mime: m.mime });
   }
@@ -260,6 +273,22 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
       const p = await deletePost(clean(args.post_id, 40));
       await logEvent("claude", `${who} deleted a ${p.type}${p.scheduledAt ? ` planned for ${ist(p.scheduledAt)}` : ""}`, req, { postId: p.id });
       return { deleted: p.id };
+    }
+    case "inbox_files": {
+      const files = await listInbox();
+      const key = await doorKey();
+      const site = (process.env.URL || "").replace(/\/$/, "");
+      return {
+        files: files.map((f) => ({ media_id: f.id, name: f.name, kind: f.kind, size_mb: Math.round((f.size / 1048576) * 10) / 10, sent: ist(f.at), caption: f.caption || undefined, note: f.note || undefined })),
+        upload_page: site ? `${site}/upload.html#k=${key}` : undefined,
+        how_to_send_from_a_script: site ? `POST ${site}/api/door/${key}/start {name,size,mime} -> {id,chunks,chunkSize}; PUT ${site}/api/door/${key}/part/{id}/{index} (raw bytes, 3 MB pieces); POST ${site}/api/door/${key}/finish/{id} {caption}. Or POST ${site}/api/door/${key}/link {url, caption}.` : undefined,
+      };
+    }
+    case "import_link": {
+      const m = await importFromLink(String(args.url || ""), { name: args.name });
+      const f = await addToInbox(m, { caption: args.caption, source: "claude-link" });
+      await logEvent("claude", `${who} added ${f.name} to the Inbox from a link`, req);
+      return { media_id: f.id, name: f.name, kind: f.kind, size_mb: Math.round((f.size / 1048576) * 10) / 10, warning: m.warn || undefined };
     }
     case "count_votes": {
       const acc = clean(args.account_id, 80);

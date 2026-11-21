@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Send files to Social HQ</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="door">
+  <header class="stack" style="gap:4px"><p class="sub">Social HQ</p><h1>Send finished videos and photos</h1>
+    <p class="muted">Files go straight into the Social HQ Inbox, ready to be scheduled. Keep this link private — anyone with it can send files (but can't see or post anything).</p></header>
+  <p class="note bad" id="bad" hidden></p>
+  <label class="drop" id="drop"><input type="file" id="file" accept="image/*,video/*" multiple class="sr">Click to pick files, or drop them here (many at once is fine)</label>
+  <label class="f">Caption or note for these files (optional)<textarea id="cap" rows="3" placeholder="e.g. Mystery Choices night 12 — Door A vs Door B. Or paste the full caption."></textarea></label>
+  <details><summary class="small" style="font-weight:600;cursor:pointer">Or send a link (Google Drive, Dropbox, any https link)</summary>
+    <form class="row" id="link-form" style="gap:8px;margin-top:8px"><input type="url" id="link" placeholder="https://drive.google.com/file/d/…" style="flex:1 1 260px" required><button class="btn sm" type="submit">Send link</button></form>
+    <p class="muted small">Google Drive: Share → General access → Anyone with the link.</p>
+  </details>
+  <div id="list" class="stack" style="gap:8px"></div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/upload.js" type="module"></script>
+</body>
+</html>

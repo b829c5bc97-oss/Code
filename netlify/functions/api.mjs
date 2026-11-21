@@ -20,6 +20,7 @@ import { analysisFor } from "../lib/analysis.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 import { sendAlert, alertLog } from "../lib/alerts.mjs";
 import { countVotes, savedVotes } from "../lib/votes.mjs";
+import { doorKey, rotateDoorKey, checkDoor, addToInbox, listInbox, removeFromInbox, importFromLink } from "../lib/door.mjs";
 import { checkLogins } from "../lib/logincheck.mjs";
 
 function siteUrl(req, context) {
@@ -232,6 +233,42 @@ route("PUT", "/api/settings", async ({ req, context }) => {
   await logEvent("settings", `Changed settings: ${Object.keys(patch || {}).join(", ")}`, req);
   return json(await publicSettings(siteUrl(req, context)));
 });
+// ---------- Private upload door + Inbox ----------
+route("GET", "/api/door", async ({ req, context }) => {
+  const key = await doorKey();
+  const site = siteUrl(req, context);
+  return json({ page: `${site}/upload.html#k=${key}`, api: `${site}/api/door/${key}`, inbox: (await listInbox()).length });
+});
+route("POST", "/api/door/rotate", async ({ req, context }) => {
+  const key = await rotateDoorKey();
+  await logEvent("security", "Made a new private upload link (the old one stopped working)", req);
+  const site = siteUrl(req, context);
+  return json({ page: `${site}/upload.html#k=${key}`, api: `${site}/api/door/${key}` });
+});
+route("GET", "/api/inbox-files", async () => json({ files: await listInbox() }));
+route("DELETE", "/api/inbox-files/:id", async ({ params }) => { await removeFromInbox(params.id); return json({ ok: true }); });
+route("POST", "/api/inbox-files/link", async ({ req }) => {
+  const b = await readJSON(req);
+  const m = await importFromLink(b.url, { name: b.name });
+  return json({ file: await addToInbox(m, { caption: b.caption, note: b.note, source: "link" }), warn: m.warn || undefined });
+});
+// Open (the secret key in the address is the password)
+route("GET", "/api/door/:key", async ({ params }) => { await checkDoor(params.key); return json({ ok: true, chunkSize: 3 * 1024 * 1024 }); }, { open: true });
+route("POST", "/api/door/:key/start", async ({ req, params }) => { await checkDoor(params.key); return json(await initUpload(await readJSON(req))); }, { open: true });
+route("PUT", "/api/door/:key/part/:id/:index", async ({ req, params }) => { await checkDoor(params.key); return json(await putPart(params.id, params.index, await req.arrayBuffer())); }, { open: true });
+route("POST", "/api/door/:key/finish/:id", async ({ req, params }) => {
+  await checkDoor(params.key);
+  const b = await readJSON(req).catch(() => ({}));
+  const m = await completeUpload(params.id);
+  return json({ file: await addToInbox(m, { caption: b?.caption, note: b?.note, source: "door" }) });
+}, { open: true });
+route("POST", "/api/door/:key/link", async ({ req, params }) => {
+  await checkDoor(params.key);
+  const b = await readJSON(req);
+  const m = await importFromLink(b.url, { name: b.name });
+  return json({ file: await addToInbox(m, { caption: b.caption, note: b.note, source: "door-link" }), warn: m.warn || undefined });
+}, { open: true });
+
 // ---------- Vote counter (this-or-that posts) ----------
 route("GET", "/api/votes/:acc/:media", async ({ params }) => json((await savedVotes(params.acc, params.media)) || {}));
 route("POST", "/api/votes/:acc/:media", async ({ req, params }) => {
