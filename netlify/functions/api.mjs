@@ -39,6 +39,64 @@ route("GET", "/m/:file", async ({ params }) => {
   return new Response(Buffer.concat(parts), { headers: { "content-type": meta.mime || "image/jpeg", "cache-control": "public, max-age=86400" } });
 }, { open: true });
 
+// ---------- One-time move to the new host (runs on the old Netlify site, token-protected) ----------
+route("POST", "/api/__migrate", async ({ req }) => {
+  const token = env("MIGRATE_TOKEN");
+  const b = await readJSON(req);
+  if (!token || !b.token || b.token.length < 20 || b.token !== token) throw new HttpError(403, "No.");
+  const target = (env("MIGRATE_SUPABASE_URL") || "").replace(/\/$/, "");
+  const key = env("MIGRATE_SUPABASE_KEY");
+  if (!target || !key) throw new HttpError(400, "Target not set.");
+  const { getStore } = await import("@netlify/blobs");
+  const H = { apikey: key, Authorization: `Bearer ${key}` };
+  const src = getStore({ name: b.store === "hq-media" ? "hq-media" : "hq", consistency: "strong" });
+  if (b.finalize) {
+    // Make the old copy inert so the old timers can't post or reply twice.
+    const hq = getStore({ name: "hq", consistency: "strong" });
+    const rules = (await hq.get("auto/rules", { type: "json" })) || [];
+    for (const r of rules) r.on = false;
+    await hq.setJSON("auto/rules", rules);
+    const { blobs } = await hq.list({ prefix: "post/" });
+    let parked = 0;
+    for (const x of blobs) {
+      const p = await hq.get(x.key, { type: "json" });
+      if (p && ["scheduled", "needs_ok", "failed", "partial"].includes(p.status)) {
+        p.status = "draft";
+        p.note = "Moved to the new Social HQ";
+        await hq.setJSON(x.key, p);
+        parked++;
+      }
+    }
+    await hq.setJSON("meta/moved", { at: new Date().toISOString(), to: b.to || "" });
+    return json({ ok: true, rulesOff: rules.length, parked });
+  }
+  const { blobs } = await src.list();
+  const keys = blobs.map((x) => x.key).sort();
+  const start = Number(b.cursor) || 0;
+  if (b.store === "hq-media") {
+    const batch = keys.slice(start, start + 8);
+    for (const k of batch) {
+      const buf = await src.get(k, { type: "arrayBuffer" });
+      if (!buf) continue;
+      const path = k.split("/").map(encodeURIComponent).join("/");
+      const r = await fetch(`${target}/storage/v1/object/media/${path}`, { method: "POST", headers: { ...H, "content-type": "application/octet-stream", "x-upsert": "true" }, body: buf });
+      if (!r.ok) throw new HttpError(502, `Media copy failed for ${k}: ${r.status} ${(await r.text()).slice(0, 120)}`);
+    }
+    return json({ total: keys.length, next: start + batch.length, done: start + batch.length >= keys.length });
+  }
+  const batch = keys.slice(start, start + 120);
+  const items = [];
+  for (let i = 0; i < batch.length; i += 12) {
+    const vals = await Promise.all(batch.slice(i, i + 12).map(async (k) => ({ k, v: await src.get(k, { type: "json" }).catch(() => null) })));
+    for (const it of vals) if (it.v !== null && it.v !== undefined) items.push(it);
+  }
+  if (items.length) {
+    const r = await fetch(`${target}/rest/v1/rpc/kv_set_many`, { method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify({ items }) });
+    if (!r.ok) throw new HttpError(502, `Copy failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
+  }
+  return json({ total: keys.length, next: start + batch.length, copied: items.length, done: start + batch.length >= keys.length });
+}, { open: true });
+
 // ---------- Saved profile pictures ----------
 route("GET", "/m/av/:id", async ({ params }) => {
   const buf = await readAvatar(params.id);
