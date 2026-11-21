@@ -8,7 +8,7 @@ import { getSettings } from "./settings.mjs";
 import { readAll, deleteMedia } from "./media.mjs";
 import { platforms } from "./platforms/index.mjs";
 import { sendReminder } from "./notify.mjs";
-import { explain, alertPostFailed, alertPostRetrying } from "./alerts.mjs";
+import { explain, alertPostFailed, alertPostRetrying, sendAlert } from "./alerts.mjs";
 import { model } from "./besttime.mjs";
 import { getJSON, setJSON } from "./store.mjs";
 import { internalSecret } from "./crypto.mjs";
@@ -75,7 +75,13 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
     } catch (e) {
       const why = explain(e, account.platform);
       const tries = target.tries || 0;
-      if (why.retry && tries < 1) {
+      const ageH = (Date.now() - new Date(post.scheduledAt).getTime()) / 3600000;
+      if (why.kind === "paused" && ageH < 48) {
+        // Keep trying every 20 minutes (for up to 2 days) until Meta lifts the pause.
+        const retryAt = new Date(Date.now() + 20 * 60000).toISOString();
+        post.targets[accId] = { status: "pending", tries, retryAt, lastError: errMessage(e), reason: why.reason, paused: true };
+        retrying.push({ account, why, retryAt, paused: true });
+      } else if (why.retry && why.kind !== "paused" && tries < 1) {
         // One automatic retry, 10 minutes later. Most network and "busy" errors clear by then.
         const retryAt = new Date(Date.now() + RETRY_MINUTES * 60000).toISOString();
         post.targets[accId] = { status: "pending", tries: tries + 1, retryAt, lastError: errMessage(e), reason: why.reason };
@@ -108,7 +114,9 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
   }
   for (const r of retrying) {
     try {
-      await alertPostRetrying(settings, { post, account: r.account, why: r.why, siteUrl, retryAt: r.retryAt });
+      if (r.paused) {
+        await sendAlert(settings, { key: `paused-${r.account.platform}-${new Date().toISOString().slice(0, 10)}`, title: `${r.account.platform === "facebook" ? "Facebook" : "Instagram"} posting is paused by Meta`, text: `${r.why.reason}\nScheduled posts wait and go out by themselves once the check is done.`, link: "https://developers.facebook.com/apps/" });
+      } else await alertPostRetrying(settings, { post, account: r.account, why: r.why, siteUrl, retryAt: r.retryAt });
     } catch (_) { /* alerts never block publishing */ }
   }
   for (const f of failures) {

@@ -24,6 +24,10 @@ export function explain(error, platform = "") {
   if (/jpeg|unsupported|codec|format|could not be processed|media type|corrupt/.test(s))
     return out("format", "The file type or format isn't accepted.", "Use JPEG photos and MP4 (H.264) videos.", false);
   const code = error?.data?.error?.code;
+  // Meta has paused the app or the developer account ("API access blocked"): nothing is wrong with
+  // the post. It waits and goes out by itself once Meta lifts the pause.
+  if (/api access blocked|app is restricted|application has been deleted|app not active|application does not have the capability/.test(s))
+    return out("paused", `${name} has paused Social HQ's access (Meta asks for an account check on developers.facebook.com).`, "Complete the check on developers.facebook.com. The post waits and goes out by itself afterwards.", true);
   if (code === 190 || error?.status === 401 || /expired|session has been invalidated|error validating access token|invalid_grant|invalid oauth|token is invalid|revoked|unauthori[sz]ed client/.test(s))
     return out("login", `${name} login for this account has expired or was removed.`, "Open Accounts and press Reconnect on this account, then press Retry on the post.", false);
   if (code === 10 || code === 200 || /permission|not authori[sz]ed|insufficient|forbidden/.test(s))

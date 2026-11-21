@@ -100,6 +100,26 @@ assert.equal((await getAccount("instagram-11")).status, "error");
 assert.ok(sent.length > before);
 console.log("✓ expired login: no pointless retry, account flagged, alert sent at once");
 
+// 4b. Meta paused the app ("API access blocked"): keep waiting, no failure, no lost post
+const paused = {
+  async ensureToken({ account }) { return { account, changed: false }; },
+  async publish() { throw new PlatformError("API access blocked.", { data: { error: { code: 200, type: "OAuthException" } }, authProblem: true }); },
+};
+await upsertConnected({ platform: "instagram", kind: "ig_business", remoteId: "12", name: "DeskCrew", handle: "@deskcrew_", token: "T2" });
+p = await createPost({ accountIds: ["instagram-12"], type: "post", caption: "wait for Meta", media, scheduledAt: new Date(Date.now() - 6 * 3600000).toISOString() });
+for (let round = 0; round < 3; round++) {
+  await claim(p.id);
+  p = await publishPost(p.id, BASE, { platformsOverride: { instagram: paused } });
+  assert.equal(p.status, "scheduled", "still waiting while Meta has paused access");
+  assert.equal(p.targets["instagram-12"].status, "pending");
+  assert.ok(p.targets["instagram-12"].paused);
+}
+assert.notEqual((await getAccount("instagram-12")).status, "error", "a Meta pause is not a broken login");
+await claim(p.id);
+p = await publishPost(p.id, BASE, { platformsOverride: { instagram: flaky } });
+assert.equal(p.targets["instagram-12"].status, "posted", "goes out once Meta lifts the pause");
+console.log("✓ Meta pause: posts keep waiting (every 20 min) and go out by themselves afterwards");
+
 // 5. Daily login check: Meta login ending in 3 days, and one that stopped working
 await updateSettings({ instagram: { appId: "app", appSecret: "sec" } });
 await upsertConnected({ platform: "facebook", kind: "fb_page", remoteId: "77", name: "Liftline Page", handle: "Page", token: "PT" });
