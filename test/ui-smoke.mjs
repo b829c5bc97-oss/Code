@@ -81,6 +81,25 @@ await wait(800);
 await visit("#/overview", "Today");
 await visit("#/plan", "Weekly plan");
 await visit("#/plan?brand=LIFTLINE", "LIFTLINE");
+await visit("#/plan?view=month", "Month plan");
+{
+  const chipEl = w.document.querySelector("#mgrid [data-move]");
+  assert.ok(chipEl, "a scheduled post shows in the month");
+  const fromDay = chipEl.closest(".mcell").dataset.day;
+  const todayKey = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  const target = [...w.document.querySelectorAll("#mgrid .mcell")].map((c) => c.dataset.day).find((d) => d > todayKey && d !== fromDay && d > fromDay);
+  const cell = w.document.querySelector(`#mgrid .mcell[data-day="${target}"]`);
+  const fire = (el, type) => { const e = new w.Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(e, "dataTransfer", { value: { setData() {}, effectAllowed: "" } }); el.dispatchEvent(e); };
+  fire(chipEl, "dragstart");
+  fire(cell, "dragover");
+  fire(cell, "drop");
+  await wait(700);
+  const moved = await (await call(`/api/posts?from=${target}&to=${target}`)).json();
+  assert.ok(moved.some((p) => p.caption === "Hello"), "post moved to " + target);
+  console.log("✓ month plan: drag a post to another day");
+  w.document.querySelector(`#mgrid .mcell[data-day="${target}"]`).click();
+  assert.ok(!w.document.querySelector("#mday-list").hidden, "tapping a day lists its posts");
+}
 await visit("#/create", "Post to");
 // click an account chip, wait for suggestions
 w.document.querySelector("#c-accounts [data-acc]").click();

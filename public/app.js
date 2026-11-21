@@ -145,7 +145,7 @@ async function accounts(force = false) {
 // ---------- shell ----------
 const NAV = [
   ["/overview", "Overview", "grid"],
-  ["/plan", "Weekly plan", "cal"],
+  ["/plan", "Plan", "cal"],
   ["/create", "Create post", "plus"],
   ["/inbox", "Comments", "chat"],
   ["/accounts", "Accounts", "link"],
@@ -361,6 +361,7 @@ async function download(id, name, btn) {
 
 // ---------- Weekly plan ----------
 async function screenPlan(q) {
+  if (q.get("view") === "month") return screenMonth(q);
   const from = q.get("from") || istKey(new Date());
   const brand = q.get("brand") || "All";
   const d = await api("GET", `/api/plan?from=${encodeURIComponent(from)}&brand=${encodeURIComponent(brand)}`);
@@ -393,6 +394,7 @@ async function screenPlan(q) {
   main(`
     <header class="head"><div><p class="sub">What goes out, on which day, at what time</p><h1>Weekly plan</h1></div>
       <div class="row">
+        <div class="seg"><button type="button" class="on">Week</button><button type="button" id="to-month">Month</button></div>
         <div class="row" style="gap:4px;background:#fff;border:1px solid #D9DCE3;border-radius:10px;padding:3px">
           <a class="btn sm" style="border:0" href="${link(addDays(d.weekFrom, -7), brand)}" aria-label="Previous week">‹</a>
           <span style="font-size:14px;font-weight:600;padding:0 8px">${esc(dayName(fromIST(d.weekFrom, "12:00")))} – ${esc(dayName(fromIST(d.weekTo, "12:00")))}</span>
@@ -410,6 +412,121 @@ async function screenPlan(q) {
     ${drafts}
     <section class="card"><h2>Perfect times, by platform</h2><p class="muted">Learned from when your own followers react most. Until there's enough data (about 3 weeks of posts) Social HQ starts with these and keeps adjusting per account.</p>
       <div class="grid g-3">${Object.entries(d.windows).filter(([p]) => p !== "manual").map(([p, w]) => `<div class="row" style="align-items:flex-start;background:#FAFAFB;border:1px solid var(--line-2);border-radius:12px;padding:12px">${badge(p)}<div class="stack" style="gap:3px"><b style="font-size:13px">${esc(PLATFORM[p].name)}</b><span style="font-size:13px;font-weight:600;color:var(--orange)">${esc(w)}</span></div></div>`).join("")}</div></section>`);
+  $("#to-month").onclick = () => (location.hash = `#/plan?view=month&month=${d.weekFrom.slice(0, 7)}&brand=${encodeURIComponent(brand)}`);
+}
+
+// ---------- Month calendar (drag a post to another day to move it) ----------
+const MOVABLE = ["draft", "needs_ok", "scheduled", "failed", "partial"];
+async function screenMonth(q) {
+  const today = istKey(new Date());
+  const month = /^\d{4}-\d{2}$/.test(q.get("month") || "") ? q.get("month") : today.slice(0, 7);
+  const brand = q.get("brand") || "All";
+  const first = `${month}-01`;
+  const lastDay = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
+  const last = `${month}-${String(lastDay).padStart(2, "0")}`;
+  const lead = (new Date(first + "T12:00:00Z").getUTCDay() + 6) % 7;
+  const gridFrom = addDays(first, -lead);
+  const cells = Math.ceil((lead + lastDay) / 7) * 7;
+  const gridTo = addDays(gridFrom, cells - 1);
+  const [acc, posts] = await Promise.all([accounts(), api("GET", `/api/posts?from=${gridFrom}&to=${gridTo}`)]);
+  const byId = Object.fromEntries(acc.accounts.map((a) => [a.id, a]));
+  const brands = [...new Set(acc.accounts.map((a) => a.brand))].sort();
+  const mine = posts.filter((p) => p.scheduledAt && (brand === "All" || (p.accountIds || []).some((id) => byId[id]?.brand === brand)));
+  const byDay = {};
+  for (const p of mine) (byDay[istKey(p.scheduledAt)] = byDay[istKey(p.scheduledAt)] || []).push(p);
+  const monthName = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(first + "T12:00:00Z"));
+  const prevM = addDays(first, -1).slice(0, 7), nextM = addDays(last, 1).slice(0, 7);
+  const link = (m, b) => `#/plan?view=month&month=${m}&brand=${encodeURIComponent(b)}`;
+  const chip = (p) => {
+    const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean);
+    const plats = [...new Set(accs.map((a) => a.platform))];
+    const movable = MOVABLE.includes(p.status);
+    return `<a class="mchip st-${esc(p.status)}" href="#/create?id=${esc(p.id)}" ${movable ? `draggable="true" data-move="${esc(p.id)}" data-at="${esc(p.scheduledAt)}"` : ""} title="${esc((accs.map((a) => a.name).join(", ") || "") + " · " + (p.caption || p.title || ""))}">
+      <b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${plats.map((x) => badge(x, true).replace('class="badge', 'class="badge xs')).join("")}<span>${esc((p.caption || p.title || typeLabel(p.type)).slice(0, 40))}</span></a>`;
+  };
+  let html = "";
+  for (let i = 0; i < cells; i++) {
+    const dk = addDays(gridFrom, i);
+    const list = (byDay[dk] || []).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    html += `<div class="mcell ${dk.slice(0, 7) !== month ? "out" : ""} ${dk === today ? "today" : ""} ${dk < today ? "past" : ""}" data-day="${dk}">
+      <div class="row between"><span class="mday">${+dk.slice(8)}</span>${list.length ? `<span class="mcount">${list.length}</span>` : ""}</div>
+      <div class="mlist">${list.map(chip).join("")}</div>
+      <span class="mdots">${list.slice(0, 6).map((p) => `<i class="st-${esc(p.status)}"></i>`).join("")}</span>
+      ${dk >= today ? `<a class="madd" href="#/create?date=${dk}" aria-label="Add a post on ${esc(dk)}">+</a>` : ""}
+    </div>`;
+  }
+  const total = mine.filter((p) => istKey(p.scheduledAt).slice(0, 7) === month).length;
+  main(`
+    <header class="head"><div><p class="sub">${total} post${total === 1 ? "" : "s"} planned in ${esc(monthName)} · drag a post to another day to move it</p><h1>Month plan</h1></div>
+      <div class="row">
+        <div class="seg"><button type="button" id="to-week">Week</button><button type="button" class="on">Month</button></div>
+        <div class="row" style="gap:4px;background:#fff;border:1px solid #D9DCE3;border-radius:10px;padding:3px">
+          <a class="btn sm" style="border:0" href="${link(prevM, brand)}" aria-label="Previous month">‹</a>
+          <span style="font-size:14px;font-weight:600;padding:0 8px">${esc(monthName)}</span>
+          <a class="btn sm" style="border:0" href="${link(nextM, brand)}" aria-label="Next month">›</a>
+        </div>
+        <a class="btn sm" href="${link(today.slice(0, 7), brand)}">This month</a>
+        <a class="btn primary" href="#/create">+ Create post</a>
+      </div></header>
+    <div class="row" role="group" aria-label="Show brand">${["All", ...brands].map((b) => `<a class="chip ${b === brand ? "on" : ""}" style="text-decoration:none" href="${link(month, b)}">${esc(b === "All" ? "All brands" : b)}</a>`).join("")}</div>
+    <section class="card" style="padding:12px">
+      <div class="mgrid mhead">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((x) => `<span>${x}</span>`).join("")}</div>
+      <div class="mgrid" id="mgrid">${html}</div>
+    </section>
+    <section class="card" id="mday-list" hidden></section>
+    <div class="row muted small" style="gap:14px"><span><i class="lg st-scheduled"></i> Scheduled</span><span><i class="lg st-needs_ok"></i> Needs your OK</span><span><i class="lg st-done"></i> Posted</span><span><i class="lg st-failed"></i> Failed</span><span><i class="lg st-draft"></i> Draft</span></div>`);
+  $("#to-week").onclick = () => (location.hash = `#/plan?from=${month === today.slice(0, 7) ? today : first}&brand=${encodeURIComponent(brand)}`);
+  const grid = $("#mgrid");
+  let dragging = null;
+  grid.addEventListener("dragstart", (e) => {
+    const c = e.target.closest("[data-move]");
+    if (!c) return;
+    dragging = c;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", c.dataset.move);
+    c.classList.add("dragging");
+  });
+  grid.addEventListener("dragend", () => { dragging?.classList.remove("dragging"); dragging = null; $$(".mcell.over").forEach((x) => x.classList.remove("over")); });
+  grid.addEventListener("dragover", (e) => {
+    const cell = e.target.closest(".mcell");
+    if (!cell || !dragging || cell.dataset.day < today) return;
+    e.preventDefault();
+    $$(".mcell.over").forEach((x) => x !== cell && x.classList.remove("over"));
+    cell.classList.add("over");
+  });
+  grid.addEventListener("drop", async (e) => {
+    const cell = e.target.closest(".mcell");
+    if (!cell || !dragging) return;
+    e.preventDefault();
+    const id = dragging.dataset.move;
+    const oldAt = dragging.dataset.at;
+    const day = cell.dataset.day;
+    if (istKey(oldAt) === day) return;
+    const newAt = fromIST(day, istHM(oldAt));
+    if (new Date(newAt) < new Date()) return toast("That time has already passed on that day.", true);
+    try {
+      await api("PUT", `/api/posts/${encodeURIComponent(id)}`, { scheduledAt: newAt });
+      toast(`Moved to ${whenText(newAt)}`);
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+  // On phones the cells only show dots: tap a day to list its posts underneath.
+  grid.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    const cell = e.target.closest(".mcell");
+    if (!cell) return;
+    const dk = cell.dataset.day;
+    const list = (byDay[dk] || []).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    const box = $("#mday-list");
+    box.hidden = false;
+    box.innerHTML = `<div class="row between"><h2>${esc(dayName(fromIST(dk, "12:00")))}</h2>${dk >= today ? `<a class="btn sm primary" href="#/create?date=${dk}">+ Add post</a>` : ""}</div>
+      ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="#/create?id=${esc(p.id)}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>${pill(p.status)}</a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
+    $$(".mcell.sel").forEach((x) => x.classList.remove("sel"));
+    cell.classList.add("sel");
+    if (window.innerWidth < 760) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
 }
 
 // ---------- Create / edit post ----------

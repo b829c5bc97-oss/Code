@@ -275,5 +275,39 @@ a.chip.on { color: #fff; }
 .hours .hc span { width: 100%; background: #6F8DF7; border-radius: 4px 4px 0 0; }
 .hours .hc em { font-style: normal; font-size: 10px; color: var(--quiet); height: 12px; }
 
+/* Month plan */
+.mgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.mhead span { font-size: 12px; font-weight: 700; color: var(--quiet); text-align: center; padding-bottom: 4px; }
+.mcell { position: relative; min-height: 118px; background: #FAFAFB; border: 1px solid var(--line-2); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; min-width: 0; }
+.mcell.out { opacity: .45; }
+.mcell.past { background: #F4F5F8; }
+.mcell.today { background: #EEF2FF; border-color: #C9D4FF; }
+.mcell.over { outline: 2px dashed var(--blue); background: #F2F5FF; }
+.mcell.sel { border-color: var(--blue); }
+.mday { font-size: 13px; font-weight: 700; }
+.mcount { font-size: 11px; font-weight: 700; color: var(--quiet); }
+.mlist { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mchip { display: flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.2; padding: 3px 5px; border-radius: 6px; background: #fff; border: 1px solid var(--line); border-left: 3px solid #1D3FD0; text-decoration: none; color: var(--ink); min-width: 0; }
+.mchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mchip b { flex: 0 0 auto; }
+.mchip[draggable="true"] { cursor: grab; }
+.mchip.dragging { opacity: .4; }
+.mchip.st-needs_ok, i.st-needs_ok { border-left-color: var(--amber); }
+.mchip.st-done, .mchip.st-posted { border-left-color: var(--green); }
+.mchip.st-failed, .mchip.st-partial { border-left-color: var(--red); }
+.mchip.st-draft { border-left-color: #9AA1AE; }
+.mchip.st-reminder { border-left-color: var(--purple); }
+.mdots { display: none; gap: 3px; flex-wrap: wrap; }
+.mdots i, i.lg { width: 8px; height: 8px; border-radius: 50%; background: #1D3FD0; display: inline-block; }
+i.st-needs_ok { background: var(--amber); } i.st-done, i.st-posted { background: var(--green); } i.st-failed, i.st-partial { background: var(--red); } i.st-draft { background: #9AA1AE; } i.st-reminder { background: var(--purple); }
+.madd { position: absolute; right: 6px; bottom: 4px; font-size: 16px; font-weight: 700; text-decoration: none; color: var(--quiet); opacity: 0; }
+.mcell:hover .madd { opacity: 1; }
+@media (max-width: 760px) {
+  .mgrid { gap: 3px; }
+  .mcell { min-height: 54px; padding: 4px; border-radius: 8px; }
+  .mlist, .madd, .mcount { display: none; }
+  .mdots { display: flex; }
+}
+
 /* The hidden attribute must win over display rules on classes like .f and .note */
 [hidden] { display: none !important; }

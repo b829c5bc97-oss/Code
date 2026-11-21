@@ -499,24 +499,26 @@ async function breakdown(settings, account, by) {
   return rows.map((r) => ({ label: (r.dimension_values || []).join(", "), value: r.value || 0 })).sort((a, b) => b.value - a.value);
 }
 
-export async function online({ settings, account }) {
+export async function online({ settings, account, withError = false }) {
   try {
     const { data } = await call(`${base(settings)}/${account.remoteId}/insights?${qs({ metric: "online_followers", period: "lifetime", access_token: tokenOf(account) })}`);
-    return onlineGrid(data.data?.[0]?.values || []);
-  } catch (_) {
-    return null;
+    const g = onlineGrid(data.data?.[0]?.values || []);
+    return withError && !g ? { error: `no data (${JSON.stringify(data).slice(0, 160)})` } : g;
+  } catch (e) {
+    return withError ? { error: e.message } : null;
   }
 }
 
 export async function audience({ settings, account }) {
   const out = { age: [], gender: [], city: [], country: [], online: null, note: "" };
-  const [age, gender, city, country, on] = await Promise.all(["age", "gender", "city", "country"].map((b) => breakdown(settings, account, b).catch((e) => ({ error: e.message }))).concat([online({ settings, account })]));
+  const [age, gender, city, country, on] = await Promise.all(["age", "gender", "city", "country"].map((b) => breakdown(settings, account, b).catch((e) => ({ error: e.message }))).concat([online({ settings, account, withError: true })]));
   const errs = [age, gender, city, country].filter((x) => x && x.error);
   out.age = Array.isArray(age) ? age.sort((a, b) => a.label.localeCompare(b.label)) : [];
   out.gender = Array.isArray(gender) ? gender.map((g) => ({ ...g, label: { F: "Women", M: "Men", U: "Not shared" }[g.label] || g.label })) : [];
   out.city = Array.isArray(city) ? city.slice(0, 10) : [];
   out.country = Array.isArray(country) ? country.slice(0, 10) : [];
-  out.online = on;
+  out.online = on && on.grid ? on : null;
+  out.onlineNote = on && on.error ? on.error : "";
   if (errs.length === 4 || (!out.age.length && !out.city.length)) out.note = "Instagram shows follower details (age, gender, cities) only once an account has 100 followers.";
   return out;
 }
