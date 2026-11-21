@@ -1,7 +1,9 @@
 // Social HQ API: every /api/* route plus the public photo links under /m/*.
 
 import { json, redirect, readJSON, HttpError, env, errMessage } from "../lib/util.mjs";
-import { authState, requireAuth, setup, login, logoutCookie, changePassword } from "../lib/auth.mjs";
+import { authState, requireAuth, setup, login, logoutCookie, changePassword, logoutEverywhere, securityStatus, startTwoStep, finishTwoStep, stopTwoStep, newRecoveryCodes } from "../lib/auth.mjs";
+import { logEvent, listEvents } from "../lib/audit.mjs";
+import { listConnections, revokeConnection } from "../lib/oauth.mjs";
 import { publicSettings, updateSettings, getSettings, configured } from "../lib/settings.mjs";
 import { listAccounts, publicAccount, upsertConnected, addReminderAccount, updateAccount, removeAccount, getAccount, saveAccount } from "../lib/accounts.mjs";
 import { listPosts, getPost, createPost, updatePost, deletePost, approvePost, prepareNow, markManualDone, claim } from "../lib/posts.mjs";
@@ -36,22 +38,70 @@ route("GET", "/m/:file", async ({ params }) => {
 route("GET", "/api/auth/state", async ({ req }) => json(await authState(req)), { open: true });
 route("POST", "/api/auth/setup", async ({ req }) => {
   const c = await setup(await readJSON(req));
+  await logEvent("security", "Password set up for the first time", req);
   return json({ ok: true }, 200, { "Set-Cookie": c });
 }, { open: true });
 route("POST", "/api/auth/login", async ({ req }) => {
-  const c = await login(await readJSON(req));
-  return json({ ok: true }, 200, { "Set-Cookie": c });
+  try {
+    const r = await login(await readJSON(req));
+    await logEvent("login", r.usedRecovery ? `Logged in with a recovery code (${r.recoveryLeft} left)` : "Logged in", req);
+    return json({ ok: true, recoveryLeft: r.usedRecovery ? r.recoveryLeft : undefined }, 200, { "Set-Cookie": r.cookie });
+  } catch (e) {
+    if (e.extra?.code !== "totp" || e.status !== 401) await logEvent("login", `Login failed: ${errMessage(e)}`, req);
+    throw e;
+  }
 }, { open: true });
 route("POST", "/api/auth/logout", async () => json({ ok: true }, 200, { "Set-Cookie": logoutCookie() }), { open: true });
 route("POST", "/api/auth/password", async ({ req }) => {
   const c = await changePassword(await readJSON(req));
+  await logEvent("security", "Password changed (all other sessions logged out)", req);
   return json({ ok: true }, 200, { "Set-Cookie": c });
+});
+
+// ---------- Security + Claude connection ----------
+route("GET", "/api/security", async ({ req, context }) => {
+  const s = await getSettings();
+  return json({
+    ...(await securityStatus()),
+    mcpUrl: `${siteUrl(req, context)}/mcp`,
+    claudeNeedsOk: !!s.claude?.requireApproval,
+    connections: await listConnections(),
+    events: await listEvents(80),
+  });
+});
+route("POST", "/api/security/two-step/start", async () => json(await startTwoStep()));
+route("POST", "/api/security/two-step/finish", async ({ req }) => {
+  const r = await finishTwoStep(await readJSON(req));
+  await logEvent("security", "2-step login turned on (other sessions logged out)", req);
+  return json({ recovery: r.recovery }, 200, { "Set-Cookie": r.cookie });
+});
+route("POST", "/api/security/two-step/stop", async ({ req }) => {
+  await stopTwoStep(await readJSON(req));
+  await logEvent("security", "2-step login turned off", req);
+  return json({ ok: true });
+});
+route("POST", "/api/security/recovery-codes", async ({ req }) => {
+  const r = await newRecoveryCodes(await readJSON(req));
+  await logEvent("security", "New recovery codes made (old ones stop working)", req);
+  return json(r);
+});
+route("POST", "/api/security/logout-everywhere", async ({ req }) => {
+  const c = await logoutEverywhere();
+  await logEvent("security", "Logged out on every other device", req);
+  return json({ ok: true }, 200, { "Set-Cookie": c });
+});
+route("DELETE", "/api/claude/connections/:id", async ({ req, params }) => {
+  await revokeConnection(params.id);
+  await logEvent("claude", params.id === "all" ? "Cut off every Claude connection" : "Cut off a Claude connection", req);
+  return json({ ok: true });
 });
 
 // ---------- Settings ----------
 route("GET", "/api/settings", async ({ req, context }) => json(await publicSettings(siteUrl(req, context))));
 route("PUT", "/api/settings", async ({ req, context }) => {
-  await updateSettings(await readJSON(req));
+  const patch = await readJSON(req);
+  await updateSettings(patch);
+  await logEvent("settings", `Changed settings: ${Object.keys(patch || {}).join(", ")}`, req);
   return json(await publicSettings(siteUrl(req, context)));
 });
 route("GET", "/api/health", async () => {
@@ -76,8 +126,9 @@ route("GET", "/api/accounts", async () => {
 });
 route("POST", "/api/accounts/reminder", async ({ req }) => json(publicAccount(await addReminderAccount(await readJSON(req)))));
 route("PATCH", "/api/accounts/:id", async ({ req, params }) => json(publicAccount(await updateAccount(params.id, await readJSON(req)))));
-route("DELETE", "/api/accounts/:id", async ({ params }) => {
+route("DELETE", "/api/accounts/:id", async ({ req, params }) => {
   await removeAccount(params.id);
+  await logEvent("account", `Removed account ${params.id}`, req);
   return json({ ok: true });
 });
 route("POST", "/api/accounts/:id/boards", async ({ params }) => {
@@ -118,6 +169,7 @@ route("GET", "/api/oauth/:platform/callback", async ({ req, params, context }) =
       const saved = await upsertConnected(acc);
       names.push(saved.name);
     }
+    await logEvent("account", `Connected ${platform}: ${names.join(", ")}`, req);
     return back("connected=" + encodeURIComponent(names.join(", ")));
   } catch (e) {
     return back("error=" + encodeURIComponent(`${platform}: ${errMessage(e)}`));
@@ -211,6 +263,11 @@ export async function handle(req, context) {
       const m = path.match(r.re);
       if (!m) continue;
       const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
+      // Changes must come from Social HQ's own pages (blocks other sites posting forms here).
+      if (req.method !== "GET" && !path.startsWith("/m/")) {
+        const origin = req.headers.get("origin");
+        if (origin && origin !== url.origin && origin !== siteUrl(req, context)) throw new HttpError(403, "Request from another website was blocked.");
+      }
       if (!r.open) await requireAuth(req);
       return await r.handler({ req, context, params, url });
     }

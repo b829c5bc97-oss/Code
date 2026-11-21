@@ -25,6 +25,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = $("#app");
 const state = { authed: false, accounts: null };
+if (/[?&](code|state|error)=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
 
 // ---------- helpers ----------
 function esc(s) {
@@ -125,6 +126,7 @@ async function api(method, path, body) {
   try {
     data = await res.json();
   } catch (_) { /* no body */ }
+  if (res.status === 401 && data?.code === "totp") throw Object.assign(new Error(data.error), { data });
   if (res.status === 401) {
     state.authed = false;
     renderAuth(data?.code === "setup" ? "setup" : "login");
@@ -191,19 +193,31 @@ function renderAuth(mode) {
     <form id="auth-form" class="stack">
       ${setup ? '<label class="f">Setup code<input type="text" name="code" autocomplete="one-time-code" required></label>' : ""}
       <label class="f">${setup ? "Choose a password (8+ characters)" : "Password"}<input type="password" name="password" autocomplete="${setup ? "new-password" : "current-password"}" required minlength="${setup ? 8 : 1}"></label>
+      ${setup ? "" : '<label class="f" id="code-wrap" hidden>6-digit code from your authenticator app (or a recovery code)<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456"></label>'}
       <button class="btn primary" type="submit">${setup ? "Save and open Social HQ" : "Log in"}</button>
       <p class="note bad" id="auth-err" hidden></p>
     </form>
   </div></div>`;
   $("#auth-form").onsubmit = async (e) => {
     e.preventDefault();
-    const f = new FormData(e.target);
+    const f = Object.fromEntries(new FormData(e.target));
+    if (!setup && !f.code) delete f.code;
     try {
-      await api("POST", setup ? "/api/auth/setup" : "/api/auth/login", Object.fromEntries(f));
+      const r = await api("POST", setup ? "/api/auth/setup" : "/api/auth/login", f);
       state.authed = true;
+      if (r?.recoveryLeft !== undefined) setTimeout(() => toast(`Recovery code used. ${r.recoveryLeft} left — make new ones in Settings → Security.`), 600);
       render();
     } catch (err) {
       const el = $("#auth-err");
+      if (err.data?.code === "totp" && $("#code-wrap")) {
+        $("#code-wrap").hidden = false;
+        $("#code-wrap input").required = true;
+        $("#code-wrap input").focus();
+        if (!f.code) {
+          el.hidden = true;
+          return;
+        }
+      }
       if (el) {
         el.hidden = false;
         el.textContent = err.message;
@@ -954,14 +968,135 @@ const GUIDE = {
 };
 const FIELD_LABEL = { appId: "App ID", appSecret: "App secret", clientId: "Client ID", clientSecret: "Client secret", orgAccess: "Company pages approved by LinkedIn", version: "LinkedIn API version (YYYYMM)", sandbox: "Sandbox (pins visible only to you)", resendKey: "Resend API key", to: "Send reminders to (email)", from: "From (optional)", graphVersion: "Meta Graph API version", configId: "Configuration ID" };
 
+function claudeCard(sec) {
+  return `<section class="card" id="claude"><h2>Claude</h2>
+    <p class="muted">Let Claude schedule posts, read your plan and check insights for you, just by asking in chat.</p>
+    <ol class="muted"><li>In Claude, open <b>Settings → Connectors → Add custom connector</b>.</li><li>Name it <b>Social HQ</b> and paste this address:</li></ol>
+    <div class="row"><code>${esc(sec.mcpUrl)}</code><button class="btn sm" type="button" data-copytext="${esc(sec.mcpUrl)}">Copy</button></div>
+    <ol class="muted" start="3"><li>Press <b>Connect</b>. Social HQ asks for your password${sec.twoStep ? " and 6-digit code" : ""}, then Claude is linked.</li></ol>
+    <label class="check"><input type="checkbox" id="claude-ok" ${sec.claudeNeedsOk ? "checked" : ""}> Posts Claude schedules wait for my OK on the Overview screen</label>
+    <h3 style="margin-top:12px">Connected</h3>
+    ${sec.connections.length ? `<div class="stack" style="gap:6px">${sec.connections.map((c) => `<div class="row between" style="gap:8px"><span><b>${esc(c.name)}</b> <span class="muted small">· linked ${esc(whenText(c.createdAt))} · last used ${esc(whenText(c.lastUsedAt))}</span></span><button class="btn sm" type="button" data-revoke="${esc(c.id)}">Cut off</button></div>`).join("")}</div>` : '<p class="muted">Not connected yet.</p>'}
+  </section>`;
+}
+
+function securityCard(sec) {
+  return `<section class="card" id="security"><h2>Security</h2>
+    <div class="row between" style="gap:10px"><span><b>2-step login</b><br><span class="muted small">${sec.twoStep ? `On · ${sec.recoveryLeft} recovery codes left` : "Off · a 6-digit code from your phone on top of your password"}</span></span>
+      ${sec.twoStep ? '<span class="row" style="gap:6px"><button class="btn sm" type="button" id="new-recovery">New recovery codes</button><button class="btn sm" type="button" id="stop-2step">Turn off</button></span>' : '<button class="btn sm primary" type="button" id="start-2step">Turn on 2-step login</button>'}</div>
+    <div id="twostep-box"></div>
+    <div class="row between" style="gap:10px;border-top:1px solid var(--line-2);padding-top:12px"><span><b>Log out everywhere</b><br><span class="muted small">Ends Social HQ on every other phone and browser. You stay logged in here.</span></span><button class="btn sm" type="button" id="logout-all">Log out everywhere</button></div>
+  </section>`;
+}
+
+function askOwner(twoStep, why) {
+  const password = prompt(`${why}\n\nType your Social HQ password:`);
+  if (!password) return null;
+  let code = "";
+  if (twoStep) {
+    code = prompt("Type the 6-digit code from your authenticator app:") || "";
+    if (!code) return null;
+  }
+  return { password, code };
+}
+
+function showRecovery(codes) {
+  $("#twostep-box").innerHTML = `<div class="note warn" style="margin:10px 0"><b>Save these recovery codes now.</b> Each one works once if you lose your phone. They won't be shown again.<pre style="font-size:15px;margin:8px 0 0;white-space:pre-wrap">${codes.map(esc).join("\n")}</pre><button class="btn sm" type="button" data-copytext="${esc(codes.join("\n"))}">Copy codes</button></div>`;
+  $$("#twostep-box [data-copytext]").forEach((b) => (b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copytext); toast("Copied"); }));
+}
+
+function wireSecurity(sec) {
+  const ok = $("#claude-ok");
+  if (ok) ok.onchange = async () => {
+    try {
+      await api("PUT", "/api/settings", { claude: { requireApproval: ok.checked } });
+      toast(ok.checked ? "Claude's posts will wait for your OK" : "Claude's posts go out on time by themselves");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  $$("[data-revoke]").forEach((b) => (b.onclick = async () => {
+    if (!confirmBox("Cut off this Claude connection? Claude will need to connect again.")) return;
+    try {
+      await api("DELETE", `/api/claude/connections/${encodeURIComponent(b.dataset.revoke)}`);
+      toast("Claude cut off");
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
+  const start = $("#start-2step");
+  if (start) start.onclick = async () => {
+    try {
+      const r = await api("POST", "/api/security/two-step/start");
+      $("#twostep-box").innerHTML = `<div class="card tight" style="margin:10px 0"><b>1. Scan this with your authenticator app</b><span class="muted small">Google Authenticator, Microsoft Authenticator or 1Password: tap +, then "Scan a QR code".</span>
+        <div style="width:180px;max-width:100%;background:#fff;padding:6px;border:1px solid var(--line-2);border-radius:10px">${r.qr}</div>
+        <span class="muted small">Can't scan? Choose "Enter a setup key" and type: <code>${esc(r.secret)}</code></span>
+        <form class="row" id="twostep-form" style="gap:8px;margin-top:6px"><label class="f" style="flex:1 1 160px">2. Type the 6-digit code it shows<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required placeholder="123 456"></label><button class="btn primary sm" type="submit">Turn on</button></form></div>`;
+      $("#twostep-form").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const done = await api("POST", "/api/security/two-step/finish", Object.fromEntries(new FormData(e.target)));
+          toast("2-step login is on");
+          showRecovery(done.recovery);
+          start.remove();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      };
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  const stop = $("#stop-2step");
+  if (stop) stop.onclick = async () => {
+    const who = askOwner(true, "Turning off 2-step login makes Social HQ easier to break into.");
+    if (!who) return;
+    try {
+      await api("POST", "/api/security/two-step/stop", who);
+      toast("2-step login is off");
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  const rec = $("#new-recovery");
+  if (rec) rec.onclick = async () => {
+    const who = askOwner(true, "New recovery codes replace the old ones.");
+    if (!who) return;
+    try {
+      showRecovery((await api("POST", "/api/security/recovery-codes", who)).recovery);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  const all = $("#logout-all");
+  if (all) all.onclick = async () => {
+    if (!confirmBox("Log out Social HQ on every other phone and browser?")) return;
+    try {
+      await api("POST", "/api/security/logout-everywhere");
+      toast("Logged out everywhere else");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+}
+
+function confirmBox(text) {
+  return window.confirm(text);
+}
+
 async function screenSettings(q) {
   const s = await api("GET", "/api/settings");
   const missing = q.get("missing");
   const sections = ["instagram", "facebook", "linkedin", "youtube", "pinterest", "reminders", "general"];
+  const sec = await api("GET", "/api/security");
   main(`
     <header class="head"><div><p class="sub">Platform keys, reminders and your password</p><h1>Settings</h1></div></header>
     ${missing ? `<p class="note warn">Add the ${esc(PLATFORM[missing]?.name || missing)} keys below first, then press Connect on the Accounts screen.</p>` : ""}
     <section class="card tight"><h3>Your Social HQ address</h3><code>${esc(s.siteUrl)}</code></section>
+    ${claudeCard(sec)}
+    ${securityCard(sec)}
     ${sections.map((sec) => {
       const def = s[sec];
       const fields = Object.keys(def).filter((k) => k !== "label");
@@ -976,7 +1111,10 @@ async function screenSettings(q) {
           return `<label class="f">${esc(FIELD_LABEL[f] || f)}<input type="text" name="${f}" value="${esc(def[f])}" autocomplete="off"></label>`;
         }).join("")}<div class="row" style="grid-column:1/-1"><button class="btn primary sm" type="submit">Save</button></div></form></section>`;
     }).join("")}
-    <section class="card"><h2>Change password</h2><form class="grid g-3" id="pw-form" style="gap:10px"><label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label><label class="f">New password (8+ characters)<input type="password" name="next" required minlength="8" autocomplete="new-password"></label><div class="row" style="grid-column:1/-1"><button class="btn sm primary" type="submit">Change password</button></div></form></section>`);
+    <section class="card" id="activity"><h2>Activity</h2><p class="muted">Logins, security changes, connections and everything Claude did. Newest first.</p>
+      <div class="stack" style="gap:0">${sec.events.length ? sec.events.map((e) => `<div class="row" style="gap:10px;padding:8px 0;border-top:1px solid var(--line-2);align-items:flex-start"><span class="muted small" style="flex:0 0 132px">${esc(whenText(e.at))}</span><span style="flex:1 1 220px;min-width:0"><b style="font-weight:600">${esc(e.text)}</b><br><span class="muted small">${esc([e.device, e.where, e.ip].filter(Boolean).join(" · "))}</span></span></div>`).join("") : '<p class="muted">Nothing yet.</p>'}</div></section>
+    <section class="card"><h2>Change password</h2><form class="grid g-3" id="pw-form" style="gap:10px"><label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label><label class="f">New password (8+ characters)<input type="password" name="next" required minlength="8" autocomplete="new-password"></label>${sec.twoStep ? '<label class="f">6-digit code<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>' : ""}<div class="row" style="grid-column:1/-1"><button class="btn sm primary" type="submit">Change password</button></div></form></section>`);
+  wireSecurity(sec);
   if (missing && $(`#sec-${missing}`)) $(`#sec-${missing}`).scrollIntoView?.();
   $$("[data-copytext]").forEach((b) => (b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copytext); toast("Copied"); }));
   $$("form[data-sec]").forEach((f) => (f.onsubmit = async (e) => {
