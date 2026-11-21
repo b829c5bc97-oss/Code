@@ -187,6 +187,68 @@ route("GET", "/api/accounts/:id/feed/:postId", async ({ params }) => {
   return json(await p.postDetail({ settings, account, postId: params.postId }));
 });
 
+// ---------- Comments inbox ----------
+route("GET", "/api/accounts/:id/audience", async ({ params, url }) => {
+  const key = `aud/${params.id}`;
+  const cached = url.searchParams.get("fresh") ? null : await getJSON(key);
+  if (cached && Date.now() - new Date(cached.at).getTime() < 6 * 3600000) return json(cached);
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "audience", "Audience details");
+  const out = { ...(await p.audience({ settings, account })), at: new Date().toISOString() };
+  await setJSON(key, out);
+  return json(out);
+});
+
+
+function needs(p, fn, what) {
+  if (!p?.[fn]) throw new HttpError(400, `${what} for this platform is not available yet.`);
+}
+route("GET", "/api/inbox/:id", async ({ params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "recentComments", "Comments");
+  const comments = await p.recentComments({ settings, account });
+  const seen = (await getJSON("inbox/seen")) || {};
+  return json({ account: publicAccount(account), comments, seenAt: seen[account.id] || null });
+});
+route("POST", "/api/inbox/seen", async ({ req }) => {
+  const body = await readJSON(req);
+  const seen = (await getJSON("inbox/seen")) || {};
+  const now = new Date().toISOString();
+  for (const id of Array.isArray(body.ids) ? body.ids.slice(0, 50) : []) seen[String(id).slice(0, 80)] = now;
+  await setJSON("inbox/seen", seen);
+  return json({ ok: true });
+});
+route("GET", "/api/accounts/:id/feed/:postId/comments", async ({ params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "comments", "Comments");
+  return json({ comments: await p.comments({ settings, account, postId: params.postId }) });
+});
+route("POST", "/api/comments/:id/:commentId/reply", async ({ req, params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "replyComment", "Replying");
+  const body = await readJSON(req);
+  const message = String(body.message || "").trim().slice(0, 2200);
+  if (!message) throw new HttpError(400, "Write a reply first.");
+  const r = await p.replyComment({ settings, account, commentId: params.commentId, message });
+  await logEvent("comment", `Replied to a comment on ${account.name}`, req);
+  return json(r);
+});
+route("POST", "/api/comments/:id/:commentId/hide", async ({ req, params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "hideComment", "Hiding comments");
+  const body = await readJSON(req);
+  const r = await p.hideComment({ settings, account, commentId: params.commentId, hide: body.hide !== false });
+  await logEvent("comment", `${body.hide !== false ? "Hid" : "Unhid"} a comment on ${account.name}`, req);
+  return json(r);
+});
+route("DELETE", "/api/comments/:id/:commentId", async ({ req, params }) => {
+  const { account, settings, p } = await liveAccount(params.id);
+  needs(p, "deleteComment", "Deleting comments");
+  const r = await p.deleteComment({ settings, account, commentId: params.commentId });
+  await logEvent("comment", `Deleted a comment on ${account.name}`, req);
+  return json(r);
+});
+
 // ---------- Connecting accounts (OAuth) ----------
 route("GET", "/api/oauth/:platform/start", async ({ req, params, context, url }) => {
   const p = platforms[params.platform];

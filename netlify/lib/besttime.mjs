@@ -43,6 +43,19 @@ export function model(account, snapshot) {
   const platform = account.platform;
   const grid = [];
   for (let d = 0; d < 7; d++) grid.push(HOURS.map((h) => prior(platform, d, h)));
+  // When the platform tells us when followers are actually online, that beats the general guess.
+  const on = snapshot?.online?.grid;
+  if (on && snapshot.online.days >= 3) {
+    let peak = 0;
+    for (const row of on) for (const v of row) peak = Math.max(peak, v);
+    if (peak > 0) {
+      for (let d = 0; d < 7; d++) HOURS.forEach((h, hi) => {
+        // Posting slightly before the peak lets the post collect early likes as people arrive.
+        const ahead = Math.max(on[d][h] || 0, 0.85 * (on[d][(h + 1) % 24] || 0)) / peak;
+        grid[d][hi] = 0.3 * grid[d][hi] + 0.7 * ahead;
+      });
+    }
+  }
 
   const posts = (snapshot?.posts || []).filter((p) => p.at);
   const perf = posts.map((p) => (p.interactions || 0) + 0.05 * (p.views || 0) + 0.02 * (p.reach || 0));
@@ -74,7 +87,7 @@ export function model(account, snapshot) {
     }
   }
   const scores = grid.map((row) => row.map((v) => Math.round((v / (max || 1)) * 100)));
-  return { scores, learnedFrom: n, trust: Math.round(trust * 100), updatedAt: new Date().toISOString() };
+  return { scores, learnedFrom: n, trust: Math.round(trust * 100), usesOnline: !!(on && snapshot.online.days >= 3), updatedAt: new Date().toISOString() };
 }
 
 export function topSlots(m, count = 3) {

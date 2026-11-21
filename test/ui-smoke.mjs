@@ -44,6 +44,13 @@ platforms.instagram = {
   feed: async ({ after }) => ({ posts: [{ id: after ? "m3" : "m1", type: "Reel", caption: "Lift demo", url: "https://instagram.com/p/1", at: new Date().toISOString(), thumb: "", likes: 12, comments: 3 }, { id: after ? "m4" : "m2", type: "Photo", caption: "Warehouse", url: "https://instagram.com/p/2", at: new Date().toISOString(), thumb: "https://x.test/a.jpg", likes: 5, comments: 0 }], next: after ? null : "CUR" }),
   postDetail: async ({ postId }) => ({ id: postId, type: "Reel", caption: "Lift demo", url: "https://instagram.com/p/1", at: new Date().toISOString(), media: [{ kind: "video", url: "https://x.test/v.mp4", thumb: "" }], stats: [{ label: "Accounts reached", value: 900 }, { label: "Avg. watch time", value: null, text: "7s" }], engagementRate: 0.05, note: "", linkLabel: "Open on Instagram" }),
 };
+const sent = [];
+const fakeComment = (id, text, replied = false) => ({ id, text, username: "buyer_" + id, at: new Date().toISOString(), likes: 1, hidden: false, mine: false, replied, replies: replied ? [{ id: id + "r", text: "Thanks!", username: "info.liftline", at: new Date().toISOString(), likes: 0, hidden: false, mine: true }] : [], media: { id: "m1", type: "Reel", caption: "Lift demo", url: "https://instagram.com/p/1", thumb: "", at: new Date().toISOString() } });
+platforms.instagram.recentComments = async () => [fakeComment("c1", "Price?"), fakeComment("c2", "Nice lift", true)];
+platforms.instagram.comments = async () => [fakeComment("c1", "Price?")];
+platforms.instagram.replyComment = async ({ commentId, message }) => (sent.push([commentId, message]), { id: "new" });
+platforms.instagram.hideComment = async () => ({ ok: true });
+platforms.instagram.audience = async () => ({ age: [{ label: "25-34", value: 40 }], gender: [{ label: "Men", value: 60 }, { label: "Women", value: 40 }], city: [{ label: "Delhi, Delhi", value: 30 }], country: [{ label: "IN", value: 90 }], online: { grid: Array.from({ length: 7 }, () => Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : 10))), days: 20 }, note: "" });
 platforms.youtube = { ...platforms.youtube, ensureToken: async ({ account }) => ({ account, changed: false }), profile: async () => { throw new Error("offline"); }, feed: async () => ({ posts: [], next: null }) };
 
 const errors = [];
@@ -104,6 +111,20 @@ w.document.querySelector(".sheet [data-close]").click();
 assert.equal(w.document.querySelector(".sheet"), null, "post sheet closes");
 console.log("✓ account page: posts grid, load more, post numbers");
 await visit("#/account?id=instagram-1&tab=hq", "Planned in Social HQ");
+await visit("#/account?id=instagram-1&tab=audience", "When your followers are online");
+assert.ok(w.document.querySelector("#main").textContent.includes("Delhi, Delhi"));
+assert.ok(w.document.querySelector("#main").textContent.includes("9 PM"));
+await visit("#/inbox", "2 comments");
+assert.ok(w.document.querySelector("#cm-list").textContent.includes("1 not replied"));
+await visit("#/inbox?show=todo", "1 comment");
+w.document.querySelector('#cm-list [data-act="reply"]').click();
+const ta = w.document.querySelector("#cm-list .cm-form textarea");
+assert.equal(ta.value, "@buyer_c1 ");
+ta.value += "It is ₹1.2 lakh";
+w.document.querySelector("#cm-list .cm-form").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+await wait(500);
+assert.deepEqual(sent[0], ["c1", "@buyer_c1 It is ₹1.2 lakh"]);
+console.log("✓ comments inbox: filter, reply");
 await visit("#/account?id=youtube-UC1", "No posts on this account yet");
 await visit("#/settings", "Redirect address");
 await visit("#/settings?missing=youtube", "Add the YouTube keys");

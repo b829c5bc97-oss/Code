@@ -92,6 +92,7 @@ const ICON = {
   chart: '<path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
 };
 function icon(name, size = 18, stroke = 2) {
@@ -146,6 +147,7 @@ const NAV = [
   ["/overview", "Overview", "grid"],
   ["/plan", "Weekly plan", "cal"],
   ["/create", "Create post", "plus"],
+  ["/inbox", "Comments", "chat"],
   ["/accounts", "Accounts", "link"],
   ["/insights", "Insights", "chart"],
   ["/settings", "Settings", "gear"],
@@ -240,7 +242,7 @@ async function render() {
     }
   }
   const { path, q } = parseHash();
-  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/insights": screenInsights, "/settings": screenSettings };
+  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/inbox": screenInbox, "/insights": screenInsights, "/settings": screenSettings };
   const fn = screens[path] || screenOverview;
   shell(path === "/account" ? "/accounts" : screens[path] ? path : "/overview");
   try {
@@ -944,7 +946,7 @@ async function screenAccount(q) {
   const P = d.profile || { name: a.name, handle: a.handle, avatar: a.avatar, bio: "", counts: [], link: "", linkLabel: "" };
   const L = ins?.latest;
   const kpis = L ? L.kpis : [];
-  const tab = q.get("tab") === "hq" ? "hq" : "posts";
+  const tab = ["hq", "audience"].includes(q.get("tab")) ? q.get("tab") : "posts";
   const tabLink = (t, label) => `<button type="button" class="${tab === t ? "on" : ""}" data-tab="${t}">${label}</button>`;
   main(`
     <div class="row"><a class="btn sm" href="#/accounts">← All accounts</a></div>
@@ -967,10 +969,20 @@ async function screenAccount(q) {
       ${d.error ? `<p class="note warn">Could not load live profile: ${esc(d.error)}</p>` : ""}
     </section>
     ${kpis.length ? `<section class="grid g-kpi">${kpis.map((k) => `<div class="kpi"><span class="l">${esc(k.label)}</span><span class="v">${esc(num(k.value))}</span><span class="s">${esc(k.period)}</span></div>`).join("")}</section>` : ""}
-    <div class="seg" role="tablist" style="align-self:flex-start">${tabLink("posts", "Posts on the account")}${tabLink("hq", `Planned in Social HQ (${d.hq.length})`)}</div>
+    <div class="seg" role="tablist" style="align-self:flex-start">${tabLink("posts", "Posts on the account")}${a.platform === "instagram" ? tabLink("audience", "Audience") : ""}${tabLink("hq", `Planned in Social HQ (${d.hq.length})`)}</div>
     <section id="acc-body"></section>`);
-  $$("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = `#/account?id=${encodeURIComponent(id)}${b.dataset.tab === "hq" ? "&tab=hq" : ""}`)));
+  $$("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = `#/account?id=${encodeURIComponent(id)}${b.dataset.tab !== "posts" ? `&tab=${b.dataset.tab}` : ""}`)));
   const body = $("#acc-body");
+  if (tab === "audience") {
+    body.innerHTML = `<p class="muted">Loading audience…</p>`;
+    try {
+      const au = await api("GET", `/api/accounts/${encodeURIComponent(id)}/audience`);
+      body.innerHTML = audienceHtml(au);
+    } catch (e) {
+      body.innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+    }
+    return;
+  }
   if (tab === "hq") {
     body.innerHTML = d.hq.length
       ? `<div class="card">${d.hq.map((p) => `<div class="list-row" style="grid-template-columns:150px minmax(0,1fr) auto">
@@ -1033,7 +1045,10 @@ async function screenAccount(q) {
     }
     try {
       const full = await api("GET", `/api/accounts/${encodeURIComponent(id)}/feed/${encodeURIComponent(p.id)}`);
-      if (document.body.contains(sheet)) sheet.querySelector(".sheet").innerHTML = postHtml(full);
+      if (document.body.contains(sheet)) {
+        sheet.querySelector(".sheet").innerHTML = postHtml(full);
+        loadPostComments(sheet, p.id);
+      }
     } catch (e) {
       sheet.querySelector(".sheet").innerHTML = postHtml({ ...p, media: p.thumb ? [{ kind: "image", url: p.thumb, thumb: p.thumb }] : [], stats: [], note: `Could not load the numbers: ${e.message}` });
     }
@@ -1050,10 +1065,181 @@ async function screenAccount(q) {
           ${x.note ? `<p class="note">${esc(x.note)}</p>` : ""}
           ${x.caption ? `<div class="stack" style="gap:6px"><h3>Caption</h3><p class="cap">${esc(x.caption)}</p></div>` : ""}
           ${x.url ? `<a class="btn sm" style="align-self:flex-start" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.linkLabel || "Open post")} ↗</a>` : ""}
+          ${a.platform === "instagram" ? `<div class="stack" style="gap:8px"><h3>Comments</h3><div class="post-cm" data-post="${esc(x.id)}"><p class="muted small">Loading comments…</p></div></div>` : ""}
         </div>
       </div>`;
   }
+  async function loadPostComments(sheet, postId) {
+    const holder = sheet.querySelector(".post-cm");
+    if (!holder) return;
+    try {
+      const r = await api("GET", `/api/accounts/${encodeURIComponent(id)}/feed/${encodeURIComponent(postId)}/comments`);
+      holder.innerHTML = r.comments.filter((c) => !c.mine).map((c) => commentHtml(c, id)).join("") || '<p class="muted small">No comments yet.</p>';
+      wireComments(holder, () => loadPostComments(sheet, postId));
+    } catch (e) {
+      holder.innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+    }
+  }
   await load();
+}
+
+function bars(rows, { total } = {}) {
+  const sum = total || rows.reduce((t, r) => t + r.value, 0) || 1;
+  const max = Math.max(...rows.map((r) => r.value), 1);
+  return `<div class="stack" style="gap:8px">${rows.map((r) => `<div class="barrow"><span class="bl">${esc(r.label)}</span><span class="bt"><span style="width:${Math.max(2, (r.value / max) * 100)}%"></span></span><span class="bv">${Math.round((r.value / sum) * 100)}%</span></div>`).join("")}</div>`;
+}
+function audienceHtml(au) {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const hourText = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+  let online = `<p class="muted">Instagram hasn't shared when your followers are online yet. It needs a few days of data and some followers.</p>`;
+  if (au.online?.grid) {
+    const g = au.online.grid;
+    const avg = Array.from({ length: 24 }, (_, h) => Math.round(g.reduce((t, row) => t + row[h], 0) / 7));
+    const peak = Math.max(...avg, 1);
+    const best = [];
+    g.forEach((row, d) => row.forEach((v, h) => best.push({ d, h, v })));
+    best.sort((x, y) => y.v - x.v);
+    const top = [];
+    for (const b of best) {
+      if (top.length >= 3) break;
+      if (top.some((t) => t.d === b.d && Math.abs(t.h - b.h) < 2)) continue;
+      top.push(b);
+    }
+    const allMax = Math.max(...best.map((b) => b.v), 1);
+    const scale = ["#F1F4FF", "#D6E0FF", "#A9BDFF", "#6F8DF7", "#2848E8"];
+    online = `<p style="font-size:14px">Most of your followers are online: <b>${top.map((t) => `${days[t.d]} ${hourText(t.h)}`).join(" · ")}</b>. Social HQ uses this for the perfect time to post.</p>
+      <div class="hours">${avg.map((v, h) => `<div class="hc" title="${hourText(h)} · about ${v} followers online"><span style="height:${Math.max(3, (v / peak) * 100)}%"></span><em>${h % 3 === 0 ? (h % 12 || 12) + (h < 12 ? "a" : "p") : ""}</em></div>`).join("")}</div>
+      <div class="tbl"><div class="heat" style="min-width:720px"><div class="hr" style="grid-template-columns:48px repeat(24,minmax(0,1fr))"><span></span>${avg.map((_, h) => `<span class="lbl">${h % 3 === 0 ? (h % 12 || 12) + (h < 12 ? "a" : "p") : ""}</span>`).join("")}</div>
+      ${g.map((row, d) => `<div class="hr" style="grid-template-columns:48px repeat(24,minmax(0,1fr))"><span style="font-size:12px;font-weight:600;color:var(--ink-2)">${days[d]}</span>${row.map((v, h) => `<span class="cell" title="${days[d]} ${hourText(h)} · about ${v} online" style="background:${scale[Math.min(4, Math.floor((v / allMax) * 4.999))]}"></span>`).join("")}</div>`).join("")}</div></div>
+      <p class="muted small">India time · average of the last ${au.online.days} days.</p>`;
+  }
+  const sec = (title, rows, empty) => `<section class="card"><h2>${title}</h2>${rows.length ? bars(rows) : `<p class="muted">${empty}</p>`}</section>`;
+  const why = au.note || "Not shared yet.";
+  return `<div class="stack" style="gap:16px">
+    <section class="card"><h2>When your followers are online</h2>${online}</section>
+    ${au.note ? `<p class="note">${esc(au.note)}</p>` : ""}
+    <div class="grid g-2">${sec("Age", au.age, why)}${sec("Men and women", au.gender, why)}${sec("Top cities", au.city, why)}${sec("Top countries", au.country, why)}</div>
+    <p class="muted small">Updated ${esc(whenText(au.at))}. Instagram refreshes these about once a day.</p>
+  </div>`;
+}
+
+// ---------- Comments (inbox + under each post) ----------
+function ago(iso) {
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return d < 30 ? `${d}d ago` : dayName(iso);
+}
+function commentHtml(c, accId, { showPost = false, isNew = false } = {}) {
+  const reply = (r) => `<div class="cm-reply ${r.hidden ? "is-hidden" : ""}"><b>${esc(r.username)}</b>${r.mine ? ' <span class="pill p-ok" style="padding:1px 7px">You</span>' : ""} <span class="muted small">${esc(ago(r.at))}</span><div class="cm-text">${esc(r.text)}</div></div>`;
+  return `<div class="cm ${c.hidden ? "is-hidden" : ""}" data-cid="${esc(c.id)}" data-acc="${esc(accId)}">
+    ${showPost && c.media ? `<a class="cm-post" href="${esc(c.media.url)}" target="_blank" rel="noopener" title="Open the post">${c.media.thumb ? `<img src="${esc(c.media.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span>${esc(c.media.type)}</span>`}</a>` : ""}
+    <div class="stack" style="gap:6px;min-width:0;flex:1">
+      <div class="row" style="gap:8px"><b>${esc(c.username || "someone")}</b><span class="muted small">${esc(ago(c.at))}${c.likes ? ` · ♥ ${esc(num(c.likes))}` : ""}</span>${isNew ? pill("scheduled", "New") : ""}${c.replied ? pill("ok", "Replied") : ""}${c.hidden ? pill("draft", "Hidden") : ""}</div>
+      <div class="cm-text">${esc(c.text)}</div>
+      ${showPost && c.media?.caption ? `<span class="muted small" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">On: ${esc(c.media.caption)}</span>` : ""}
+      ${c.replies.length ? `<div class="stack" style="gap:6px">${c.replies.map(reply).join("")}</div>` : ""}
+      <div class="row" style="gap:6px">
+        <button class="btn sm" type="button" data-act="reply">Reply</button>
+        <button class="btn sm" type="button" data-act="hide" data-hide="${c.hidden ? "0" : "1"}">${c.hidden ? "Unhide" : "Hide"}</button>
+        <button class="btn sm danger" type="button" data-act="delete">Delete</button>
+      </div>
+      <form class="cm-form" hidden><textarea name="message" rows="2" maxlength="2200" placeholder="Write a reply… (it starts with @${esc(c.username)})" style="min-height:70px"></textarea><div class="row" style="gap:6px"><button class="btn sm primary" type="submit">Send reply</button><button class="btn sm" type="button" data-act="cancel">Cancel</button></div></form>
+    </div>
+  </div>`;
+}
+function wireComments(root, onChange) {
+  root.onclick = async (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    const box = b.closest(".cm");
+    const acc = box.dataset.acc, cid = box.dataset.cid;
+    const form = box.querySelector(".cm-form");
+    if (b.dataset.act === "reply") {
+      form.hidden = false;
+      const ta = form.querySelector("textarea");
+      const user = box.querySelector("b")?.textContent || "";
+      if (!ta.value) ta.value = user ? `@${user} ` : "";
+      ta.focus();
+      return;
+    }
+    if (b.dataset.act === "cancel") { form.hidden = true; return; }
+    try {
+      if (b.dataset.act === "hide") {
+        b.disabled = true;
+        await api("POST", `/api/comments/${encodeURIComponent(acc)}/${encodeURIComponent(cid)}/hide`, { hide: b.dataset.hide === "1" });
+        toast(b.dataset.hide === "1" ? "Comment hidden" : "Comment visible again");
+      } else if (b.dataset.act === "delete") {
+        if (!confirm("Delete this comment from Instagram? This cannot be undone.")) return;
+        await api("DELETE", `/api/comments/${encodeURIComponent(acc)}/${encodeURIComponent(cid)}`);
+        toast("Comment deleted");
+      }
+      onChange && onChange();
+    } catch (err) {
+      b.disabled = false;
+      toast(err.message, true);
+    }
+  };
+  root.onsubmit = async (e) => {
+    const form = e.target.closest(".cm-form");
+    if (!form) return;
+    e.preventDefault();
+    const box = form.closest(".cm");
+    const message = form.querySelector("textarea").value.trim();
+    if (!message) return;
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    try {
+      await api("POST", `/api/comments/${encodeURIComponent(box.dataset.acc)}/${encodeURIComponent(box.dataset.cid)}/reply`, { message });
+      toast("Reply sent");
+      onChange && onChange();
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+      btn.textContent = "Send reply";
+    }
+  };
+}
+
+async function screenInbox(q) {
+  const d = await accounts();
+  const list = d.accounts.filter((a) => a.platform === "instagram");
+  const only = q.get("account");
+  const filter = q.get("show") || "all";
+  const link = (k, v) => { const p = new URLSearchParams(q); v ? p.set(k, v) : p.delete(k); return `#/inbox?${p}`; };
+  main(`
+    <header class="head"><div><p class="sub">Newest comments on your recent posts</p><h1>Comments</h1></div><button class="btn" id="cm-refresh" type="button">Refresh</button></header>
+    <div class="row" role="group" aria-label="Show">
+      <a class="chip ${filter === "all" ? "on" : ""}" href="${link("show", "")}">All</a>
+      <a class="chip ${filter === "todo" ? "on" : ""}" href="${link("show", "todo")}">Not replied yet</a>
+      <a class="chip ${filter === "new" ? "on" : ""}" href="${link("show", "new")}">New since last visit</a>
+    </div>
+    <div class="row" role="group" aria-label="Account"><a class="acc-chip ${!only ? "on" : ""}" style="text-decoration:none;color:inherit;padding-left:12px" href="${link("account", "")}">All accounts</a>${list.map((a) => `<a class="acc-chip ${only === a.id ? "on" : ""}" style="text-decoration:none;color:inherit" href="${link("account", a.id)}">${badge(a.platform, true)}${esc(a.handle || a.name)}</a>`).join("")}</div>
+    <p class="note">Facebook Page comments come next: Meta needs one more permission for them.</p>
+    <section class="card" id="cm-list"><p class="muted">Loading comments…</p></section>`);
+  $("#cm-refresh").onclick = () => render();
+  const targets = only ? list.filter((a) => a.id === only) : list;
+  const results = await Promise.all(targets.map((a) => api("GET", `/api/inbox/${encodeURIComponent(a.id)}`).catch((e) => ({ account: a, comments: [], error: e.message }))));
+  const box = $("#cm-list");
+  if (!box) return;
+  const rows = [];
+  const errors = [];
+  for (const r of results) {
+    if (r.error) errors.push(`${r.account.name}: ${r.error}`);
+    for (const c of r.comments) rows.push({ c, acc: r.account, isNew: !r.seenAt || c.at > r.seenAt });
+  }
+  rows.sort((x, y) => String(y.c.at).localeCompare(String(x.c.at)));
+  const shown = rows.filter((x) => (filter === "todo" ? !x.c.replied : filter === "new" ? x.isNew : true));
+  box.innerHTML = `${errors.length ? `<p class="note bad">${esc(errors.join(" · "))}</p>` : ""}
+    <div class="row between"><h2>${shown.length} comment${shown.length === 1 ? "" : "s"}</h2><span class="muted small">${rows.filter((x) => !x.c.replied).length} not replied · ${rows.filter((x) => x.isNew).length} new</span></div>
+    ${shown.map(({ c, acc, isNew }) => `<div class="cm-wrap"><a class="muted small" style="font-weight:700;text-decoration:none" href="#/account?id=${encodeURIComponent(acc.id)}">${badge(acc.platform, true).replace('class="badge', 'class="badge xs')} ${esc(acc.handle || acc.name)}</a>${commentHtml(c, acc.id, { showPost: true, isNew })}</div>`).join("") || `<p class="muted">${filter === "all" ? "No comments on your recent posts yet." : "Nothing here. You're all caught up."}</p>`}`;
+  wireComments(box, () => render());
+  // Mark as seen a moment after showing, so "New" badges stay visible on this visit.
+  setTimeout(() => api("POST", "/api/inbox/seen", { ids: targets.map((a) => a.id) }).catch(() => {}), 1500);
 }
 
 // ---------- Insights ----------

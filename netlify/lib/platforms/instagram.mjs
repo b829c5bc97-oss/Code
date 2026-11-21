@@ -251,7 +251,9 @@ export async function insights({ settings, account }) {
 
   const reach28 = t28.reach || 0;
   const inter28 = t28.total_interactions || 0;
+  const onlineHours = await online({ settings, account });
   return {
+    online: onlineHours,
     name: me.name || me.username,
     handle: me.username ? "@" + me.username : "",
     avatar: me.profile_picture_url || "",
@@ -400,4 +402,121 @@ export async function postDetail({ settings, account, postId }) {
     note: stats.length ? "" : "Instagram did not share numbers for this post (posts from before the account became a business account have none).",
     linkLabel: "Open on Instagram",
   };
+}
+
+// ---------- Comments: read, reply, hide, delete ----------
+const C_FIELDS = "id,text,username,timestamp,like_count,hidden,replies{id,text,username,timestamp,like_count,hidden}";
+
+function ownName(account) {
+  return String(account.meta?.username || account.handle || "").replace(/^@/, "").toLowerCase();
+}
+function shapeComment(c, account, media) {
+  const me = ownName(account);
+  const replies = (c.replies?.data || []).map((r) => ({ id: r.id, text: r.text || "", username: r.username || "", at: r.timestamp, likes: r.like_count || 0, hidden: !!r.hidden, mine: (r.username || "").toLowerCase() === me })).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  return {
+    id: c.id,
+    text: c.text || "",
+    username: c.username || "",
+    at: c.timestamp,
+    likes: c.like_count || 0,
+    hidden: !!c.hidden,
+    mine: (c.username || "").toLowerCase() === me,
+    replied: replies.some((r) => r.mine),
+    replies,
+    media,
+  };
+}
+
+export async function comments({ settings, account, postId }) {
+  const token = tokenOf(account);
+  const { data } = await call(`${base(settings)}/${encodeURIComponent(postId)}/comments?${qs({ fields: C_FIELDS, limit: 50, access_token: token })}`);
+  return (data.data || []).map((c) => shapeComment(c, account, null)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+// Newest comments across the account's recent posts (for the inbox).
+export async function recentComments({ settings, account, posts = 12 }) {
+  const token = tokenOf(account);
+  const { data } = await call(`${base(settings)}/${account.remoteId}/media?${qs({ fields: "id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count", limit: posts, access_token: token })}`);
+  const withComments = (data.data || []).filter((m) => (m.comments_count || 0) > 0);
+  const lists = await Promise.all(withComments.map(async (m) => {
+    const media = { id: m.id, type: igType(m), caption: (m.caption || "").slice(0, 120), url: m.permalink || "", thumb: m.thumbnail_url || (m.media_type !== "VIDEO" ? m.media_url : "") || "", at: m.timestamp };
+    try {
+      const { data: cs } = await call(`${base(settings)}/${m.id}/comments?${qs({ fields: C_FIELDS, limit: 50, access_token: token })}`);
+      return (cs.data || []).map((c) => shapeComment(c, account, media));
+    } catch (_) {
+      return [];
+    }
+  }));
+  return lists.flat().filter((c) => !c.mine).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+export async function replyComment({ settings, account, commentId, message }) {
+  const { data } = await call(`${base(settings)}/${encodeURIComponent(commentId)}/replies`, { method: "POST", form: { message, access_token: tokenOf(account) } });
+  return { id: data.id };
+}
+
+export async function hideComment({ settings, account, commentId, hide }) {
+  await call(`${base(settings)}/${encodeURIComponent(commentId)}`, { method: "POST", form: { hide: hide ? "true" : "false", access_token: tokenOf(account) } });
+  return { ok: true };
+}
+
+export async function deleteComment({ settings, account, commentId }) {
+  await call(`${base(settings)}/${encodeURIComponent(commentId)}?${qs({ access_token: tokenOf(account) })}`, { method: "DELETE" });
+  return { ok: true };
+}
+
+// ---------- Audience: who follows you and when they are online ----------
+// Meta gives online hours per US Pacific day (end_time = the next Pacific midnight);
+// turn them into India time, per weekday.
+export function onlineGrid(values) {
+  const sum = Array.from({ length: 7 }, () => Array(24).fill(0));
+  const cnt = Array.from({ length: 7 }, () => Array(24).fill(0));
+  let days = 0;
+  for (const v of values || []) {
+    const hours = v.value && typeof v.value === "object" ? v.value : null;
+    if (!hours || !Object.keys(hours).length || !v.end_time) continue;
+    days++;
+    // end_time is the end of the Pacific day the counts belong to.
+    const end = new Date(v.end_time);
+    const dayStartUtc = end.getTime() - 24 * 3600000; // Pacific midnight, in UTC ms
+    for (const [h, n] of Object.entries(hours)) {
+      const t = new Date(dayStartUtc + Number(h) * 3600000 + 330 * 60000); // shift to IST clock
+      const ist = new Date(t.getTime());
+      const dow = (ist.getUTCDay() + 6) % 7;
+      const hh = ist.getUTCHours();
+      sum[dow][hh] += Number(n) || 0;
+      cnt[dow][hh] += 1;
+    }
+  }
+  if (!days) return null;
+  const grid = sum.map((row, d) => row.map((s, h) => (cnt[d][h] ? Math.round(s / cnt[d][h]) : 0)));
+  return { grid, days };
+}
+
+async function breakdown(settings, account, by) {
+  const { data } = await call(`${base(settings)}/${account.remoteId}/insights?${qs({ metric: "follower_demographics", period: "lifetime", metric_type: "total_value", breakdown: by, access_token: tokenOf(account) })}`);
+  const rows = data.data?.[0]?.total_value?.breakdowns?.[0]?.results || [];
+  return rows.map((r) => ({ label: (r.dimension_values || []).join(", "), value: r.value || 0 })).sort((a, b) => b.value - a.value);
+}
+
+export async function online({ settings, account }) {
+  try {
+    const { data } = await call(`${base(settings)}/${account.remoteId}/insights?${qs({ metric: "online_followers", period: "lifetime", access_token: tokenOf(account) })}`);
+    return onlineGrid(data.data?.[0]?.values || []);
+  } catch (_) {
+    return null;
+  }
+}
+
+export async function audience({ settings, account }) {
+  const out = { age: [], gender: [], city: [], country: [], online: null, note: "" };
+  const [age, gender, city, country, on] = await Promise.all(["age", "gender", "city", "country"].map((b) => breakdown(settings, account, b).catch((e) => ({ error: e.message }))).concat([online({ settings, account })]));
+  const errs = [age, gender, city, country].filter((x) => x && x.error);
+  out.age = Array.isArray(age) ? age.sort((a, b) => a.label.localeCompare(b.label)) : [];
+  out.gender = Array.isArray(gender) ? gender.map((g) => ({ ...g, label: { F: "Women", M: "Men", U: "Not shared" }[g.label] || g.label })) : [];
+  out.city = Array.isArray(city) ? city.slice(0, 10) : [];
+  out.country = Array.isArray(country) ? country.slice(0, 10) : [];
+  out.online = on;
+  if (errs.length === 4 || (!out.age.length && !out.city.length)) out.note = "Instagram shows follower details (age, gender, cities) only once an account has 100 followers.";
+  return out;
 }
