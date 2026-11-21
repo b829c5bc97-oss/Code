@@ -1,5 +1,6 @@
-// LinkedIn: your personal profile (Share on LinkedIn, self-serve) and, once LinkedIn approves
-// the Community Management API, company pages such as LIFTLINE. Logins last 60 days.
+// LinkedIn: company pages such as LIFTLINE (Community Management API). With "Company pages only"
+// on (the default) Social HQ never asks for or posts to the personal profile.
+// With it off, the personal profile (Share on LinkedIn, self-serve) is added too. Logins last 60 days.
 
 import { call, qs, captionFor, waitFor, PlatformError } from "./common.mjs";
 import { tokenOf } from "../accounts.mjs";
@@ -15,9 +16,16 @@ function headers(settings, token, extra = {}) {
   };
 }
 
-function scopes(settings) {
+const ORG_SCOPES = ["w_organization_social", "r_organization_social", "rw_organization_admin"];
+
+export function pagesOnly(settings) {
+  return settings.linkedin.pagesOnly !== false;
+}
+
+export function scopes(settings) {
+  if (pagesOnly(settings)) return ORG_SCOPES.join(" ");
   const s = ["openid", "profile", "email", "w_member_social"];
-  if (settings.linkedin.orgAccess) s.push("w_organization_social", "r_organization_social", "rw_organization_admin");
+  if (settings.linkedin.orgAccess) s.push(...ORG_SCOPES);
   return s.join(" ");
 }
 
@@ -39,9 +47,11 @@ export async function callback({ settings, redirectUri, code }) {
   });
   const token = tok.access_token;
   const exp = new Date(Date.now() + (tok.expires_in || 5184000) * 1000).toISOString();
-  const { data: me } = await call("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${token}` } });
-  const out = [
-    {
+  const out = [];
+  const onlyPages = pagesOnly(settings);
+  if (!onlyPages) {
+    const { data: me } = await call("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${token}` } });
+    out.push({
       platform: "linkedin",
       kind: "li_member",
       remoteId: me.sub,
@@ -53,9 +63,9 @@ export async function callback({ settings, redirectUri, code }) {
       tokenExpiresAt: exp,
       refreshExpiresAt: tok.refresh_token_expires_in ? new Date(Date.now() + tok.refresh_token_expires_in * 1000).toISOString() : null,
       meta: { urn: `urn:li:person:${me.sub}`, isOrg: false },
-    },
-  ];
-  if (s.orgAccess) {
+    });
+  }
+  if (onlyPages || s.orgAccess) {
     try {
       const { data: acls } = await call(`${API}/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED`, { headers: headers(settings, token) });
       for (const el of acls.elements || []) {
@@ -83,8 +93,10 @@ export async function callback({ settings, redirectUri, code }) {
         });
       }
     } catch (e) {
+      if (onlyPages) throw new PlatformError(`LinkedIn did not share your Company Pages (${e.message}). LinkedIn must first approve the Community Management API for this app, and you must be an admin of the page.`);
       // Not approved for company pages yet: keep the personal profile.
     }
+    if (onlyPages && !out.length) throw new PlatformError("No LinkedIn Company Page found. Log in with the LinkedIn account that is an admin of the LIFTLINE page.");
   }
   return out;
 }

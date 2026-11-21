@@ -13,7 +13,7 @@ export const SECTIONS = {
   facebook: { label: "Facebook Pages (same Meta app)", fields: { appId: {}, appSecret: { secret: true }, configId: {} } },
   linkedin: {
     label: "LinkedIn",
-    fields: { clientId: {}, clientSecret: { secret: true }, orgAccess: { bool: true }, version: {} },
+    fields: { clientId: {}, clientSecret: { secret: true }, pagesOnly: { bool: true }, orgAccess: { bool: true }, version: {} },
   },
   youtube: { label: "YouTube (Google Cloud)", fields: { clientId: {}, clientSecret: { secret: true } } },
   pinterest: { label: "Pinterest", fields: { appId: {}, appSecret: { secret: true }, sandbox: { bool: true } } },
@@ -24,7 +24,7 @@ export const SECTIONS = {
 };
 
 const DEFAULTS = {
-  linkedin: { version: "202608", orgAccess: false },
+  linkedin: { version: "202608", orgAccess: false, pagesOnly: true },
   pinterest: { sandbox: true },
   claude: { requireApproval: false },
   alerts: { loginDays: "7" },
