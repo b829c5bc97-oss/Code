@@ -195,3 +195,6 @@ a.chip.on { color: #fff; }
   .list-row { grid-template-columns: 64px 30px minmax(0, 1fr); }
   .list-row > :last-child { grid-column: 3; justify-self: start; }
 }
+
+/* The hidden attribute must win over display rules on classes like .f and .note */
+[hidden] { display: none !important; }
