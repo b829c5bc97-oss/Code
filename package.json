@@ -1,0 +1,16 @@
+{
+  "name": "social-hq",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pratham's own social media scheduler: schedule posts and see insights for Instagram, Facebook Pages, LinkedIn, YouTube and Pinterest.",
+  "type": "module",
+  "scripts": {
+    "test": "HQ_LOCAL=1 MASTER_KEY=local-test-master-key-123 SETUP_CODE=123456 node test/local.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

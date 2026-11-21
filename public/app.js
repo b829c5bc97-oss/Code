@@ -1,0 +1,1013 @@
+// Social HQ — the app in your browser. Plain JavaScript, no build step.
+// All times are shown in India time (Asia/Kolkata).
+
+const TZ = "Asia/Kolkata";
+const IST_MIN = 330;
+const PLATFORM = {
+  instagram: { label: "IG", name: "Instagram" },
+  facebook: { label: "FB", name: "Facebook" },
+  linkedin: { label: "in", name: "LinkedIn" },
+  youtube: { label: "YT", name: "YouTube" },
+  pinterest: { label: "P", name: "Pinterest" },
+  manual: { label: "FB", name: "Facebook profile" },
+  unknown: { label: "?", name: "Removed" },
+};
+const STATUS_TEXT = {
+  draft: "Draft", needs_ok: "Needs your OK", scheduled: "Scheduled", publishing: "Going out…", done: "Posted",
+  partial: "Partly posted", failed: "Failed", reminder: "Reminder", posted: "Posted", pending: "Waiting",
+  ok: "Auto-post", error: "Reconnect needed", expired: "Login ended", expiring: "Log in again soon",
+};
+const TYPES = [
+  ["post", "Post"], ["reel", "Reel"], ["carousel", "Carousel"], ["story", "Story"], ["short", "Short"], ["pin", "Pin"],
+];
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const app = $("#app");
+const state = { authed: false, accounts: null };
+
+// ---------- helpers ----------
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function num(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (Math.abs(n) >= 100000) return (n / 1000).toFixed(0) + "K";
+  if (Math.abs(n) >= 10000) return (n / 1000).toFixed(1) + "K";
+  return Number(n).toLocaleString("en-IN");
+}
+function signed(n) {
+  if (n === null || n === undefined) return "—";
+  return (n > 0 ? "+" : n < 0 ? "−" : "") + num(Math.abs(n));
+}
+function pct(x) {
+  return x === null || x === undefined ? "—" : (x * 100).toFixed(1) + "%";
+}
+function istKey(d) {
+  return new Date(new Date(d).getTime() + IST_MIN * 60000).toISOString().slice(0, 10);
+}
+function istHM(d) {
+  return new Date(new Date(d).getTime() + IST_MIN * 60000).toISOString().slice(11, 16);
+}
+function fromIST(dateKey, hm) {
+  const [y, m, dd] = dateKey.split("-").map(Number);
+  const [h, mi] = hm.split(":").map(Number);
+  return new Date(Date.UTC(y, m - 1, dd, h, mi) - IST_MIN * 60000).toISOString();
+}
+function addDays(key, n) {
+  const d = new Date(key + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const fmt = (opts) => new Intl.DateTimeFormat("en-IN", { timeZone: TZ, ...opts });
+function time(iso) {
+  return fmt({ hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)).toUpperCase().replace(/\s+/g, " ");
+}
+function dayName(iso) {
+  return fmt({ weekday: "short", day: "numeric", month: "short" }).format(new Date(iso));
+}
+function whenText(iso) {
+  if (!iso) return "No time set";
+  const today = istKey(new Date());
+  const k = istKey(iso);
+  const day = k === today ? "Today" : k === addDays(today, 1) ? "Tomorrow" : k === addDays(today, -1) ? "Yesterday" : dayName(iso);
+  return `${day} · ${time(iso)}`;
+}
+function longDate(d = new Date()) {
+  return fmt({ weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(d);
+}
+function badge(platform, sm = false) {
+  const p = PLATFORM[platform] || PLATFORM.unknown;
+  return `<span class="badge b-${esc(platform)}${sm ? " sm" : ""}" title="${esc(p.name)}">${esc(p.label)}</span>`;
+}
+function pill(status, text) {
+  return `<span class="pill p-${esc(status)}">${esc(text || STATUS_TEXT[status] || status)}</span>`;
+}
+const ICON = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  cal: '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  plus: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
+  chart: '<path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
+};
+function icon(name, size = 18, stroke = 2) {
+  return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
+}
+let toastTimer;
+function toast(msg, bad = false) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ""), bad ? 6000 : 3000);
+}
+function parseHash() {
+  const h = location.hash.slice(1) || "/overview";
+  const [path, q] = h.split("?");
+  return { path: path || "/overview", q: new URLSearchParams(q || "") };
+}
+function go(hash) {
+  if (location.hash === hash) render();
+  else location.hash = hash;
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {}, credentials: "same-origin" };
+  if (body !== undefined) {
+    opts.headers["content-type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) { /* no body */ }
+  if (res.status === 401) {
+    state.authed = false;
+    renderAuth(data?.code === "setup" ? "setup" : "login");
+    throw new Error(data?.error || "Please log in.");
+  }
+  if (!res.ok) throw Object.assign(new Error(data?.error || `Something went wrong (${res.status}).`), { data });
+  return data;
+}
+
+async function accounts(force = false) {
+  if (!state.accounts || force) state.accounts = await api("GET", "/api/accounts");
+  return state.accounts;
+}
+
+// ---------- shell ----------
+const NAV = [
+  ["/overview", "Overview", "grid"],
+  ["/plan", "Weekly plan", "cal"],
+  ["/create", "Create post", "plus"],
+  ["/accounts", "Accounts", "link"],
+  ["/insights", "Insights", "chart"],
+  ["/settings", "Settings", "gear"],
+];
+function shell(active) {
+  app.innerHTML = `
+  <div class="shell">
+    <nav class="side" aria-label="Main menu">
+      <div class="brandmark"><div class="logo">${icon("clock", 18, 2.2).replace('stroke="currentColor"', 'stroke="#fff"')}</div><span>Social HQ</span></div>
+      <div class="nav">${NAV.map(([p, l, i]) => `<a href="#${p}" class="${active === p ? "on" : ""}" ${active === p ? 'aria-current="page"' : ""}>${icon(i)}${l}</a>`).join("")}</div>
+      <div class="side-foot">
+        <div class="side-card" id="side-count"><span>Connected</span><b>…</b></div>
+        <div class="who"><span>Pratham Bansal</span><button id="logout" type="button">Log out</button></div>
+      </div>
+    </nav>
+    <main class="main" id="main"><p class="muted">Loading…</p></main>
+  </div>`;
+  $("#logout").onclick = async () => {
+    await api("POST", "/api/auth/logout");
+    state.authed = false;
+    renderAuth("login");
+  };
+  accounts().then((d) => {
+    const c = {};
+    for (const a of d.accounts) c[a.platform] = (c[a.platform] || 0) + 1;
+    const parts = Object.entries(c).map(([p, n]) => `${n} ${PLATFORM[p].name}`).join(" · ");
+    const el = $("#side-count");
+    if (el) el.innerHTML = `<span>Connected</span><b>${d.accounts.length} account${d.accounts.length === 1 ? "" : "s"}</b><span>${esc(parts || "None yet")}</span>`;
+  }).catch(() => {});
+}
+function main(html) {
+  const m = $("#main");
+  if (m) m.innerHTML = html;
+  return m;
+}
+
+// ---------- auth screens ----------
+function renderAuth(mode) {
+  const setup = mode === "setup";
+  app.innerHTML = `
+  <div class="center"><div class="card login">
+    <div class="brandmark" style="padding:0"><div class="logo">${icon("clock", 18, 2.2).replace('stroke="currentColor"', 'stroke="#fff"')}</div><span style="color:var(--ink)">Social HQ</span></div>
+    <h1 style="font-size:24px">${setup ? "First-time setup" : "Log in"}</h1>
+    <p class="muted">${setup ? "Enter the setup code from Claude, then choose your own password." : "Your private social media scheduler."}</p>
+    <form id="auth-form" class="stack">
+      ${setup ? '<label class="f">Setup code<input type="text" name="code" autocomplete="one-time-code" required></label>' : ""}
+      <label class="f">${setup ? "Choose a password (8+ characters)" : "Password"}<input type="password" name="password" autocomplete="${setup ? "new-password" : "current-password"}" required minlength="${setup ? 8 : 1}"></label>
+      <button class="btn primary" type="submit">${setup ? "Save and open Social HQ" : "Log in"}</button>
+      <p class="note bad" id="auth-err" hidden></p>
+    </form>
+  </div></div>`;
+  $("#auth-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await api("POST", setup ? "/api/auth/setup" : "/api/auth/login", Object.fromEntries(f));
+      state.authed = true;
+      render();
+    } catch (err) {
+      const el = $("#auth-err");
+      if (el) {
+        el.hidden = false;
+        el.textContent = err.message;
+      }
+    }
+  };
+}
+
+// ---------- router ----------
+async function render() {
+  if (!state.authed) {
+    try {
+      const s = await fetch("/api/auth/state", { credentials: "same-origin" }).then((r) => r.json());
+      if (!s.setupDone) return renderAuth("setup");
+      if (!s.loggedIn) return renderAuth("login");
+      state.authed = true;
+    } catch (e) {
+      app.innerHTML = `<div class="center"><p class="note bad">Could not reach Social HQ: ${esc(e.message)}</p></div>`;
+      return;
+    }
+  }
+  const { path, q } = parseHash();
+  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/insights": screenInsights, "/settings": screenSettings };
+  const fn = screens[path] || screenOverview;
+  shell(screens[path] ? path : "/overview");
+  try {
+    await fn(q);
+  } catch (e) {
+    if (state.authed) main(`<p class="note bad">${esc(e.message)}</p>`);
+  }
+}
+window.addEventListener("hashchange", render);
+
+// ---------- Overview ----------
+async function screenOverview(q) {
+  const d = await api("GET", "/api/overview");
+  const k = d.kpis;
+  const counts = Object.entries(k.counts).map(([p, n]) => `${n} ${PLATFORM[p].name}`).join(" · ") || "None yet";
+  const kpis = [
+    ["Accounts connected", k.accounts, `${k.auto} auto-post · ${k.reminderOnly} reminder only`],
+    ["Scheduled this week", k.scheduledThisWeek, `${dayName(fromIST(k.weekFrom, "12:00"))} – ${dayName(fromIST(addDays(k.weekFrom, 6), "12:00"))}`],
+    ["Waiting for your OK", k.needsOk, k.needsOk ? "Approve them on the plan" : "Nothing waiting"],
+    ["Reach, last 7 days", k.reach7 === null ? "—" : num(k.reach7), k.reach7 === null ? "Fills in after the first insights run" : "All accounts together"],
+    ["New followers, 7 days", k.newFollowers7 === null ? "—" : signed(k.newFollowers7), k.newFollowers7 === null ? "Needs a week of history" : "All accounts together"],
+  ];
+  const todayRows = d.today_posts.length
+    ? d.today_posts.map((p) => {
+        const plats = [...new Set(p.accounts.map((a) => a.platform))];
+        const names = p.accounts.map((a) => a.name).join(", ");
+        return `<div class="list-row">
+          <span class="t">${esc(time(p.scheduledAt))}</span>
+          ${badge(plats[0] || "unknown")}
+          <div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(names)}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>
+          <a class="pill p-${esc(p.status)}" style="text-decoration:none" href="#/create?id=${esc(p.id)}">${esc(STATUS_TEXT[p.status] || p.status)}</a>
+        </div>`;
+      }).join("")
+    : `<p class="muted">Nothing goes out today. <a href="#/create">Create a post</a>.</p>`;
+  const attention = d.attention.length
+    ? d.attention.map((a) => `<div class="alert"><div class="ic">${icon("alert", 16, 2.2)}</div><div class="stack" style="gap:4px;min-width:0"><b style="font-size:14px">${esc(a.title)}</b>${a.detail ? `<span class="muted">${esc(a.detail)}</span>` : ""}<a href="${esc(a.href)}" style="font-size:13px;font-weight:700;text-decoration:none">${esc(a.action)} →</a></div></div>`).join("")
+    : `<p class="muted">All clear.</p>`;
+  const reminders = d.reminders.length
+    ? `<section class="card" id="reminders"><h2>Post these by hand</h2><p class="muted">Facebook doesn't let any app post to personal profiles. Copy the caption, download the photo or video, post it, then tick it off.</p>
+      ${d.reminders.map((r, i) => `<div class="file-row" style="align-items:flex-start;flex-wrap:wrap">
+        <div class="stack" style="gap:6px;flex:1 1 260px;min-width:0"><b>${esc(r.accountName)} · ${esc(whenText(r.post.scheduledAt))}</b><span class="muted" style="white-space:pre-wrap">${esc(r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || "")}</span></div>
+        <div class="row"><button class="btn sm" data-copy="${i}" type="button">Copy caption</button>${r.post.mediaDeleted ? "" : r.post.media.map((m) => `<button class="btn sm" data-dl="${esc(m.id)}" data-name="${esc(m.name)}" type="button">Download ${esc(m.kind)}</button>`).join("")}<button class="btn sm primary" data-done="${esc(r.post.id)}" data-acc="${esc(r.accountId)}" type="button">Mark as posted</button></div>
+      </div>`).join("")}</section>`
+    : "";
+  const rows = d.accounts.map((a) => `<tr>
+      <td><div class="acc-cell">${badge(a.platform, true)}<div><div class="n">${esc(a.name)}</div><div class="h">${esc(a.handle || PLATFORM[a.platform].name)}</div></div></div></td>
+      <td><b>${a.platform === "manual" ? "—" : num(a.followers)}</b></td>
+      <td>${a.platform === "manual" ? "—" : num(a.reach7)}</td>
+      <td class="${a.change7 > 0 ? "up" : a.change7 < 0 ? "down" : ""}">${signed(a.change7)}</td>
+      <td>${spark(a.spark)}</td>
+      <td class="muted">${a.nextAt ? esc(whenText(a.nextAt)) : "Nothing planned"}</td>
+      <td>${a.status === "ok" || a.status === "reminder" ? "" : pill(a.status)}</td>
+    </tr>`).join("");
+  main(`
+    <header class="head"><div><p class="sub">${esc(longDate())}</p><h1>Overview</h1></div>
+      <div class="row"><a class="btn" href="#/plan">Open weekly plan</a><a class="btn primary" href="#/create">+ Create post</a></div></header>
+    <section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>
+    <div class="grid g-2">
+      <section class="card"><div class="row between"><h2>Today · ${d.today_posts.length} post${d.today_posts.length === 1 ? "" : "s"}</h2></div><div>${todayRows}</div><a href="#/plan" style="font-size:14px;font-weight:600;text-decoration:none">See the full week →</a></section>
+      <section class="card"><h2>Needs your attention</h2>${attention}</section>
+    </div>
+    ${reminders}
+    <section class="card"><div class="row between"><h2>All accounts · last 7 days</h2><a href="#/insights" style="font-size:14px;font-weight:600;text-decoration:none">Open insights →</a></div>
+      ${d.accounts.length ? `<div class="tbl"><table><thead><tr><th>Account</th><th>Followers</th><th>Reach / views</th><th>Followers +/−</th><th>Trend</th><th>Next post</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="muted">No accounts yet. <a href="#/accounts">Connect your accounts</a>.</p>`}
+      <p class="muted small">${esc(counts)}</p></section>`);
+  bindReminders(d.reminders);
+  if (q.get("reminders") && $("#reminders")) $("#reminders").scrollIntoView?.();
+}
+function typeLabel(t) {
+  return (TYPES.find((x) => x[0] === t) || [t, t])[1];
+}
+function spark(arr) {
+  if (!arr || arr.length < 2) return '<span class="muted small">—</span>';
+  const min = Math.min(...arr), max = Math.max(...arr), span = max - min || 1;
+  const pts = arr.map((v, i) => `${Math.round(i * (118 / (arr.length - 1))) + 1},${Math.round(30 - ((v - min) / span) * 26)}`).join(" ");
+  const up = arr[arr.length - 1] >= arr[0];
+  return `<svg role="img" aria-label="Trend" width="120" height="32" viewBox="0 0 120 32"><polyline points="${pts}" fill="none" stroke="${up ? "#2848E8" : "#9AA1AE"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function bindReminders(list) {
+  $$("[data-copy]").forEach((b) => (b.onclick = async () => {
+    const r = list[Number(b.dataset.copy)];
+    await navigator.clipboard.writeText(r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || "");
+    toast("Caption copied");
+  }));
+  $$("[data-dl]").forEach((b) => (b.onclick = () => download(b.dataset.dl, b.dataset.name, b)));
+  $$("[data-done]").forEach((b) => (b.onclick = async () => {
+    await api("POST", `/api/posts/${b.dataset.done}/done/${b.dataset.acc}`);
+    toast("Marked as posted");
+    render();
+  }));
+}
+async function download(id, name, btn) {
+  const old = btn.textContent;
+  btn.textContent = "Downloading…";
+  try {
+    const meta = await api("GET", `/api/media/${id}`);
+    const parts = [];
+    for (let i = 0; i < meta.chunks; i++) {
+      const r = await fetch(`/api/media/${id}/part/${i}`, { credentials: "same-origin" });
+      if (!r.ok) throw new Error("Download failed");
+      parts.push(await r.blob());
+      btn.textContent = `Downloading ${Math.round(((i + 1) / meta.chunks) * 100)}%`;
+    }
+    const url = URL.createObjectURL(new Blob(parts, { type: meta.mime }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name || meta.name || "file";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.textContent = old;
+  }
+}
+
+// ---------- Weekly plan ----------
+async function screenPlan(q) {
+  const from = q.get("from") || istKey(new Date());
+  const brand = q.get("brand") || "All";
+  const d = await api("GET", `/api/plan?from=${encodeURIComponent(from)}&brand=${encodeURIComponent(brand)}`);
+  const today = istKey(new Date());
+  const link = (f, b) => `#/plan?from=${f}&brand=${encodeURIComponent(b)}`;
+  const counts = Object.entries(d.counts).map(([p, n]) => `<span class="chip" style="cursor:default;padding-left:5px">${badge(p, true)}${n} on ${esc(PLATFORM[p].name)}</span>`).join("");
+  const gapRow = (g) => `<div class="gap-row"><span class="muted">${esc(g.name)} (${esc(PLATFORM[g.platform].name)}): ${g.have} of ${g.want} this week</span>${g.slot ? `<a class="btn sm orange" href="#/create?account=${esc(g.accountId)}&at=${encodeURIComponent(g.slot)}">Add ${esc(whenText(g.slot))}</a>` : ""}</div>`;
+  const gaps = d.gaps.length
+    ? d.gaps.slice(0, 4).map(gapRow).join("") + (d.gaps.length > 4 ? `<details><summary class="link small" style="cursor:pointer">${d.gaps.length - 4} more gaps</summary><div class="stack" style="gap:10px;margin-top:10px">${d.gaps.slice(4).map(gapRow).join("")}</div></details>` : "") + `<p class="muted small">Each button opens a new post at that account's next perfect time.</p>`
+    : `<p class="muted">No gaps. Set a weekly target per account on the Accounts screen and gaps show here.</p>`;
+  const days = d.days.map((day) => {
+    const posts = day.posts.map((p) => {
+      const plats = [...new Set(p.accounts.map((a) => a.platform))];
+      const brands = [...new Set(p.accounts.map((a) => a.brand))].join(", ");
+      return `<a class="post-card ${p.best ? "best" : ""}" href="#/create?id=${esc(p.id)}" style="text-decoration:none;color:inherit">
+        <div class="row between" style="gap:6px"><span class="pt">${esc(time(p.scheduledAt))}</span><span class="row" style="gap:3px">${plats.map((x) => badge(x, true)).join("")}</span></div>
+        <span class="pb">${esc(brands)} · ${esc(typeLabel(p.type))}</span>
+        <span class="pc">${esc(p.caption || p.title || "(no caption)")}</span>
+        ${pill(p.status)}
+      </a>`;
+    }).join("");
+    return `<div class="day ${day.date === today ? "today" : ""}">
+      <div class="day-head"><div class="row between"><span class="display" style="font-size:17px;font-weight:700">${esc(dayName(fromIST(day.date, "12:00")))}</span><span class="muted small">${day.posts.length} post${day.posts.length === 1 ? "" : "s"}</span></div>
+      ${day.perfect ? `<span class="perfect">${icon("clock", 12, 2.6)} Perfect ${esc(time(day.perfect))}</span>` : ""}</div>
+      ${posts || `<p class="muted small" style="padding:4px">Nothing planned.</p>`}
+      <a class="link small" href="#/create?date=${day.date}" style="font-size:12px;padding:4px">+ Add</a>
+    </div>`;
+  }).join("");
+  const drafts = d.drafts.length ? `<section class="card"><h2>Drafts · no time set yet</h2>${d.drafts.map((p) => `<a href="#/create?id=${esc(p.id)}" class="row" style="text-decoration:none;color:inherit;border-top:1px solid var(--line-2);padding-top:10px">${[...new Set(p.accounts.map((a) => a.platform))].map((x) => badge(x, true)).join("")}<span style="font-weight:600">${esc(p.accounts.map((a) => a.name).join(", ") || "No account")}</span><span class="muted">${esc((p.caption || "").slice(0, 80))}</span></a>`).join("")}</section>` : "";
+  main(`
+    <header class="head"><div><p class="sub">What goes out, on which day, at what time</p><h1>Weekly plan</h1></div>
+      <div class="row">
+        <div class="row" style="gap:4px;background:#fff;border:1px solid #D9DCE3;border-radius:10px;padding:3px">
+          <a class="btn sm" style="border:0" href="${link(addDays(d.weekFrom, -7), brand)}" aria-label="Previous week">‹</a>
+          <span style="font-size:14px;font-weight:600;padding:0 8px">${esc(dayName(fromIST(d.weekFrom, "12:00")))} – ${esc(dayName(fromIST(d.weekTo, "12:00")))}</span>
+          <a class="btn sm" style="border:0" href="${link(addDays(d.weekFrom, 7), brand)}" aria-label="Next week">›</a>
+        </div>
+        <a class="btn sm" href="${link(today, brand)}">This week</a>
+        <a class="btn primary" href="#/create">+ Create post</a>
+      </div></header>
+    <div class="row" role="group" aria-label="Show brand">${["All", ...d.brands].map((b) => `<a class="chip ${b === brand ? "on" : ""}" style="text-decoration:none" href="${link(d.weekFrom, b)}">${esc(b === "All" ? "All brands" : b)}</a>`).join("")}</div>
+    <div class="grid g-2">
+      <section class="card tight"><div class="row between"><h3>${esc(brand === "All" ? "All brands" : brand)} · ${d.total} post${d.total === 1 ? "" : "s"} this week</h3><span class="muted small">${d.perfectCount} of ${d.total} at a perfect time</span></div><div class="row">${counts || '<span class="muted">Nothing scheduled yet.</span>'}</div></section>
+      <section class="card tight"><h3>Gaps this week</h3>${gaps}</section>
+    </div>
+    <section class="grid g-week" aria-label="Week">${days}</section>
+    ${drafts}
+    <section class="card"><h2>Perfect times, by platform</h2><p class="muted">Learned from when your own followers react most. Until there's enough data (about 3 weeks of posts) Social HQ starts with these and keeps adjusting per account.</p>
+      <div class="grid g-3">${Object.entries(d.windows).filter(([p]) => p !== "manual").map(([p, w]) => `<div class="row" style="align-items:flex-start;background:#FAFAFB;border:1px solid var(--line-2);border-radius:12px;padding:12px">${badge(p)}<div class="stack" style="gap:3px"><b style="font-size:13px">${esc(PLATFORM[p].name)}</b><span style="font-size:13px;font-weight:600;color:var(--orange)">${esc(w)}</span></div></div>`).join("")}</div></section>`);
+}
+
+// ---------- Create / edit post ----------
+let C = null;
+function blankPost() {
+  return { id: null, accountIds: [], type: "post", caption: "", captions: {}, title: "", link: "", boardIds: {}, firstComment: "", alsoStory: false, aiGenerated: false, ytPrivacy: "public", ytMadeForKids: false, media: [], needsApproval: false, date: "", time: "", slot: -1, suggestions: [], tab: "all", status: null, targets: {}, uploading: 0 };
+}
+
+async function screenCreate(q) {
+  const acc = await accounts(true);
+  C = blankPost();
+  let readOnly = false;
+  if (q.get("id")) {
+    const p = await api("GET", `/api/posts/${q.get("id")}`);
+    Object.assign(C, {
+      id: p.id, accountIds: p.accountIds, type: p.type, caption: p.caption, captions: p.captions || {}, title: p.title, link: p.link, boardIds: p.boardIds || {},
+      firstComment: p.firstComment, alsoStory: p.alsoStory, aiGenerated: p.aiGenerated, ytPrivacy: p.ytPrivacy, ytMadeForKids: p.ytMadeForKids,
+      media: p.media, needsApproval: p.needsApproval && !p.approvedAt, status: p.status, targets: p.targets || {}, mediaDeleted: p.mediaDeleted,
+      date: p.scheduledAt ? istKey(p.scheduledAt) : "", time: p.scheduledAt ? istHM(p.scheduledAt) : "",
+    });
+    readOnly = ["publishing", "done", "reminder"].includes(p.status);
+  } else {
+    if (q.get("account")) C.accountIds = [q.get("account")];
+    if (q.get("at")) {
+      C.date = istKey(q.get("at"));
+      C.time = istHM(q.get("at"));
+    }
+    if (q.get("date")) C.date = q.get("date");
+  }
+  if (!acc.accounts.length) {
+    main(`<header class="head"><h1>Create post</h1></header><section class="card"><p>Connect at least one account first.</p><a class="btn primary" href="#/accounts" style="align-self:flex-start">Go to Accounts</a></section>`);
+    return;
+  }
+  const byBrand = {};
+  for (const a of acc.accounts) (byBrand[a.brand] = byBrand[a.brand] || []).push(a);
+
+  main(`
+    <header class="head"><div><p class="sub">${C.id ? "Edit a post" : "One post, many accounts — each at its perfect time"}</p><h1>${C.id ? "Post" : "Create post"}</h1></div>
+      ${C.id ? `<div class="row">${pill(C.status)}</div>` : ""}</header>
+    <div id="c-status"></div>
+    <div class="grid g-2">
+      <div class="stack">
+        <section class="card"><div class="row between"><h2>1. Post to</h2><span id="c-count" style="font-size:13px;font-weight:600;color:var(--blue)"></span></div><div id="c-accounts" class="stack" style="gap:10px"></div></section>
+        <section class="card"><h2>2. What kind of post</h2><div class="row" id="c-type" role="group" aria-label="Post type"></div><p class="muted small" id="c-type-note"></p></section>
+        <section class="card"><h2>3. Photo, video and caption</h2>
+          <div id="c-media" class="stack" style="gap:10px"></div>
+          <label class="drop" id="c-drop"><input type="file" id="c-file" accept="image/*,video/*" multiple class="sr">Click to add photos or a video (or drop them here)</label>
+          <div class="row between"><label for="c-caption" style="font-size:13px;font-weight:700">Caption</label><div class="seg" id="c-tabs" role="group" aria-label="Edit caption for"></div></div>
+          <textarea id="c-caption" rows="7"></textarea>
+          <div class="row between muted small"><span id="c-cap-note">Same caption for every account. Use the tabs to change it for one platform.</span><span id="c-len"></span></div>
+          <div id="c-extra" class="stack" style="gap:12px"></div>
+          <div class="grid g-3" style="gap:8px" id="c-opts"></div>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="card"><div class="stack" style="gap:4px"><h2>4. When to post</h2><p class="muted">Perfect times for the accounts you picked, from when their followers react most.</p></div>
+          <div id="c-slots" class="stack" style="gap:8px" role="radiogroup" aria-label="Suggested times"></div>
+          <div class="grid g-3" style="gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr))">
+            <label class="f">Or pick a date<input type="date" id="c-date"></label>
+            <label class="f">and time (India)<input type="time" id="c-time" step="300"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="c-ok"> Ask me before it goes out</label>
+          <div id="c-warn"></div>
+          <div class="stack" style="gap:8px" id="c-actions"></div>
+        </section>
+        <section class="card"><h2>Preview</h2><div id="c-preview"></div></section>
+      </div>
+    </div>`);
+
+  // static bindings
+  const cap = $("#c-caption");
+  cap.oninput = () => {
+    if (C.tab === "all") C.caption = cap.value;
+    else if (cap.value.trim()) C.captions[C.tab] = cap.value;
+    else delete C.captions[C.tab];
+    capLen();
+    renderPreview();
+  };
+  $("#c-file").onchange = (e) => addFiles([...e.target.files]);
+  const drop = $("#c-drop");
+  drop.ondragover = (e) => { e.preventDefault(); drop.style.borderColor = "var(--blue)"; };
+  drop.ondragleave = () => (drop.style.borderColor = "");
+  drop.ondrop = (e) => { e.preventDefault(); drop.style.borderColor = ""; addFiles([...e.dataTransfer.files]); };
+  $("#c-date").value = C.date;
+  $("#c-time").value = C.time;
+  $("#c-date").onchange = (e) => { C.date = e.target.value; C.slot = -1; renderSlots(); };
+  $("#c-time").onchange = (e) => { C.time = e.target.value; C.slot = -1; renderSlots(); };
+  $("#c-ok").checked = !!C.needsApproval;
+  $("#c-ok").onchange = (e) => (C.needsApproval = e.target.checked);
+
+  function selected() {
+    return acc.accounts.filter((a) => C.accountIds.includes(a.id));
+  }
+  function platformsSel() {
+    return [...new Set(selected().map((a) => a.platform))];
+  }
+
+  function renderAccounts() {
+    $("#c-accounts").innerHTML = Object.entries(byBrand).map(([brand, list]) => `<div class="row" style="gap:8px"><span style="flex:0 0 112px;font-size:13px;font-weight:700;color:var(--ink-2)">${esc(brand)}</span>${list.map((a) => `<button type="button" class="acc-chip ${C.accountIds.includes(a.id) ? "on" : ""}" data-acc="${esc(a.id)}" aria-pressed="${C.accountIds.includes(a.id)}">${badge(a.platform, true)}${esc(a.handle && a.platform === "instagram" ? a.handle : a.name)}</button>`).join("")}</div>`).join("");
+    $$("#c-accounts [data-acc]").forEach((b) => (b.onclick = () => {
+      if (readOnly) return;
+      const id = b.dataset.acc;
+      C.accountIds = C.accountIds.includes(id) ? C.accountIds.filter((x) => x !== id) : [...C.accountIds, id];
+      renderAccounts();
+      renderTabs();
+      renderExtra();
+      renderOpts();
+      loadSlots();
+      renderPreview();
+    }));
+    $("#c-count").textContent = `${C.accountIds.length} account${C.accountIds.length === 1 ? "" : "s"} selected`;
+  }
+  function renderType() {
+    $("#c-type").innerHTML = TYPES.map(([v, l]) => `<button type="button" class="chip ${C.type === v ? "on" : ""}" data-type="${v}" aria-pressed="${C.type === v}">${l}</button>`).join("");
+    $$("#c-type [data-type]").forEach((b) => (b.onclick = () => { if (readOnly) return; C.type = b.dataset.type; renderType(); renderOpts(); renderPreview(); }));
+    const notes = {
+      post: "One photo (or one video, which Instagram treats as a Reel). Text-only works on Facebook and LinkedIn.",
+      reel: "One vertical video. Goes to Instagram Reels, Facebook Reels and LinkedIn as a video.",
+      carousel: "2 to 10 photos or videos, swiped through on Instagram; several photos in one post elsewhere.",
+      story: "One photo or video, shown for 24 hours (Instagram and Facebook Pages).",
+      short: "One vertical video: YouTube Short, and a Reel on Instagram/Facebook.",
+      pin: "One photo or video for Pinterest, with a title and a link.",
+    };
+    $("#c-type-note").textContent = notes[C.type] || "";
+  }
+  function renderTabs() {
+    const plats = platformsSel().filter((p) => p !== "manual");
+    if (!plats.includes(C.tab) && C.tab !== "all") C.tab = "all";
+    $("#c-tabs").innerHTML = [["all", "Same for all"], ...plats.map((p) => [p, PLATFORM[p].name + (C.captions[p] ? " •" : "")])].map(([v, l]) => `<button type="button" class="${C.tab === v ? "on" : ""}" data-tab="${v}">${esc(l)}</button>`).join("");
+    $$("#c-tabs [data-tab]").forEach((b) => (b.onclick = () => { C.tab = b.dataset.tab; renderTabs(); fillCaption(); }));
+  }
+  function fillCaption() {
+    cap.value = C.tab === "all" ? C.caption : C.captions[C.tab] || "";
+    cap.placeholder = C.tab === "all" ? "Write your caption. Hashtags and links are fine." : `Same as the main caption. Type here to use a different caption on ${PLATFORM[C.tab].name}.`;
+    $("#c-cap-note").textContent = C.tab === "all" ? "Same caption for every account. Use the tabs to change it for one platform." : `Only for ${PLATFORM[C.tab].name}. Leave empty to use the main caption.`;
+    capLen();
+  }
+  function capLen() {
+    const limits = { instagram: 2200, facebook: 63206, linkedin: 3000, youtube: 5000, pinterest: 800 };
+    const plats = C.tab === "all" ? platformsSel() : [C.tab];
+    const lim = Math.min(...plats.map((p) => limits[p] || 5000), 5000);
+    $("#c-len").textContent = `${cap.value.length} / ${lim.toLocaleString("en-IN")}`;
+    $("#c-len").style.color = cap.value.length > lim ? "var(--red)" : "";
+  }
+  function renderExtra() {
+    const plats = platformsSel();
+    let h = "";
+    if (plats.includes("youtube")) {
+      h += `<div class="grid g-3" style="gap:10px"><label class="f">YouTube title<input type="text" id="x-title" maxlength="100" value="${esc(C.title)}"></label>
+        <label class="f">YouTube visibility<select id="x-priv">${["public", "unlisted", "private"].map((v) => `<option value="${v}" ${C.ytPrivacy === v ? "selected" : ""}>${v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label></div>
+        <label class="check"><input type="checkbox" id="x-kids" ${C.ytMadeForKids ? "checked" : ""}> Made for kids (YouTube requires this answer)</label>`;
+    } else if (plats.includes("pinterest") || plats.includes("linkedin")) {
+      h += `<label class="f">Title (Pinterest pin title / LinkedIn video title)<input type="text" id="x-title" maxlength="100" value="${esc(C.title)}"></label>`;
+    }
+    if (plats.includes("pinterest") || plats.includes("facebook")) {
+      h += `<label class="f">Link (Pinterest pin link, or a link post on Facebook)<input type="url" id="x-link" placeholder="https://liftline.in" value="${esc(C.link)}"></label>`;
+    }
+    for (const a of selected().filter((x) => x.platform === "pinterest")) {
+      const boards = a.meta.boards || [];
+      const cur = C.boardIds[a.id] || a.meta.defaultBoardId || "";
+      h += `<label class="f">Pinterest board for ${esc(a.name)}<select data-board="${esc(a.id)}">${boards.length ? boards.map((b) => `<option value="${esc(b.id)}" ${b.id === cur ? "selected" : ""}>${esc(b.name)}</option>`).join("") : '<option value="">No boards found — refresh on the Accounts screen</option>'}</select></label>`;
+    }
+    $("#c-extra").innerHTML = h;
+    const t = $("#x-title");
+    if (t) t.oninput = () => { C.title = t.value; renderPreview(); };
+    const l = $("#x-link");
+    if (l) l.oninput = () => (C.link = l.value);
+    const p = $("#x-priv");
+    if (p) p.onchange = () => (C.ytPrivacy = p.value);
+    const k = $("#x-kids");
+    if (k) k.onchange = () => (C.ytMadeForKids = k.checked);
+    $$("[data-board]").forEach((s) => {
+      C.boardIds[s.dataset.board] = s.value;
+      s.onchange = () => (C.boardIds[s.dataset.board] = s.value);
+    });
+  }
+  function renderOpts() {
+    const plats = platformsSel();
+    let h = "";
+    if (plats.includes("instagram") && C.type !== "story") h += `<label class="check"><input type="checkbox" id="o-story" ${C.alsoStory ? "checked" : ""}> Also post it to the Instagram Story</label>`;
+    if (plats.some((p) => ["instagram", "facebook"].includes(p))) h += `<label class="f" style="grid-column:1/-1">First comment (Instagram and Facebook)<input type="text" id="o-comment" value="${esc(C.firstComment)}" placeholder="e.g. Get a quote at liftline.in"></label>`;
+    if (plats.includes("youtube")) h += `<label class="check"><input type="checkbox" id="o-ai" ${C.aiGenerated ? "checked" : ""}> Video has realistic AI-made content (YouTube label)</label>`;
+    $("#c-opts").innerHTML = h;
+    const s = $("#o-story");
+    if (s) s.onchange = () => (C.alsoStory = s.checked);
+    const c = $("#o-comment");
+    if (c) c.oninput = () => (C.firstComment = c.value);
+    const ai = $("#o-ai");
+    if (ai) ai.onchange = () => (C.aiGenerated = ai.checked);
+  }
+  function renderMedia() {
+    $("#c-media").innerHTML = C.media.map((m, i) => `<div class="file-row">
+      ${m.preview && m.kind === "image" ? `<img class="thumb" src="${esc(m.preview)}" alt="">` : m.preview && m.kind === "video" ? `<video class="thumb" src="${esc(m.preview)}" muted></video>` : `<div class="thumb">${m.kind === "video" ? "VIDEO" : "PHOTO"}</div>`}
+      <div class="stack" style="gap:4px;flex:1 1 auto;min-width:0"><span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>
+        <span class="muted small">${m.kind === "video" ? "Video" : "Photo"} · ${(m.size / 1048576).toFixed(1)} MB${m.ratio ? ` · ${m.ratio}` : ""}</span>
+        ${m.progress !== undefined && m.progress < 1 ? `<div class="progress"><span style="width:${Math.round(m.progress * 100)}%"></span></div>` : ""}
+        ${m.warn ? `<span class="small" style="color:var(--amber)">${esc(m.warn)}</span>` : ""}</div>
+      ${readOnly ? "" : `<div class="row" style="gap:4px">${i > 0 ? `<button class="btn sm" data-up="${i}" type="button" aria-label="Move up">↑</button>` : ""}<button class="btn sm danger" data-rm="${i}" type="button">Remove</button></div>`}
+    </div>`).join("") + (C.mediaDeleted ? `<p class="note">The files were deleted after posting to save space.</p>` : "");
+    $$("[data-rm]").forEach((b) => (b.onclick = () => { C.media.splice(Number(b.dataset.rm), 1); renderMedia(); renderPreview(); }));
+    $$("[data-up]").forEach((b) => (b.onclick = () => { const i = Number(b.dataset.up); [C.media[i - 1], C.media[i]] = [C.media[i], C.media[i - 1]]; renderMedia(); renderPreview(); }));
+    $("#c-drop").hidden = readOnly;
+  }
+  async function addFiles(files) {
+    for (const file of files) {
+      const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
+      if (!kind) { toast(`${file.name}: only photos and videos`, true); continue; }
+      const item = { id: null, kind, name: file.name, size: file.size, mime: file.type, progress: 0, preview: URL.createObjectURL(file) };
+      C.media.push(item);
+      C.uploading++;
+      renderMedia();
+      try {
+        const done = await uploadFile(file, (p) => { item.progress = p; renderMedia(); }, item);
+        Object.assign(item, done, { progress: 1 });
+        if (C.type === "post" && C.media.length > 1) C.type = "carousel";
+        if (C.type === "post" && kind === "video") C.type = "reel";
+        renderType();
+      } catch (e) {
+        C.media.splice(C.media.indexOf(item), 1);
+        toast(`${file.name}: ${e.message}`, true);
+      } finally {
+        C.uploading--;
+        renderMedia();
+        renderPreview();
+      }
+    }
+  }
+  function renderSlots() {
+    const box = $("#c-slots");
+    if (!C.accountIds.length) { box.innerHTML = `<p class="muted">Pick accounts to see their perfect times.</p>`; return; }
+    if (!C.suggestions.length) { box.innerHTML = `<p class="muted">Working out the best times…</p>`; return; }
+    box.innerHTML = C.suggestions.map((s, i) => `<button type="button" class="slot ${C.slot === i ? "on" : ""}" role="radio" aria-checked="${C.slot === i}" data-slot="${i}">
+      <span class="stack" style="gap:3px"><span class="w">${esc(whenText(s.at))}</span><span class="muted small">${i === 0 ? "Best upcoming time for these accounts" : "Another strong time"}</span></span>
+      <span class="stack" style="gap:5px"><span style="font-size:12px;font-weight:700;color:var(--orange);text-align:right">${s.score} / 100</span><span class="bar"><span style="width:${s.score}%"></span></span></span></button>`).join("");
+    $$("[data-slot]").forEach((b) => (b.onclick = () => {
+      if (readOnly) return;
+      C.slot = Number(b.dataset.slot);
+      const s = C.suggestions[C.slot];
+      C.date = istKey(s.at);
+      C.time = istHM(s.at);
+      $("#c-date").value = C.date;
+      $("#c-time").value = C.time;
+      renderSlots();
+      renderActions();
+    }));
+    renderActions();
+  }
+  let slotTimer;
+  function loadSlots() {
+    clearTimeout(slotTimer);
+    C.suggestions = [];
+    renderSlots();
+    if (!C.accountIds.length) return;
+    slotTimer = setTimeout(async () => {
+      try {
+        C.suggestions = await api("POST", "/api/suggest", { accountIds: C.accountIds });
+        if (!C.suggestions.length) $("#c-slots").innerHTML = `<p class="muted">No free slot found in the next 7 days.</p>`;
+        else renderSlots();
+      } catch (e) {
+        $("#c-slots").innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+      }
+    }, 300);
+  }
+  function renderActions() {
+    const box = $("#c-actions");
+    if (readOnly) {
+      box.innerHTML = Object.values(C.targets).some((t) => t.status === "failed") ? `<button class="btn primary" id="a-retry" type="button">Retry the failed ones now</button>` : "";
+      const r = $("#a-retry");
+      if (r) r.onclick = retry;
+      return;
+    }
+    const when = C.date && C.time ? whenText(fromIST(C.date, C.time)) : "";
+    box.innerHTML = `
+      <button class="btn primary" id="a-schedule" type="button" style="min-height:48px">${when ? `Schedule for ${esc(when)}` : "Pick a time to schedule"}</button>
+      <div class="grid" style="gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))">
+        <button class="btn" id="a-queue" type="button">Add to queue — next perfect slot</button>
+        <button class="btn" id="a-draft" type="button">Save as draft</button>
+        <button class="btn" id="a-now" type="button">Post now</button>
+        ${C.status === "needs_ok" ? `<button class="btn orange" id="a-approve" type="button">Approve</button>` : ""}
+        ${C.id ? `<button class="btn danger" id="a-delete" type="button">Delete</button>` : ""}
+      </div>`;
+    $("#a-schedule").onclick = () => save("schedule");
+    $("#a-queue").onclick = () => save("queue");
+    $("#a-draft").onclick = () => save("draft");
+    $("#a-now").onclick = () => save("now");
+    const ap = $("#a-approve");
+    if (ap) ap.onclick = async () => { await api("POST", `/api/posts/${C.id}/approve`); toast("Approved"); go(`#/plan?from=${C.date || istKey(new Date())}`); };
+    const del = $("#a-delete");
+    if (del) del.onclick = async () => { if (!confirm("Delete this post?")) return; await api("DELETE", `/api/posts/${C.id}`); toast("Deleted"); go("#/plan"); };
+  }
+  async function retry() {
+    try {
+      await api("POST", `/api/posts/${C.id}/retry`);
+      toast("Trying again now");
+      setTimeout(() => go(`#/create?id=${C.id}`), 1500);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+  async function save(mode) {
+    if (C.uploading) return toast("Wait for the upload to finish.", true);
+    const body = {
+      accountIds: C.accountIds, type: C.type, caption: C.caption, captions: C.captions, title: C.title, link: C.link, boardIds: C.boardIds,
+      firstComment: C.firstComment, alsoStory: C.alsoStory, aiGenerated: C.aiGenerated, ytPrivacy: C.ytPrivacy, ytMadeForKids: C.ytMadeForKids,
+      media: C.media.filter((m) => m.id).map(({ id, kind, name, size, mime }) => ({ id, kind, name, size, mime })),
+      needsApproval: C.needsApproval,
+    };
+    if (mode === "schedule") {
+      if (!C.date || !C.time) return toast("Pick a perfect time or a date and time first.", true);
+      body.scheduledAt = fromIST(C.date, C.time);
+      if (new Date(body.scheduledAt) < new Date(Date.now() - 60000)) return toast("That time has already passed. Pick a later time or press Post now.", true);
+    } else if (mode === "queue") {
+      if (!C.suggestions[0]) return toast("Pick accounts first so Social HQ can find a slot.", true);
+      body.scheduledAt = C.suggestions[0].at;
+    } else if (mode === "now") {
+      body.scheduledAt = new Date().toISOString();
+      body.publishNow = true;
+      body.needsApproval = false;
+    } else body.scheduledAt = null;
+    if (!C.needsApproval && mode !== "draft") body.approve = true;
+    try {
+      const p = C.id ? await api("PUT", `/api/posts/${C.id}`, body) : await api("POST", "/api/posts", body);
+      if (mode === "now") {
+        toast("Posting now. This page refreshes with the result.");
+        setTimeout(() => go(`#/create?id=${p.id}`), 2500);
+      } else if (mode === "draft") {
+        toast("Saved as draft");
+        go("#/plan");
+      } else {
+        toast(p.status === "needs_ok" ? "Saved. It waits for your OK." : `Scheduled for ${whenText(p.scheduledAt)}`);
+        go(`#/plan?from=${istKey(p.scheduledAt)}`);
+      }
+    } catch (e) {
+      $("#c-warn").innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+      toast("Couldn't save — see the note above the buttons.", true);
+    }
+  }
+  function renderPreview() {
+    const first = C.media[0];
+    const a = selected()[0];
+    const capText = (a && C.captions[a.platform]) || C.caption;
+    $("#c-preview").innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:236px;${C.type === "post" || C.type === "carousel" || C.type === "pin" ? "height:295px" : "height:420px"};border-radius:18px;background:#1C2132;overflow:hidden;position:relative;display:flex;align-items:flex-end">
+        ${first?.preview ? (first.kind === "image" ? `<img src="${esc(first.preview)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : `<video src="${esc(first.preview)}" muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>`) : ""}
+        <div style="position:relative;padding:12px;background:rgba(10,12,20,.6);width:100%;display:flex;flex-direction:column;gap:4px">
+          <b style="font-size:12px;color:#fff">${esc(a ? (a.handle || a.name) : "Pick an account")}</b>
+          <span style="font-size:11px;color:#fff;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${esc(capText || "Your caption shows here")}</span>
+        </div>
+      </div>
+      <span class="muted small">${C.media.length > 1 ? `${C.media.length} files · first one shown` : "Rough preview"}</span></div>`;
+  }
+  function renderStatus() {
+    if (!C.id) return;
+    const targets = Object.entries(C.targets);
+    if (!targets.length) return;
+    const rows = targets.map(([id, t]) => {
+      const a = acc.accounts.find((x) => x.id === id);
+      return `<div class="row between" style="border-top:1px solid var(--line-2);padding-top:10px"><span class="row">${badge(a?.platform || "unknown", true)}<b style="font-size:14px">${esc(a?.name || "Removed account")}</b></span>
+        <span class="row">${pill(t.status)}${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600">Open post</a>` : ""}</span></div>
+        ${t.error ? `<p class="note bad">${esc(t.error)}</p>` : ""}${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}`;
+    }).join("");
+    $("#c-status").innerHTML = `<section class="card tight"><h3>Where this post stands</h3>${rows}</section>`;
+  }
+
+  renderAccounts();
+  renderType();
+  renderTabs();
+  fillCaption();
+  renderExtra();
+  renderOpts();
+  renderMedia();
+  renderStatus();
+  renderPreview();
+  if (readOnly) {
+    $("#c-slots").innerHTML = `<p class="muted">${esc(whenText(C.date ? fromIST(C.date, C.time) : null))}</p>`;
+    $("#c-date").disabled = true;
+    $("#c-time").disabled = true;
+    $("#c-ok").disabled = true;
+    cap.readOnly = true;
+    renderActions();
+    if (C.status === "publishing") setTimeout(() => { if (location.hash.includes(C.id)) render(); }, 8000);
+  } else {
+    loadSlots();
+    renderActions();
+  }
+}
+
+async function uploadFile(file, onProgress, item) {
+  let blob = file;
+  let name = file.name;
+  let mime = file.type;
+  if (mime.startsWith("image/")) {
+    const out = await toJpeg(file);
+    blob = out.blob;
+    mime = "image/jpeg";
+    name = name.replace(/\.[^.]+$/, "") + ".jpg";
+    const r = out.w / out.h;
+    item.ratio = `${out.w}×${out.h}`;
+    if (r < 0.8 - 0.01 || r > 1.91 + 0.01) item.warn = "Instagram feed photos must be between 4:5 (tall) and 1.91:1 (wide). Crop it, or use it as a Story.";
+  }
+  const init = await api("POST", "/api/media", { name, size: blob.size, mime });
+  for (let i = 0; i < init.chunks; i++) {
+    const part = blob.slice(i * init.chunkSize, (i + 1) * init.chunkSize);
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      const r = await fetch(`/api/media/${init.id}/part/${i}`, { method: "PUT", body: part, headers: { "content-type": "application/octet-stream" }, credentials: "same-origin" });
+      ok = r.ok;
+      if (!ok && attempt === 2) throw new Error((await r.json().catch(() => ({}))).error || "Upload failed");
+    }
+    onProgress((i + 1) / init.chunks);
+  }
+  const done = await api("POST", `/api/media/${init.id}/complete`);
+  return { id: done.id, kind: done.kind, name, size: blob.size, mime };
+}
+
+async function toJpeg(file) {
+  let bmp;
+  try {
+    bmp = await createImageBitmap(file);
+  } catch (_) {
+    throw new Error("This photo format can't be read here. Save it as JPG or PNG first.");
+  }
+  const max = 2160;
+  const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * s), h = Math.round(bmp.height * s);
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bmp, 0, 0, w, h);
+  let q = 0.92, blob;
+  do {
+    blob = await new Promise((r) => c.toBlob(r, "image/jpeg", q));
+    q -= 0.08;
+  } while (blob.size > 2.9 * 1024 * 1024 && q > 0.4);
+  return { blob, w, h };
+}
+
+// ---------- Accounts ----------
+async function screenAccounts(q) {
+  const d = await accounts(true);
+  const msg = q.get("connected") ? `<p class="note good">Connected: ${esc(q.get("connected"))}</p>` : q.get("error") ? `<p class="note bad">${esc(q.get("error"))}</p>` : "";
+  const connectBtn = (p, label) => d.configured[p]
+    ? `<a class="btn" href="/api/oauth/${p}/start" style="padding-left:8px">${badge(p)}${esc(label)}</a>`
+    : `<a class="btn" href="#/settings?missing=${p}" style="padding-left:8px;opacity:.7" title="Add the ${esc(PLATFORM[p].name)} app keys in Settings first">${badge(p)}${esc(label)} <span class="muted small">· keys needed</span></a>`;
+  const groups = {};
+  for (const a of d.accounts) (groups[a.brand] = groups[a.brand] || []).push(a);
+  const brands = [...new Set([...Object.keys(groups), "LIFTLINE", "MM Spares", "KAIU", "AdmitX", "Coinwise Kids", "Wrong Door", "The Backstory", "Personal"])];
+  const statusOf = (a) => (a.platform === "manual" ? pill("reminder", "Reminder only") : a.platform === "pinterest" && d.pinterestSandbox ? pill("waiting", "Pins visible only to you") : pill(a.status));
+  main(`
+    <header class="head"><div><p class="sub">${d.accounts.length} account${d.accounts.length === 1 ? "" : "s"}</p><h1>Accounts</h1></div></header>
+    ${msg}
+    <section class="card"><div class="stack" style="gap:4px"><h2>Connect an account</h2><p class="muted">You log in on the platform's own page. Social HQ never sees your password. For several Instagram accounts, connect them one by one: switch to the next account on instagram.com, then press Connect again.</p></div>
+      <div class="row">${connectBtn("instagram", "Instagram")}${connectBtn("facebook", "Facebook Pages")}${connectBtn("linkedin", "LinkedIn")}${connectBtn("youtube", "YouTube")}${connectBtn("pinterest", "Pinterest")}</div>
+      <form class="row" id="rem-form" style="border-top:1px solid var(--line-2);padding-top:14px"><b style="font-size:13px">Facebook personal profile (reminders):</b>
+        <input type="text" name="name" placeholder="Profile name" required style="max-width:220px"><input type="text" name="brand" placeholder="Brand" value="Personal" style="max-width:160px"><button class="btn sm" type="submit">Add</button></form>
+    </section>
+    <section class="grid g-3">
+      <div class="card tight">${pill("ok", "Auto-post")}<b style="font-size:14px">Posts by itself at the set time</b><span class="muted">Instagram business or creator accounts, Facebook Pages, your LinkedIn profile.</span></div>
+      <div class="card tight">${pill("reminder", "Reminder only")}<b style="font-size:14px">You get a nudge with everything ready</b><span class="muted">Facebook personal profiles. Facebook lets no app post there.</span></div>
+      <div class="card tight">${pill("waiting", "Waiting for approval")}<b style="font-size:14px">Works fully once the platform says yes</b><span class="muted">YouTube (uploads Private till then), Pinterest (pins only you see), LinkedIn company pages.</span></div>
+    </section>
+    <datalist id="brand-list">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
+    <section class="grid g-2">${Object.entries(groups).map(([brand, list]) => `<div class="card"><div class="row between"><h2>${esc(brand)}</h2><span class="muted small">${list.length} account${list.length === 1 ? "" : "s"}</span></div>
+      ${list.map((a) => `<div class="stack" style="gap:8px;border-top:1px solid var(--line-2);padding-top:12px">
+        <div class="row between"><span class="row">${badge(a.platform)}<span class="stack" style="gap:2px"><b style="font-size:14px">${esc(a.name)}</b><span class="muted small">${esc(a.handle || "")}</span></span></span><span class="row">${statusOf(a)}</span></div>
+        <span class="muted small">${esc(a.loginNote)}</span>${a.lastError ? `<p class="note bad">${esc(a.lastError)}</p>` : ""}
+        <div class="row" style="gap:8px">
+          <label class="f" style="flex:1 1 140px">Brand<input type="text" list="brand-list" data-brand="${esc(a.id)}" value="${esc(a.brand)}"></label>
+          <label class="f" style="flex:0 1 130px">Posts a week target<input type="number" min="0" max="21" data-cad="${esc(a.id)}" value="${a.cadence || 0}"></label>
+          ${a.platform === "pinterest" ? `<label class="f" style="flex:1 1 160px">Default board<select data-board="${esc(a.id)}">${(a.meta.boards || []).map((b) => `<option value="${esc(b.id)}" ${b.id === a.meta.defaultBoardId ? "selected" : ""}>${esc(b.name)}</option>`).join("") || '<option value="">No boards</option>'}</select></label>` : ""}
+        </div>
+        <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
+      </div>`).join("")}</div>`).join("") || `<p class="muted">No accounts yet.</p>`}</section>`);
+  $("#rem-form").onsubmit = async (e) => {
+    e.preventDefault();
+    await api("POST", "/api/accounts/reminder", Object.fromEntries(new FormData(e.target)));
+    toast("Added");
+    render();
+  };
+  $$("[data-brand]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.brand}`, { brand: i.value }); toast("Saved"); state.accounts = null; }));
+  $$("[data-cad]").forEach((i) => (i.onchange = async () => { await api("PATCH", `/api/accounts/${i.dataset.cad}`, { cadence: i.value }); toast("Saved"); }));
+  $$("select[data-board]").forEach((s) => (s.onchange = async () => { await api("PATCH", `/api/accounts/${s.dataset.board}`, { boardId: s.value }); toast("Saved"); }));
+  $$("[data-refresh]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/accounts/${b.dataset.refresh}/boards`); toast("Boards refreshed"); render(); } catch (e) { toast(e.message, true); } }));
+  $$("[data-del]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Remove ${b.dataset.name} from Social HQ? Scheduled posts for it will fail.`)) return;
+    await api("DELETE", `/api/accounts/${b.dataset.del}`);
+    toast("Removed");
+    render();
+  }));
+}
+
+// ---------- Insights ----------
+async function screenInsights(q) {
+  const list = await api("GET", "/api/insights");
+  if (!list.accounts.length) {
+    main(`<header class="head"><h1>Insights</h1></header><section class="card"><p class="muted">Connect accounts first. Insights are collected every 6 hours.</p><a class="btn primary" href="#/accounts" style="align-self:flex-start">Go to Accounts</a></section>`);
+    return;
+  }
+  const id = q.get("id") || list.accounts[0].id;
+  const d = await api("GET", `/api/insights/${encodeURIComponent(id)}`);
+  const L = d.latest;
+  const kpis = L ? [[L.followersLabel || "Followers", num(L.followers), L.followers === null ? "Not shared by this platform" : "Now"], ...L.kpis.map((k) => [k.label, num(k.value), k.period])] : [];
+  const hist = (d.hist || []).filter((h) => typeof h.followers === "number");
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const scale = ["#F1F4FF", "#D6E0FF", "#A9BDFF", "#6F8DF7", "#2848E8"];
+  const topKey = Object.fromEntries(d.top.map((t, i) => [`${t.d}-${t.h}`, i + 1]));
+  const heat = `<div class="tbl"><div class="heat"><div class="hr"><span></span>${d.hours.map((h) => `<span class="lbl">${h % 3 === 0 ? (h % 12 || 12) + (h < 12 ? "a" : "p") : ""}</span>`).join("")}</div>
+    ${d.model.scores.map((row, di) => `<div class="hr"><span style="font-size:12px;font-weight:600;color:var(--ink-2)">${days[di]}</span>${row.map((v, hi) => {
+      const rank = topKey[`${di}-${d.hours[hi]}`];
+      return `<span class="cell" title="${days[di]} ${d.hours[hi]}:00 · ${v}/100" style="background:${rank ? "#B4500C" : scale[Math.min(4, Math.floor(v / 20.01))]}">${rank || ""}</span>`;
+    }).join("")}</div>`).join("")}</div></div>`;
+  const hourText = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+  const posts = (L?.posts || []).slice().sort((a, b) => (b.interactions || 0) + (b.views || 0) * 0.05 - ((a.interactions || 0) + (a.views || 0) * 0.05)).slice(0, 5);
+  const cmp = list.accounts.slice().sort((a, b) => (b.growth28 ?? -1e9) - (a.growth28 ?? -1e9));
+  main(`
+    <header class="head"><div><p class="sub">${L ? `Updated ${esc(whenText(L.at))}` : "Not collected yet"} · numbers refresh every 6 hours</p><h1>Insights</h1></div>
+      <button class="btn" id="refresh" type="button">Refresh now</button></header>
+    <div class="row" role="group" aria-label="Pick an account">${list.accounts.map((a) => `<a class="acc-chip ${a.id === id ? "on" : ""}" style="text-decoration:none;color:inherit" href="#/insights?id=${encodeURIComponent(a.id)}">${badge(a.platform, true)}${esc(a.platform === "instagram" ? a.handle || a.name : a.name)}</a>`).join("")}</div>
+    ${L?.limited ? `<p class="note">${esc(L.limited)}</p>` : ""}
+    ${L ? `<section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>` : `<p class="note">No numbers yet for this account. Press "Refresh now" and come back in a minute.</p>`}
+    <div class="grid g-2">
+      <section class="card"><div class="row between"><h2>${esc(L?.followersLabel || "Followers")}</h2><span class="muted small">${hist.length > 1 ? `${num(hist[0].followers)} → ${num(hist[hist.length - 1].followers)}` : "Builds up day by day"}</span></div>${growth(hist)}</section>
+      <section class="card"><h2>Top posts</h2>${posts.length ? posts.map((p) => `<div class="row between" style="border-top:1px solid var(--line-2);padding-top:10px;flex-wrap:nowrap"><div class="stack" style="gap:3px;min-width:0"><a href="${esc(p.url || "#")}" target="_blank" rel="noopener" style="font-size:14px;font-weight:600;text-decoration:none;color:inherit">${esc(p.title || "Post")}</a><span class="muted small">${esc(p.type || "")} · ${p.at ? esc(dayName(p.at)) : ""}</span></div><div class="stack" style="gap:3px;align-items:flex-end;flex:0 0 auto"><b>${num(p.views || p.reach || 0)} ${p.views ? "views" : "reached"}</b><span class="muted small">${num(p.interactions)} interactions</span></div></div>`).join("") : `<p class="muted">No post data for this account yet.</p>`}</section>
+    </div>
+    <section class="card"><div class="row between" style="align-items:flex-end"><div class="stack" style="gap:4px"><h2>Perfect time to post · ${esc(d.account.name)}</h2><p class="muted">Darker = better. Numbered squares are the top 3. ${d.model.learnedFrom ? `Learned from ${d.model.learnedFrom} of your posts (${d.model.trust}% your data, rest starting guess).` : `Starting guess: ${esc(d.startingWindow || "")}. It learns as you post.`}</p></div>
+      <div class="row">${d.top.map((t, i) => `<span class="perfect" style="padding-left:5px"><span style="width:22px;height:22px;border-radius:50%;background:#B4500C;color:#fff;display:inline-flex;align-items:center;justify-content:center">${i + 1}</span>${days[t.d]} · ${hourText(t.h)}</span>`).join("")}</div></div>${heat}</section>
+    <section class="card"><h2>Compare all accounts · fastest growing first</h2><div class="tbl"><table><thead><tr><th>Account</th><th>Followers</th><th>Reach, 28 days</th><th>Engagement</th><th>Posts, 28 days</th><th>Growth, 28 days</th></tr></thead><tbody>
+      ${cmp.map((a) => `<tr><td><div class="acc-cell">${badge(a.platform, true)}<span class="n">${esc(a.name)}</span></div></td><td>${num(a.followers)}</td><td>${num(a.reach28)}</td><td>${pct(a.engagementRate)}</td><td>${a.posts28}</td><td class="${a.growth28 > 0 ? "up" : a.growth28 < 0 ? "down" : ""}">${signed(a.growth28)}</td></tr>`).join("")}
+    </tbody></table></div><p class="muted small">Growth needs a few days of history; it fills in automatically.</p></section>`);
+  $("#refresh").onclick = async () => {
+    await api("POST", `/api/insights/refresh?account=${encodeURIComponent(id)}`);
+    toast("Collecting fresh numbers. Reload in a minute.");
+  };
+}
+function growth(hist) {
+  if (hist.length < 2) return `<p class="muted">The chart starts after two days of data.</p>`;
+  const vals = hist.map((h) => h.followers);
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const pts = vals.map((v, i) => `${Math.round(i * (600 / (vals.length - 1)))},${Math.round(180 - ((v - min) / span) * 150)}`);
+  return `<svg role="img" aria-label="Follower growth" width="100%" height="200" viewBox="0 0 600 200" preserveAspectRatio="none">
+    <line x1="0" y1="30" x2="600" y2="30" stroke="#EEF0F3" vector-effect="non-scaling-stroke"/><line x1="0" y1="105" x2="600" y2="105" stroke="#EEF0F3" vector-effect="non-scaling-stroke"/><line x1="0" y1="180" x2="600" y2="180" stroke="#EEF0F3" vector-effect="non-scaling-stroke"/>
+    <polygon points="0,200 ${pts.join(" ")} 600,200" fill="#EAF0FF"/><polyline points="${pts.join(" ")}" fill="none" stroke="#2848E8" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+    <div class="row between muted small"><span>${esc(dayName(hist[0].d + "T12:00:00Z"))}</span><span>${esc(dayName(hist[hist.length - 1].d + "T12:00:00Z"))}</span></div>`;
+}
+
+// ---------- Settings ----------
+const GUIDE = {
+  instagram: `<ol class="muted"><li>Open <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">Meta for Developers → My Apps</a> and create an app (type: Business). Add the use case <b>Manage messaging & content on Instagram</b>.</li><li>Under <b>Instagram → API setup with Instagram login</b>, copy the <b>Instagram app ID</b> and <b>Instagram app secret</b> here.</li><li>In <b>Set up Instagram business login</b>, add the redirect address shown below.</li><li>Under <b>App roles → Roles → Instagram testers</b>, add each of your Instagram accounts, then accept the invite in each account (Instagram app → Settings → Website permissions → Apps and websites → Tester invites).</li></ol>`,
+  facebook: `<ol class="muted"><li>In the same Meta app, add the use case <b>Manage everything on your Page</b>.</li><li>Copy the app's <b>App ID</b> and <b>App secret</b> (App settings → Basic) here.</li><li>Under <b>Facebook Login for Business → Settings</b>, add the redirect address shown below.</li></ol>`,
+  linkedin: `<ol class="muted"><li>Open <a href="https://www.linkedin.com/developers/apps" target="_blank" rel="noopener">LinkedIn Developers</a>, create an app linked to the LIFTLINE page.</li><li>Under <b>Products</b>, add <b>Sign In with LinkedIn using OpenID Connect</b> and <b>Share on LinkedIn</b>.</li><li>Under <b>Auth</b>, copy the Client ID and secret here and add the redirect address below.</li><li>For company pages, LinkedIn must approve the Community Management API (separate app). Tick "Company pages" only after that.</li></ol>`,
+  youtube: `<ol class="muted"><li>Open <a href="https://console.cloud.google.com" target="_blank" rel="noopener">Google Cloud Console</a> with info.liftline@gmail.com, create a project.</li><li>Enable <b>YouTube Data API v3</b> and <b>YouTube Analytics API</b>.</li><li>Set up the OAuth consent screen (External) and press <b>Publish app</b> so logins don't end after 7 days.</li><li>Create an OAuth client (Web application), add the redirect address below, copy the Client ID and secret here.</li></ol>`,
+  pinterest: `<ol class="muted"><li>Open <a href="https://developers.pinterest.com/apps/" target="_blank" rel="noopener">Pinterest Developers</a> with the infoliftline account and create an app.</li><li>Add the redirect address below, copy the App ID and secret here.</li><li>Keep "Sandbox" on until Pinterest gives Standard access, then turn it off.</li></ol>`,
+  reminders: `<p class="muted">Optional. Make a free <a href="https://resend.com" target="_blank" rel="noopener">Resend</a> account, create an API key, and paste it here with your email. Without it, reminders still show on the Overview screen.</p>`,
+  general: `<p class="muted">Leave as it is unless Claude tells you to change it.</p>`,
+};
+const FIELD_LABEL = { appId: "App ID", appSecret: "App secret", clientId: "Client ID", clientSecret: "Client secret", orgAccess: "Company pages approved by LinkedIn", version: "LinkedIn API version (YYYYMM)", sandbox: "Sandbox (pins visible only to you)", resendKey: "Resend API key", to: "Send reminders to (email)", from: "From (optional)", graphVersion: "Meta Graph API version" };
+
+async function screenSettings(q) {
+  const s = await api("GET", "/api/settings");
+  const missing = q.get("missing");
+  const sections = ["instagram", "facebook", "linkedin", "youtube", "pinterest", "reminders", "general"];
+  main(`
+    <header class="head"><div><p class="sub">Platform keys, reminders and your password</p><h1>Settings</h1></div></header>
+    ${missing ? `<p class="note warn">Add the ${esc(PLATFORM[missing]?.name || missing)} keys below first, then press Connect on the Accounts screen.</p>` : ""}
+    <section class="card tight"><h3>Your Social HQ address</h3><code>${esc(s.siteUrl)}</code></section>
+    ${sections.map((sec) => {
+      const def = s[sec];
+      const fields = Object.keys(def).filter((k) => k !== "label");
+      return `<section class="card" id="sec-${sec}" ${missing === sec ? 'style="border-color:var(--orange-mid)"' : ""}><h2>${esc(def.label)}</h2>${GUIDE[sec] || ""}
+        ${s.redirects[sec] ? `<div class="row"><span class="muted small">Redirect address:</span><code>${esc(s.redirects[sec])}</code><button class="btn sm" type="button" data-copytext="${esc(s.redirects[sec])}">Copy</button></div>` : ""}
+        <form class="grid g-3" data-sec="${sec}" style="gap:10px">${fields.map((f) => {
+          if (f.endsWith("Set")) {
+            const name = f.slice(0, -3);
+            return `<label class="f">${esc(FIELD_LABEL[name] || name)}<input type="password" name="${name}" autocomplete="off" placeholder="${def[f] ? "Saved — type to replace" : "Not set"}"></label>`;
+          }
+          if (typeof def[f] === "boolean") return `<label class="check"><input type="checkbox" name="${f}" ${def[f] ? "checked" : ""}> ${esc(FIELD_LABEL[f] || f)}</label>`;
+          return `<label class="f">${esc(FIELD_LABEL[f] || f)}<input type="text" name="${f}" value="${esc(def[f])}" autocomplete="off"></label>`;
+        }).join("")}<div class="row" style="grid-column:1/-1"><button class="btn primary sm" type="submit">Save</button></div></form></section>`;
+    }).join("")}
+    <section class="card"><h2>Change password</h2><form class="grid g-3" id="pw-form" style="gap:10px"><label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label><label class="f">New password (8+ characters)<input type="password" name="next" required minlength="8" autocomplete="new-password"></label><div class="row" style="grid-column:1/-1"><button class="btn sm primary" type="submit">Change password</button></div></form></section>`);
+  if (missing && $(`#sec-${missing}`)) $(`#sec-${missing}`).scrollIntoView?.();
+  $$("[data-copytext]").forEach((b) => (b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copytext); toast("Copied"); }));
+  $$("form[data-sec]").forEach((f) => (f.onsubmit = async (e) => {
+    e.preventDefault();
+    const sec = f.dataset.sec;
+    const values = {};
+    for (const el of f.elements) {
+      if (!el.name) continue;
+      if (el.type === "checkbox") values[el.name] = el.checked;
+      else if (el.type === "password") { if (el.value.trim()) values[el.name] = el.value.trim(); }
+      else values[el.name] = el.value;
+    }
+    try {
+      await api("PUT", "/api/settings", { [sec]: values });
+      state.accounts = null;
+      toast("Saved");
+      render();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
+  $("#pw-form").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("POST", "/api/auth/password", Object.fromEntries(new FormData(e.target)));
+      toast("Password changed");
+      e.target.reset();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+}
+
+render();
