@@ -143,7 +143,7 @@ export function publicAccount(a) {
     kind: a.kind,
     name: a.name,
     handle: a.handle,
-    avatar: a.avatar,
+    avatar: a.avatarCached ? `/m/av/${encodeURIComponent(a.id)}?v=${a.avatarCached}` : a.avatar || "",
     brand: a.brand,
     cadence: a.cadence || 0,
     status,

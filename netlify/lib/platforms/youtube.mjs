@@ -265,3 +265,16 @@ export async function postDetail({ account, postId }) {
   const inter = (item.likes || 0) + (item.comments || 0);
   return { ...item, media: [{ kind: "image", url: item.big || item.thumb, thumb: item.thumb }], stats, engagementRate: item.views ? inter / item.views : null, note, linkLabel: "Open on YouTube" };
 }
+
+// ---------- Analysis: views, likes, comments for the last 50 videos ----------
+export async function analysisPosts({ account }) {
+  const out = [];
+  let after;
+  for (let i = 0; i < 3 && out.length < 50; i++) {
+    const r = await feed({ account, after });
+    out.push(...r.posts);
+    if (!r.next) break;
+    after = r.next;
+  }
+  return out.filter((v) => v.privacy !== "private").map((v) => ({ ...v, reach: null, interactions: (v.likes || 0) + (v.comments || 0) }));
+}

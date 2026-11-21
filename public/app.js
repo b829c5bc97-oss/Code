@@ -81,6 +81,11 @@ function badge(platform, sm = false) {
   const p = PLATFORM[platform] || PLATFORM.unknown;
   return `<span class="badge b-${esc(platform)}${sm ? " sm" : ""}" title="${esc(p.name)}">${esc(p.label)}</span>`;
 }
+function avatar(a, size = 30) {
+  const p = PLATFORM[a?.platform] || PLATFORM.unknown;
+  const pic = a?.avatar ? `<img src="${esc(a.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="badge b-${esc(a?.platform || "unknown")}" style="width:100%;height:100%;border-radius:50%">${esc(p.label)}</span>`;
+  return `<span class="avw" style="width:${size}px;height:${size}px" title="${esc((a?.name || "") + " · " + p.name)}">${pic}${a?.avatar ? `<span class="pb b-${esc(a.platform)}">${esc(p.label)}</span>` : ""}</span>`;
+}
 function pill(status, text) {
   return `<span class="pill p-${esc(status)}">${esc(text || STATUS_TEXT[status] || status)}</span>`;
 }
@@ -290,7 +295,7 @@ async function screenOverview(q) {
       </div>`).join("")}</section>`
     : "";
   const rows = d.accounts.map((a) => `<tr>
-      <td><a class="acc-cell" style="text-decoration:none;color:inherit" href="${a.platform === "manual" ? "#/accounts" : `#/account?id=${encodeURIComponent(a.id)}`}">${badge(a.platform, true)}<div><div class="n">${esc(a.name)}</div><div class="h">${esc(a.handle || PLATFORM[a.platform].name)}</div></div></a></td>
+      <td><a class="acc-cell" style="text-decoration:none;color:inherit" href="${a.platform === "manual" ? "#/accounts" : `#/account?id=${encodeURIComponent(a.id)}`}">${avatar(a, 34)}<div><div class="n">${esc(a.name)}</div><div class="h">${esc(a.handle || PLATFORM[a.platform].name)}</div></div></a></td>
       <td><b>${a.platform === "manual" ? "—" : num(a.followers)}</b></td>
       <td>${a.platform === "manual" ? "—" : num(a.reach7)}</td>
       <td class="${a.change7 > 0 ? "up" : a.change7 < 0 ? "down" : ""}">${signed(a.change7)}</td>
@@ -448,11 +453,11 @@ async function screenMonth(q) {
   const link = (m, b) => `#/plan?view=month&month=${m}&brand=${encodeURIComponent(b)}`;
   const chip = (p) => {
     const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean);
-    if (p.live) return `<a class="mchip st-done live" href="#/account?id=${encodeURIComponent(p.id)}" title="${esc((accs[0]?.name || "") + " · " + (p.caption || ""))}"><b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${accs.map((a) => badge(a.platform, true).replace('class="badge', 'class="badge xs')).join("")}<span>${esc((accs[0]?.name || "") + (p.stat ? ` · ${num(p.stat)}` : ""))}</span></a>`;
+    if (p.live) return `<a class="mchip st-done live" href="#/account?id=${encodeURIComponent(p.id)}" title="${esc((accs[0]?.name || "") + " · " + (p.caption || ""))}"><b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${accs.map((a) => avatar(a, 16)).join("")}<span>${esc((accs[0]?.name || "") + (p.stat ? ` · ${num(p.stat)}` : ""))}</span></a>`;
     const plats = [...new Set(accs.map((a) => a.platform))];
     const movable = MOVABLE.includes(p.status);
     return `<a class="mchip st-${esc(p.status)}" href="#/create?id=${esc(p.id)}" ${movable ? `draggable="true" data-move="${esc(p.id)}" data-at="${esc(p.scheduledAt)}"` : ""} title="${esc((accs.map((a) => a.name).join(", ") || "") + " · " + (p.caption || p.title || ""))}">
-      <b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${plats.map((x) => badge(x, true).replace('class="badge', 'class="badge xs')).join("")}<span>${esc((p.caption || p.title || typeLabel(p.type)).slice(0, 40))}</span></a>`;
+      <b>${esc(time(p.scheduledAt).replace(":00", ""))}</b>${accs.slice(0, 3).map((a) => avatar(a, 16)).join("")}<span>${esc((p.caption || p.title || typeLabel(p.type)).slice(0, 40))}</span></a>`;
   };
   let html = "";
   for (let i = 0; i < cells; i++) {
@@ -636,7 +641,7 @@ async function screenCreate(q) {
   }
 
   function renderAccounts() {
-    $("#c-accounts").innerHTML = Object.entries(byBrand).map(([brand, list]) => `<div class="row" style="gap:8px"><span style="flex:0 0 112px;font-size:13px;font-weight:700;color:var(--ink-2)">${esc(brand)}</span>${list.map((a) => `<button type="button" class="acc-chip ${C.accountIds.includes(a.id) ? "on" : ""}" data-acc="${esc(a.id)}" aria-pressed="${C.accountIds.includes(a.id)}">${badge(a.platform, true)}${esc(a.handle && a.platform === "instagram" ? a.handle : a.name)}</button>`).join("")}</div>`).join("");
+    $("#c-accounts").innerHTML = Object.entries(byBrand).map(([brand, list]) => `<div class="row" style="gap:8px"><span style="flex:0 0 112px;font-size:13px;font-weight:700;color:var(--ink-2)">${esc(brand)}</span>${list.map((a) => `<button type="button" class="acc-chip ${C.accountIds.includes(a.id) ? "on" : ""}" data-acc="${esc(a.id)}" aria-pressed="${C.accountIds.includes(a.id)}">${avatar(a, 26)}${esc(a.handle && a.platform === "instagram" ? a.handle : a.name)}</button>`).join("")}</div>`).join("");
     $$("#c-accounts [data-acc]").forEach((b) => (b.onclick = () => {
       if (readOnly) return;
       const id = b.dataset.acc;
@@ -997,7 +1002,7 @@ async function screenAccounts(q) {
       <div class="acc-grid">${d.accounts.filter((a) => a.platform !== "manual").sort((x, y) => x.platform.localeCompare(y.platform) || x.name.localeCompare(y.name)).map((a) => {
         const f = fol[a.id];
         return `<a class="acc-tile" href="#/account?id=${encodeURIComponent(a.id)}">
-          ${a.avatar ? `<img class="av" src="${esc(a.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge(a.platform)}
+          ${avatar(a, 44)}
           <span class="stack" style="gap:2px;min-width:0;flex:1"><b>${esc(a.name)}</b><span class="muted small">${badge(a.platform, true).replace('class="badge', 'class="badge xs')} ${esc(a.handle || PLATFORM[a.platform].name)}</span>
           <span class="small" style="font-weight:600">${f && f.followers !== null ? `${esc(num(f.followers))} ${esc((f.followersLabel || "Followers").toLowerCase())}` : ""}${a.status !== "ok" ? ` ${pill(a.status)}` : ""}</span></span>
           <span class="go" aria-hidden="true">›</span></a>`;
@@ -1022,7 +1027,7 @@ async function screenAccounts(q) {
     <datalist id="brand-list">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
     <section class="grid g-2">${Object.entries(groups).map(([brand, list]) => `<div class="card"><div class="row between"><h2>${esc(brand)}</h2><span class="muted small">${list.length} account${list.length === 1 ? "" : "s"}</span></div>
       ${list.map((a) => `<div class="stack" style="gap:8px;border-top:1px solid var(--line-2);padding-top:12px">
-        <div class="row between"><a class="row acc-open" href="#/account?id=${encodeURIComponent(a.id)}">${a.avatar ? `<img class="av" src="${esc(a.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge(a.platform)}<span class="stack" style="gap:2px"><b style="font-size:14px">${esc(a.name)}</b><span class="muted small">${esc(PLATFORM[a.platform]?.name || "")} · ${esc(a.handle || "")}</span></span></a><span class="row">${statusOf(a)}</span></div>
+        <div class="row between"><a class="row acc-open" href="#/account?id=${encodeURIComponent(a.id)}">${avatar(a, 36)}<span class="stack" style="gap:2px"><b style="font-size:14px">${esc(a.name)}</b><span class="muted small">${esc(PLATFORM[a.platform]?.name || "")} · ${esc(a.handle || "")}</span></span></a><span class="row">${statusOf(a)}</span></div>
         <span class="muted small">${esc(a.loginNote)}</span>${a.lastError ? `<p class="note bad">${esc(a.lastError)}</p>` : ""}
         <div class="row" style="gap:8px">
           <label class="f" style="flex:1 1 140px">Brand<input type="text" list="brand-list" data-brand="${esc(a.id)}" value="${esc(a.brand)}"></label>
@@ -1074,7 +1079,7 @@ async function screenAccount(q) {
   const P = d.profile || { name: a.name, handle: a.handle, avatar: a.avatar, bio: "", counts: [], link: "", linkLabel: "" };
   const L = ins?.latest;
   const kpis = L ? L.kpis : [];
-  const tab = ["hq", "audience"].includes(q.get("tab")) ? q.get("tab") : "posts";
+  const tab = ["hq", "audience", "analysis"].includes(q.get("tab")) ? q.get("tab") : "posts";
   const tabLink = (t, label) => `<button type="button" class="${tab === t ? "on" : ""}" data-tab="${t}">${label}</button>`;
   main(`
     <div class="row"><a class="btn sm" href="#/accounts">← All accounts</a></div>
@@ -1097,10 +1102,11 @@ async function screenAccount(q) {
       ${d.error ? `<p class="note warn">Could not load live profile: ${esc(d.error)}</p>` : ""}
     </section>
     ${kpis.length ? `<section class="grid g-kpi">${kpis.map((k) => `<div class="kpi"><span class="l">${esc(k.label)}</span><span class="v">${esc(num(k.value))}</span><span class="s">${esc(k.period)}</span></div>`).join("")}</section>` : ""}
-    <div class="seg" role="tablist" style="align-self:flex-start">${tabLink("posts", "Posts on the account")}${a.platform === "instagram" ? tabLink("audience", "Audience") : ""}${tabLink("hq", `Planned in Social HQ (${d.hq.length})`)}</div>
+    <div class="seg" role="tablist" style="align-self:flex-start">${tabLink("posts", "Posts on the account")}${["instagram", "facebook", "youtube"].includes(a.platform) ? tabLink("analysis", "Analysis") : ""}${a.platform === "instagram" ? tabLink("audience", "Audience") : ""}${tabLink("hq", `Planned in Social HQ (${d.hq.length})`)}</div>
     <section id="acc-body"></section>`);
   $$("[data-tab]").forEach((b) => (b.onclick = () => (location.hash = `#/account?id=${encodeURIComponent(id)}${b.dataset.tab !== "posts" ? `&tab=${b.dataset.tab}` : ""}`)));
   const body = $("#acc-body");
+  if (tab === "analysis") return mountAnalysis(body, id);
   if (tab === "audience") {
     body.innerHTML = `<p class="muted">Loading audience…</p>`;
     try {
@@ -1281,6 +1287,81 @@ function audienceHtml(au) {
   </div>`;
 }
 
+// ---------- Analysis (what works, from the account's own posts) ----------
+function idxTxt(i) {
+  if (i === null || i === undefined) return "—";
+  const v = Math.round((i - 1) * 100);
+  return `<span class="${v > 5 ? "up" : v < -5 ? "down" : ""}">${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v)}%</span>`;
+}
+function idxBars(rows, labelKey = "label") {
+  const shown = rows.filter((r) => r.n);
+  const max = Math.max(...shown.map((r) => r.index || 0), 1);
+  return `<div class="stack" style="gap:8px">${rows.map((r) => `<div class="barrow" style="grid-template-columns:minmax(110px,190px) minmax(0,1fr) 110px"><span class="bl">${esc(r[labelKey])}</span><span class="bt">${r.n ? `<span style="width:${Math.max(3, ((r.index || 0) / max) * 100)}%;background:${(r.index || 0) >= 1.15 ? "var(--green)" : (r.index || 0) <= 0.85 ? "#E08A7E" : "var(--blue)"}"></span>` : ""}</span><span class="bv" style="text-align:left">${r.n ? `${idxTxt(r.index)} <span class="muted">· ${r.n}</span>` : '<span class="muted">no posts</span>'}</span></div>`).join("")}</div>`;
+}
+function analysisHtml(d, accId) {
+  const a = d.analysis;
+  const ml = a.metricLabel;
+  if (!a.posts) return `<section class="card"><p class="muted">${esc(a.note || "No posts yet.")}</p></section>`;
+  const tagRow = (t) => `<div class="row between tagrow"><span class="kw">${esc(t.tag)}</span><span class="small muted">${t.uses}× · ${idxTxt(t.index)}</span></div>`;
+  const postTile = (p) => `<a class="ptile" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.caption)}">${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc(p.caption)}</span>`}<span class="ptype">${esc(p.type || "")}</span><span class="pstat"><span>${esc(num(p.value))} ${esc(ml.split(" ")[0])}</span><span>${idxTxt(p.index).replace(/class="(up|down)"/, 'style="color:#fff"')}</span></span><span class="pdate">${esc(dayName(p.at))}</span></a>`;
+  const t = a.types;
+  const e = a.engagement;
+  const weeksMax = Math.max(...a.weeks.map((w) => w.posts), 1);
+  return `<div class="stack" style="gap:16px">
+    <section class="card tips"><div class="row between"><h2>What to do next</h2><span class="row" style="gap:8px"><span class="muted small">${a.posts} posts · measured by ${esc(ml)} · updated ${esc(whenText(d.at))}</span><button class="btn sm" type="button" data-reanalyse="${esc(accId)}">Refresh analysis</button></span></div>
+      ${a.tips.length ? `<ol class="tiplist">${a.tips.map((x) => `<li><span class="tk tk-${esc(x.kind)}">${esc({ type: "Content", tags: "Hashtags", time: "Timing", caption: "Captions", rhythm: "Rhythm", trend: "Trend", engage: "Engagement" }[x.kind] || "Tip")}</span>${esc(x.text)}</li>`).join("")}</ol>` : `<p class="muted">No clear patterns yet. Keep posting and check back in a week.</p>`}
+      ${a.note ? `<p class="note">${esc(a.note)}</p>` : ""}
+      <p class="muted small">“Usual post” = the middle result of these ${a.posts} posts (${esc(num(a.median))} ${esc(ml)}). +50% means half as much again. These are patterns in your own posts, not guarantees.</p></section>
+
+    <section class="card"><h2>Content type</h2><div class="tbl"><table><thead><tr><th>Type</th><th>Posts</th><th>Avg. ${esc(ml)}</th><th>vs usual</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Saves</th><th>Avg. watch</th></tr></thead><tbody>
+      ${t.map((x) => `<tr><td><b>${esc(x.type)}</b></td><td>${x.n}</td><td>${esc(num(x.avg))}</td><td>${idxTxt(x.index)}</td><td>${esc(num(x.likes))}</td><td>${esc(x.comments ?? "—")}</td><td>${esc(x.shares ?? "—")}</td><td>${esc(x.saves ?? "—")}</td><td>${x.watchSec ? esc(x.watchSec + "s") : "—"}</td></tr>`).join("")}</tbody></table></div></section>
+
+    <section class="card"><div class="row between"><h2>Hashtags</h2><span class="muted small">${a.hashtags.distinct} different hashtags · each post compared with posts of the same type</span></div>
+      <div class="grid g-3">
+        <div class="stack" style="gap:6px"><h3 style="color:var(--green)">Working (${a.hashtags.working.length})</h3>${a.hashtags.working.slice(0, 15).map(tagRow).join("") || '<p class="muted small">None stand out yet (needs a tag used on 2+ posts).</p>'}</div>
+        <div class="stack" style="gap:6px"><h3 style="color:var(--red)">Not working (${a.hashtags.notWorking.length})</h3>${a.hashtags.notWorking.slice(0, 15).map(tagRow).join("") || '<p class="muted small">None pulling posts down.</p>'}</div>
+        <div class="stack" style="gap:6px"><h3>Average (${a.hashtags.average.length})</h3>${a.hashtags.average.slice(0, 15).map(tagRow).join("") || '<p class="muted small">—</p>'}</div>
+      </div>
+      ${a.hashtags.once.length ? `<details><summary class="link small" style="cursor:pointer">Tried only once (${a.hashtags.once.length}): try the top ones again to know for sure</summary><div class="row" style="gap:6px;margin-top:10px">${a.hashtags.once.slice(0, 40).map((x) => `<span class="kw" title="${esc(idxTxt(x.index).replace(/<[^>]+>/g, ""))} vs similar posts">${esc(x.tag)} <span class="muted" style="font-weight:600;margin-left:4px">${idxTxt(x.index).replace(/<[^>]+>/g, "")}</span></span>`).join("")}</div></details>` : ""}
+      <div class="grid g-2">
+        <div class="stack" style="gap:8px"><h3>How many hashtags per post</h3>${idxBars(a.hashtags.count)}</div>
+        <div class="stack" style="gap:8px"><h3>With vs without hashtags</h3>${idxBars([{ label: "With hashtags", ...a.hashtags.withVsWithout.with }, { label: "No hashtags", ...a.hashtags.withVsWithout.without }])}</div>
+      </div></section>
+
+    <section class="card"><h2>When you post (India time)</h2><div class="grid g-2"><div class="stack" style="gap:8px"><h3>Time of day</h3>${idxBars(a.dayparts)}</div><div class="stack" style="gap:8px"><h3>Day of week</h3>${idxBars(a.days)}</div></div>
+      <p class="muted small">Green = better than your usual post, red = worse. The number after the dot is how many posts went out then.</p></section>
+
+    <section class="card"><h2>Captions</h2><div class="grid g-2">
+      <div class="stack" style="gap:8px"><h3>Caption length (hashtags not counted)</h3>${idxBars(a.captions)}<span class="muted small">${a.captions.map((c) => `${esc(c.label.split(" (")[0])}: ${c.comments} comments a post`).join(" · ")}</span></div>
+      <div class="stack" style="gap:8px"><h3>Asking people to act</h3>${idxBars([{ label: "Asks (comment, DM, save…)", ...a.cta.with }, { label: "No ask", ...a.cta.without }])}<span class="muted small">Comments a post: ${a.cta.with.n ? `${a.cta.with.comments} with an ask` : "no posts with an ask"} · ${a.cta.without.n ? `${a.cta.without.comments} without` : "every post has an ask"}</span></div>
+    </div></section>
+
+    <section class="card"><h2>How people engage</h2>
+      <div class="pst-grid">${[["Likes", e.likes], ["Comments", e.comments], ["Shares", e.shares], ["Saves", e.saves]].map(([l, v]) => `<div class="pst"><span class="v">${esc(num(v))}</span><span class="l">${l}, all ${a.posts} posts</span>${e.perThousand ? `<span class="l">${e.perThousand[l.toLowerCase()]} per 1,000 reached</span>` : ""}</div>`).join("")}${e.rate !== null ? `<div class="pst"><span class="v">${e.rate}%</span><span class="l">Engagement rate (interactions ÷ reach)</span></div>` : ""}</div>
+      <p class="muted small">Saves and shares count most: they tell Instagram a post is worth showing to more people.</p></section>
+
+    <section class="card"><h2>Posting rhythm</h2>
+      <div class="weeks">${a.weeks.map((w) => `<div class="wk" title="Week of ${esc(w.week)}: ${w.posts} posts"><span style="height:${Math.max(4, (w.posts / weeksMax) * 100)}%">${w.posts || ""}</span><em>${esc(new Date(w.week + "T12:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }))}</em></div>`).join("")}</div>
+      <div class="pst-grid"><div class="pst"><span class="v">${a.perWeek ?? "—"}</span><span class="l">Posts a week (last 7 weeks)</span></div><div class="pst"><span class="v">${a.longestGapDays ?? "—"}d</span><span class="l">Longest gap (60 days)</span></div><div class="pst"><span class="v">${a.daysSinceLastPost ?? "—"}d</span><span class="l">Since the last post</span></div>${a.trend ? `<div class="pst"><span class="v">${a.trend.change === null ? "—" : (a.trend.change > 0 ? "+" : "") + a.trend.change + "%"}</span><span class="l">Last ${a.trend.k} posts vs the ${a.trend.k} before</span></div>` : ""}</div></section>
+
+    <div class="grid g-2">
+      <section class="card"><h2>Best 5 posts</h2><div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr))">${a.top.map(postTile).join("")}</div></section>
+      <section class="card"><h2>Weakest 5 posts</h2><div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr))">${a.bottom.map(postTile).join("") || '<p class="muted small">Not enough posts older than 2 days.</p>'}</div></section>
+    </div>
+  </div>`;
+}
+async function mountAnalysis(box, accId, refresh = false) {
+  box.innerHTML = `<p class="muted">${refresh ? "Reading every post's numbers again…" : "Working out what works…"}</p>`;
+  try {
+    const d = await api("GET", `/api/analysis/${encodeURIComponent(accId)}${refresh ? "?refresh=1" : ""}`);
+    box.innerHTML = analysisHtml(d, accId);
+    const b = box.querySelector("[data-reanalyse]");
+    if (b) b.onclick = () => mountAnalysis(box, accId, true);
+  } catch (e) {
+    box.innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+  }
+}
+
 // ---------- Comments (inbox + under each post) ----------
 function ago(iso) {
   const m = Math.round((Date.now() - new Date(iso)) / 60000);
@@ -1376,7 +1457,7 @@ async function screenInbox(q) {
       <a class="chip ${filter === "todo" ? "on" : ""}" href="${link("show", "todo")}">Not replied yet</a>
       <a class="chip ${filter === "new" ? "on" : ""}" href="${link("show", "new")}">New since last visit</a>
     </div>
-    <div class="row" role="group" aria-label="Account"><a class="acc-chip ${!only ? "on" : ""}" style="text-decoration:none;color:inherit;padding-left:12px" href="${link("account", "")}">All accounts</a>${list.map((a) => `<a class="acc-chip ${only === a.id ? "on" : ""}" style="text-decoration:none;color:inherit" href="${link("account", a.id)}">${badge(a.platform, true)}${esc(a.handle || a.name)}</a>`).join("")}</div>
+    <div class="row" role="group" aria-label="Account"><a class="acc-chip ${!only ? "on" : ""}" style="text-decoration:none;color:inherit;padding-left:12px" href="${link("account", "")}">All accounts</a>${list.map((a) => `<a class="acc-chip ${only === a.id ? "on" : ""}" style="text-decoration:none;color:inherit" href="${link("account", a.id)}">${avatar(a, 26)}${esc(a.handle || a.name)}</a>`).join("")}</div>
     <p class="note">Facebook Page comments come next: Meta needs one more permission for them.</p>
     <section class="card" id="cm-list"><p class="muted">Loading comments…</p></section>`);
   $("#cm-refresh").onclick = () => render();
@@ -1394,7 +1475,7 @@ async function screenInbox(q) {
   const shown = rows.filter((x) => (filter === "todo" ? !x.c.replied : filter === "new" ? x.isNew : true));
   box.innerHTML = `${errors.length ? `<p class="note bad">${esc(errors.join(" · "))}</p>` : ""}
     <div class="row between"><h2>${shown.length} comment${shown.length === 1 ? "" : "s"}</h2><span class="muted small">${rows.filter((x) => !x.c.replied).length} not replied · ${rows.filter((x) => x.isNew).length} new</span></div>
-    ${shown.map(({ c, acc, isNew }) => `<div class="cm-wrap"><a class="muted small" style="font-weight:700;text-decoration:none" href="#/account?id=${encodeURIComponent(acc.id)}">${badge(acc.platform, true).replace('class="badge', 'class="badge xs')} ${esc(acc.handle || acc.name)}</a>${commentHtml(c, acc.id, { showPost: true, isNew })}</div>`).join("") || `<p class="muted">${filter === "all" ? "No comments on your recent posts yet." : "Nothing here. You're all caught up."}</p>`}`;
+    ${shown.map(({ c, acc, isNew }) => `<div class="cm-wrap"><a class="muted small" style="font-weight:700;text-decoration:none" href="#/account?id=${encodeURIComponent(acc.id)}" class="row" style="gap:6px">${avatar(acc, 20)} ${esc(acc.handle || acc.name)}</a>${commentHtml(c, acc.id, { showPost: true, isNew })}</div>`).join("") || `<p class="muted">${filter === "all" ? "No comments on your recent posts yet." : "Nothing here. You're all caught up."}</p>`}`;
   wireComments(box, () => render());
   // Mark as seen a moment after showing, so "New" badges stay visible on this visit.
   setTimeout(() => api("POST", "/api/inbox/seen", { ids: targets.map((a) => a.id) }).catch(() => {}), 1500);
@@ -1508,7 +1589,7 @@ async function screenCompetitors(q) {
       <p class="muted small">Works for public business and creator accounts. Numbers refresh every 6 hours and a growth history builds up day by day.</p></section>
     ${bad.length ? `<p class="note bad">${bad.map((r) => `@${esc(r.username)}: ${esc(r.error)}`).join("<br>")}</p>` : ""}
     <section class="card"><div class="row between"><h2>Side by side</h2><span class="muted small">${d.tracked} tracked · your accounts are marked “You”</span></div>
-      <div class="tbl"><table><thead><tr><th>Account</th>${th("followers", "Followers")}${th("change28", "28-day change")}${th("postsPerWeek", "Posts / week")}${th("avgLikes", "Avg. likes")}${th("avgComments", "Avg. comments")}${th("engagement", "Engagement")}<th>Mix (last 12)</th><th></th></tr></thead><tbody>
+      <div class="tbl"><table><thead><tr><th>Account</th>${th("followers", "Followers")}${th("change28", "28-day change")}${th("postsPerWeek", "Posts / week")}${th("avgLikes", "Avg. likes")}${th("avgComments", "Avg. comments")}${th("engagement", "Engagement")}${th("maxLikes", "Best post (likes)")}${th("reelsShare", "Reels")}<th>Top hashtag</th><th>Last post</th><th></th></tr></thead><tbody>
       ${rows.map((r) => `<tr class="${r.you ? "you-row" : ""}">
         <td><a class="acc-cell" style="text-decoration:none;color:inherit" href="#/competitors?u=${encodeURIComponent(r.username)}">${r.avatar ? `<img class="av" src="${esc(r.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge("instagram", true)}<div><div class="n">${esc(r.name)} ${r.you ? pill("ok", "You") : ""}</div><div class="h">@${esc(r.username)}</div></div></a></td>
         <td><b>${esc(num(r.followers))}</b></td>
@@ -1517,7 +1598,10 @@ async function screenCompetitors(q) {
         <td>${esc(num(r.avgLikes))}</td>
         <td>${esc(r.avgComments === null ? "—" : String(r.avgComments))}</td>
         <td>${esc(pct(r.engagement))}</td>
-        <td class="muted small">${Object.entries(r.types || {}).map(([t, n]) => `${n} ${t.toLowerCase()}${n === 1 ? "" : "s"}`).join(", ")}</td>
+        <td>${esc(num(r.maxLikes))}</td>
+        <td>${r.reelsShare === null ? "—" : esc(r.reelsShare + "%")}</td>
+        <td>${r.topTag ? `<span class="kw">${esc(r.topTag)}</span>` : '<span class="muted small">none</span>'}</td>
+        <td class="muted small">${r.lastPostAt ? esc(ago(r.lastPostAt)) : "—"}</td>
         <td>${r.you ? "" : `<button class="btn sm danger" type="button" data-untrack="${esc(r.username)}">Stop</button>`}</td>
       </tr>`).join("")}</tbody></table></div>
       <p class="muted small">Engagement = average likes + comments per post ÷ followers. Click an account to see its best posts.</p></section>
@@ -1555,6 +1639,28 @@ async function screenCompetitors(q) {
         <div class="stack" style="gap:8px;flex:1 1 260px;min-width:0"><div class="row"><h2 style="font-size:22px">${esc(c.name)}</h2><a class="btn sm" href="https://www.instagram.com/${esc(c.username)}/" target="_blank" rel="noopener">Open on Instagram ↗</a></div>
           <div class="prof-counts"><div><b>${esc(num(c.posts))}</b><span>Posts</span></div><div><b>${esc(num(c.followers))}</b><span>Followers</span></div><div><b>${esc(String(c.postsPerWeek))}</b><span>Posts a week</span></div><div><b>${esc(num(c.avgLikes))}</b><span>Avg. likes</span></div><div><b>${esc(pct(c.engagement))}</b><span>Engagement</span></div></div>
           ${c.bio ? `<p class="prof-bio">${esc(c.bio)}</p>` : ""}</div></div>
+      ${c.insights.length ? `<div class="stack" style="gap:6px"><h3>What they're doing</h3><ul class="tiplist" style="padding-left:18px">${c.insights.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <div class="pst-grid">
+        <div class="pst"><span class="v">${esc(String(c.postsPerWeek))}</span><span class="l">Posts a week</span></div>
+        <div class="pst"><span class="v">${esc(num(c.avgLikes))}</span><span class="l">Avg. likes (last 12)</span></div>
+        <div class="pst"><span class="v">${esc(c.avgComments === null ? "—" : String(c.avgComments))}</span><span class="l">Avg. comments</span></div>
+        <div class="pst"><span class="v">${esc(pct(c.engagement))}</span><span class="l">Engagement</span></div>
+        <div class="pst"><span class="v">${esc(String(c.hashtagsPerPost))}</span><span class="l">Hashtags a post</span></div>
+        <div class="pst"><span class="v">${esc(String(c.captionLength))}</span><span class="l">Letters in a caption</span></div>
+        <div class="pst"><span class="v">${c.lastPostAt ? esc(ago(c.lastPostAt)) : "—"}</span><span class="l">Last post</span></div>
+        <div class="pst"><span class="v">${c.change28 === null ? "—" : esc(signed(c.change28))}</span><span class="l">Followers, 28 days</span></div>
+      </div>
+      <div class="grid g-2">
+        <div class="stack" style="gap:8px"><h3>Their content types</h3><div class="tbl"><table style="min-width:0"><thead><tr><th>Type</th><th>Posts</th><th>Avg. likes + comments</th><th>vs their usual</th></tr></thead><tbody>${c.analysis.types.map((x) => `<tr><td><b>${esc(x.type)}</b></td><td>${x.n}</td><td>${esc(num(x.avg))}</td><td>${idxTxt(x.index)}</td></tr>`).join("")}</tbody></table></div></div>
+        <div class="stack" style="gap:8px"><h3>Hashtags they use most</h3><div class="row" style="gap:6px">${c.mostUsed.map((t) => `<span class="kw" style="${t.yours ? "background:var(--green-soft);color:var(--green)" : ""}" title="${t.yours ? "You use this one too" : "You don't use this one"}">${esc(t.tag)} · ${t.uses}</span>`).join("") || '<span class="muted small">They don\'t use hashtags.</span>'}</div><span class="muted small">Green = you use it too.</span>
+          ${c.analysis.hashtags.working.length ? `<h3 style="margin-top:6px">Their best hashtags</h3><div class="row" style="gap:6px">${c.analysis.hashtags.working.slice(0, 10).map((t) => `<span class="kw">${esc(t.tag)} ${idxTxt(t.index).replace(/<[^>]+>/g, "")}</span>`).join("")}</div>` : ""}
+          ${c.toTry.length ? `<h3 style="margin-top:6px">Worth testing on your posts</h3><div class="row" style="gap:6px">${c.toTry.map((t) => `<span class="kw" style="background:var(--orange-soft);color:var(--orange)">${esc(t.tag)}</span>`).join("")}</div>` : ""}</div>
+      </div>
+      <div class="grid g-2">
+        <div class="stack" style="gap:8px"><h3>When they post, and what works (India time)</h3>${idxBars(c.analysis.dayparts)}</div>
+        <div class="stack" style="gap:8px"><h3>Days they post</h3>${idxBars(c.analysis.days)}</div>
+      </div>
+      <div class="stack" style="gap:8px"><h3>Their posting rhythm (last 8 weeks)</h3><div class="weeks">${c.analysis.weeks.map((w) => { const mx = Math.max(...c.analysis.weeks.map((x) => x.posts), 1); return `<div class="wk"><span style="height:${Math.max(4, (w.posts / mx) * 100)}%">${w.posts || ""}</span><em>${esc(new Date(w.week + "T12:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }))}</em></div>`; }).join("")}</div></div>
       <h3>Their best recent posts</h3>
       <div class="pgrid">${top.map((m) => `<a class="ptile" href="${esc(m.url)}" target="_blank" rel="noopener" title="${esc(m.caption)}">${m.thumb ? `<img src="${esc(m.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc(m.caption.slice(0, 120))}</span>`}<span class="ptype">${esc(POST_ICON[m.type] || m.type)}</span><span class="pstat"><span>♥ ${esc(num(m.likes))}</span><span>💬 ${esc(num(m.comments))}</span></span><span class="pdate">${esc(dayName(m.at))}</span></a>`).join("") || '<p class="muted">No posts yet.</p>'}</div>
       ${c.hist.length > 1 ? `<h3>Followers over time</h3>${growth(c.hist)}` : '<p class="muted small">The follower chart starts after two days of tracking.</p>'}
@@ -1579,34 +1685,45 @@ async function screenInsights(q) {
   const hist = (d.hist || []).filter((h) => typeof h.followers === "number");
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const scale = ["#F1F4FF", "#D6E0FF", "#A9BDFF", "#6F8DF7", "#2848E8"];
+  const words = ["Poor", "Fair", "Good", "Very good", "Best"];
+  const band = (v) => Math.min(4, Math.floor(v / 20.01));
+  const hText = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
   const topKey = Object.fromEntries(d.top.map((t, i) => [`${t.d}-${t.h}`, i + 1]));
   const heat = `<div class="tbl"><div class="heat"><div class="hr"><span></span>${d.hours.map((h) => `<span class="lbl">${h % 3 === 0 ? (h % 12 || 12) + (h < 12 ? "a" : "p") : ""}</span>`).join("")}</div>
     ${d.model.scores.map((row, di) => `<div class="hr"><span style="font-size:12px;font-weight:600;color:var(--ink-2)">${days[di]}</span>${row.map((v, hi) => {
       const rank = topKey[`${di}-${d.hours[hi]}`];
-      return `<span class="cell" title="${days[di]} ${d.hours[hi]}:00 · ${v}/100" style="background:${rank ? "#B4500C" : scale[Math.min(4, Math.floor(v / 20.01))]}">${rank || ""}</span>`;
-    }).join("")}</div>`).join("")}</div></div>`;
+      return `<span class="cell" title="${days[di]} ${hText(d.hours[hi])}: ${words[band(v)]} (${v} out of 100)${rank ? ` · number ${rank} best hour of the week` : ""}" style="background:${rank ? "#B4500C" : scale[band(v)]}">${rank || ""}</span>`;
+    }).join("")}</div>`).join("")}</div></div>
+    <div class="row legend">${scale.map((c, i) => `<span><i style="background:${c}"></i>${words[i]}</span>`).join("")}<span><i style="background:#B4500C"></i>Top 3 hours</span></div>`;
+  const bestEachDay = d.model.scores.map((row, di) => { const m = Math.max(...row); return { d: days[di], h: d.hours[row.indexOf(m)], v: m }; });
   const hourText = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
   const posts = (L?.posts || []).slice().sort((a, b) => (b.interactions || 0) + (b.views || 0) * 0.05 - ((a.interactions || 0) + (a.views || 0) * 0.05)).slice(0, 5);
   const cmp = list.accounts.slice().sort((a, b) => (b.growth28 ?? -1e9) - (a.growth28 ?? -1e9));
   main(`
     <header class="head"><div><p class="sub">${L ? `Updated ${esc(whenText(L.at))}` : "Not collected yet"} · numbers refresh every 6 hours</p><h1>Insights</h1></div>
       <div class="row"><a class="btn" href="#/account?id=${encodeURIComponent(id)}">Open account · all posts</a><button class="btn" id="refresh" type="button">Refresh now</button></div></header>
-    <div class="row" role="group" aria-label="Pick an account">${list.accounts.map((a) => `<a class="acc-chip ${a.id === id ? "on" : ""}" style="text-decoration:none;color:inherit" href="#/insights?id=${encodeURIComponent(a.id)}">${badge(a.platform, true)}${esc(a.platform === "instagram" ? a.handle || a.name : a.name)}</a>`).join("")}</div>
+    <div class="row" role="group" aria-label="Pick an account">${list.accounts.map((a) => `<a class="acc-chip ${a.id === id ? "on" : ""}" style="text-decoration:none;color:inherit" href="#/insights?id=${encodeURIComponent(a.id)}">${avatar(a, 26)}${esc(a.platform === "instagram" ? a.handle || a.name : a.name)}</a>`).join("")}</div>
     ${L?.limited ? `<p class="note">${esc(L.limited)}</p>` : ""}
     ${L ? `<section class="grid g-kpi">${kpis.map(([l, v, s]) => `<div class="kpi"><span class="l">${esc(l)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join("")}</section>` : `<p class="note">No numbers yet for this account. Press "Refresh now" and come back in a minute.</p>`}
+    ${["instagram", "facebook", "youtube"].includes(d.account.platform) ? `<section id="ana-box"></section>` : ""}
     <div class="grid g-2">
       <section class="card"><div class="row between"><h2>${esc(L?.followersLabel || "Followers")}</h2><span class="muted small">${hist.length > 1 ? `${num(hist[0].followers)} → ${num(hist[hist.length - 1].followers)}` : "Builds up day by day"}</span></div>${growth(hist)}</section>
       <section class="card"><h2>Top posts</h2>${posts.length ? posts.map((p) => `<div class="row between" style="border-top:1px solid var(--line-2);padding-top:10px;flex-wrap:nowrap"><div class="stack" style="gap:3px;min-width:0"><a href="${esc(p.url || "#")}" target="_blank" rel="noopener" style="font-size:14px;font-weight:600;text-decoration:none;color:inherit">${esc(p.title || "Post")}</a><span class="muted small">${esc(p.type || "")} · ${p.at ? esc(dayName(p.at)) : ""}</span></div><div class="stack" style="gap:3px;align-items:flex-end;flex:0 0 auto"><b>${num(p.views || p.reach || 0)} ${p.views ? "views" : "reached"}</b><span class="muted small">${num(p.interactions)} interactions</span></div></div>`).join("") : `<p class="muted">No post data for this account yet.</p>`}</section>
     </div>
-    <section class="card"><div class="row between" style="align-items:flex-end"><div class="stack" style="gap:4px"><h2>Perfect time to post · ${esc(d.account.name)}</h2><p class="muted">Darker = better. Numbered squares are the top 3. ${d.model.learnedFrom ? `Learned from ${d.model.learnedFrom} of your posts (${d.model.trust}% your data, rest starting guess).` : `Starting guess: ${esc(d.startingWindow || "")}. It learns as you post.`}</p></div>
-      <div class="row">${d.top.map((t, i) => `<span class="perfect" style="padding-left:5px"><span style="width:22px;height:22px;border-radius:50%;background:#B4500C;color:#fff;display:inline-flex;align-items:center;justify-content:center">${i + 1}</span>${days[t.d]} · ${hourText(t.h)}</span>`).join("")}</div></div>${heat}</section>
+    <section class="card"><div class="row between" style="align-items:flex-start"><div class="stack" style="gap:6px;max-width:760px"><h2>Best time to post on ${esc(d.account.name)}</h2>
+        <p style="font-size:14px;line-height:1.55">Each row is a day and each square is one hour (India time). The <b>darker the blue, the better</b> that hour is for posting on this account. The <b style="color:#B4500C">orange squares 1, 2, 3</b> are the three best hours of the whole week. Point at any square to see its score.</p>
+        <p class="muted small">${d.model.learnedFrom ? `Worked out from ${d.model.learnedFrom} of your own posts (they count ${d.model.trust}%), plus a general starting guess for Indian audiences (${100 - d.model.trust}%)${d.model.usesOnline ? " and the hours your followers are online" : ""}. It gets more accurate with every post.` : `For now this is a general starting guess (${esc(d.startingWindow || "")}). It learns from your own posts as you publish.`}</p></div>
+      <div class="stack" style="gap:6px"><b style="font-size:13px">Top 3 hours this week</b>${d.top.map((t, i) => `<span class="perfect" style="padding-left:5px"><span style="width:22px;height:22px;border-radius:50%;background:#B4500C;color:#fff;display:inline-flex;align-items:center;justify-content:center">${i + 1}</span>${days[t.d]} · ${hourText(t.h)}</span>`).join("")}</div></div>
+      ${heat}
+      <div class="stack" style="gap:6px"><b style="font-size:13px">Best hour on each day</b><div class="row" style="gap:6px">${bestEachDay.map((b) => `<span class="chip" style="cursor:default">${b.d} · ${hourText(b.h)}</span>`).join("")}</div></div></section>
     <section class="card"><h2>Compare all accounts · fastest growing first</h2><div class="tbl"><table><thead><tr><th>Account</th><th>Followers</th><th>Reach, 28 days</th><th>Engagement</th><th>Posts, 28 days</th><th>Growth, 28 days</th></tr></thead><tbody>
-      ${cmp.map((a) => `<tr><td><div class="acc-cell">${badge(a.platform, true)}<span class="n">${esc(a.name)}</span></div></td><td>${num(a.followers)}</td><td>${num(a.reach28)}</td><td>${pct(a.engagementRate)}</td><td>${a.posts28}</td><td class="${a.growth28 > 0 ? "up" : a.growth28 < 0 ? "down" : ""}">${signed(a.growth28)}</td></tr>`).join("")}
+      ${cmp.map((a) => `<tr><td><div class="acc-cell">${avatar(a, 30)}<span class="n">${esc(a.name)}</span></div></td><td>${num(a.followers)}</td><td>${num(a.reach28)}</td><td>${pct(a.engagementRate)}</td><td>${a.posts28}</td><td class="${a.growth28 > 0 ? "up" : a.growth28 < 0 ? "down" : ""}">${signed(a.growth28)}</td></tr>`).join("")}
     </tbody></table></div><p class="muted small">Growth needs a few days of history; it fills in automatically.</p></section>`);
   $("#refresh").onclick = async () => {
     await api("POST", `/api/insights/refresh?account=${encodeURIComponent(id)}`);
     toast("Collecting fresh numbers. Reload in a minute.");
   };
+  if ($("#ana-box")) mountAnalysis($("#ana-box"), id);
 }
 function growth(hist) {
   if (hist.length < 2) return `<p class="muted">The chart starts after two days of data.</p>`;

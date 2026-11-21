@@ -14,6 +14,8 @@ import { overview, plan, suggestions, insightsList, insightsDetail } from "../li
 import { triggerPublish } from "../lib/jobs.mjs";
 import { getJSON, setJSON, del } from "../lib/store.mjs";
 import { listRules, createRule, updateRule, deleteRule, getLog, testComment, runAutoReplies } from "../lib/autoreply.mjs";
+import { cacheAvatar, readAvatar, refreshAvatars } from "../lib/avatars.mjs";
+import { analysisFor } from "../lib/analysis.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 
 function siteUrl(req, context) {
@@ -35,6 +37,15 @@ route("GET", "/m/:file", async ({ params }) => {
   const parts = [];
   for (let i = 0; i < meta.chunks; i++) parts.push(await readPart(id, i));
   return new Response(Buffer.concat(parts), { headers: { "content-type": meta.mime || "image/jpeg", "cache-control": "public, max-age=86400" } });
+}, { open: true });
+
+// ---------- Saved profile pictures ----------
+route("GET", "/m/av/:id", async ({ params }) => {
+  const buf = await readAvatar(params.id);
+  if (!buf) return new Response("Not found", { status: 404 });
+  let type = "image/jpeg";
+  try { type = (await getAccount(params.id)).avatarType || type; } catch (_) { /* removed account */ }
+  return new Response(buf, { headers: { "content-type": type, "cache-control": "public, max-age=604800, immutable" } });
 }, { open: true });
 
 // ---------- Login ----------
@@ -172,6 +183,10 @@ route("GET", "/api/accounts/:id/profile", async ({ params }) => {
   let profile = null, error = "";
   if (p?.profile) {
     try { profile = await p.profile({ settings, account }); } catch (e) { error = errMessage(e); }
+    if (profile?.avatar && (profile.avatar !== account.avatar || !account.avatarCached)) {
+      if (await cacheAvatar(account, profile.avatar)) await saveAccount(account);
+    }
+    if (profile && account.avatarCached) profile.avatar = `/m/av/${encodeURIComponent(account.id)}?v=${account.avatarCached}`;
   }
   return json({ account: publicAccount(account), profile, error, hq: mine, canBrowse: !!p?.feed });
 });
@@ -243,6 +258,10 @@ route("DELETE", "/api/competitors/:u", async ({ req, params }) => {
   await logEvent("settings", `Stopped tracking @${params.u}`, req);
   return json({ ok: true });
 });
+
+route("POST", "/api/accounts-avatars", async () => json(await refreshAvatars()));
+
+route("GET", "/api/analysis/:id", async ({ params, url }) => json(await analysisFor(params.id, { refresh: url.searchParams.get("refresh") === "1" })));
 
 // ---------- Comments inbox ----------
 route("GET", "/api/accounts/:id/audience", async ({ params, url }) => {

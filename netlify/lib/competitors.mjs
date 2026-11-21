@@ -7,6 +7,7 @@ import { listAccounts, tokenOf } from "./accounts.mjs";
 import { getSettings } from "./settings.mjs";
 import { getJSON, setJSON, del } from "./store.mjs";
 import { HttpError } from "./util.mjs";
+import { analyse, hashtagsOf } from "./analysis.mjs";
 
 const FIELDS = "id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website,media.limit(30){id,caption,like_count,comments_count,timestamp,permalink,media_type,media_product_type,media_url,thumbnail_url}";
 const FRESH_MS = 6 * 3600000;
@@ -139,7 +140,13 @@ export async function competitorTable({ force = false } = {}) {
       const s = await snapshot(n.username, { force });
       const { media, ...rest } = s.summary;
       const best = [...media].filter((m) => m.likes !== null).sort((a, b) => b.likes - a.likes)[0] || null;
-      return { ...rest, you: n.you, best, at: s.at };
+      const recent = media.slice(0, 12);
+      const tagCount = {};
+      for (const m of recent) for (const t of hashtagsOf(m.caption)) tagCount[t] = (tagCount[t] || 0) + 1;
+      const topTag = Object.entries(tagCount).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      const reelsShare = recent.length ? Math.round(((rest.types.Reel || 0) / recent.length) * 100) : null;
+      const maxLikes = recent.reduce((m2, x) => Math.max(m2, x.likes || 0), 0);
+      return { ...rest, you: n.you, best, at: s.at, topTag, reelsShare, maxLikes };
     } catch (e) {
       return { username: n.username, you: n.you, error: e.message };
     }
@@ -147,9 +154,49 @@ export async function competitorTable({ force = false } = {}) {
   return { rows, tracked: list.length };
 }
 
+// Your own hashtags (from your accounts' analysed posts), to spot tags worth testing.
+async function ownHashtags() {
+  const tags = new Set();
+  for (const a of (await listAccounts()).filter((x) => x.platform === "instagram")) {
+    const rec = await getJSON(`ana/${a.id}`);
+    for (const p of rec?.posts || []) for (const t of hashtagsOf(p.caption)) tags.add(t);
+  }
+  return tags;
+}
+
 export async function competitorDetail(username) {
   const s = await snapshot(cleanName(username));
-  return { ...s.summary, hist: s.hist, at: s.at };
+  const posts = s.summary.media.map((m) => ({ ...m, interactions: (m.likes || 0) + (m.comments || 0) }));
+  const an = analyse(posts, { platform: "instagram" });
+  const mine = await ownHashtags();
+  const tagTotals = {};
+  for (const p of posts) for (const t of hashtagsOf(p.caption)) tagTotals[t] = (tagTotals[t] || 0) + 1;
+  const mostUsed = Object.entries(tagTotals).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([tag, uses]) => ({ tag, uses, yours: mine.has(tag) }));
+  const toTry = [...an.hashtags.working, ...an.hashtags.average.filter((t) => t.index >= 1)].filter((t) => !mine.has(t.tag)).slice(0, 12);
+  const withTags = posts.filter((p) => hashtagsOf(p.caption).length);
+  const busiest = an.days.filter((d) => d.n).sort((a, b) => b.n - a.n).slice(0, 2).map((d) => d.label);
+  const busiestPart = an.dayparts.filter((d) => d.n).sort((a, b) => b.n - a.n)[0]?.label || null;
+  const insights = [];
+  const t = an.types.filter((x) => x.n >= 2);
+  if (t.length >= 2 && t[0].avg && t[t.length - 1].avg) insights.push(`Their ${t[0].type.toLowerCase()}s get ${Math.round((t[0].avg / Math.max(t[t.length - 1].avg, 1)) * 10) / 10}× the likes and comments of their ${t[t.length - 1].type.toLowerCase()}s.`);
+  if (s.summary.postsPerWeek) insights.push(`They post about ${s.summary.postsPerWeek} times a week${busiest.length ? `, mostly on ${busiest.join(" and ")}` : ""}${busiestPart ? `, usually in the ${busiestPart.split(" (")[0].toLowerCase()}` : ""}.`);
+  if (an.hashtags.working.length) insights.push(`Hashtags that do best for them: ${an.hashtags.working.slice(0, 5).map((x) => x.tag).join(", ")}.`);
+  if (toTry.length) insights.push(`Tags they use well that you haven't tried: ${toTry.slice(0, 6).map((x) => x.tag).join(", ")}.`);
+  if (an.cta.with.n >= 2 && an.cta.without.n >= 2) insights.push(an.cta.with.comments > an.cta.without.comments ? `Asking for comments works for them: ${an.cta.with.comments} comments a post with an ask vs ${an.cta.without.comments} without.` : `Their posts with an ask don't get more comments (${an.cta.with.comments} vs ${an.cta.without.comments}).`);
+  if (an.trend && an.trend.change !== null) insights.push(`Their last ${an.trend.k} posts got ${Math.abs(an.trend.change)}% ${an.trend.change >= 0 ? "more" : "fewer"} likes and comments than the ${an.trend.k} before.`);
+  if (s.summary.change28 !== null) insights.push(`Followers: ${s.summary.change28 >= 0 ? "+" : ""}${s.summary.change28} in the last 28 days.`);
+  return {
+    ...s.summary,
+    hist: s.hist,
+    at: s.at,
+    analysis: an,
+    hashtagsPerPost: posts.length ? Math.round((posts.reduce((t2, p) => t2 + hashtagsOf(p.caption).length, 0) / posts.length) * 10) / 10 : 0,
+    postsWithHashtags: withTags.length,
+    captionLength: posts.length ? Math.round(posts.reduce((t2, p) => t2 + String(p.caption || "").replace(/#[\p{L}\p{N}_]+/gu, "").trim().length, 0) / posts.length) : 0,
+    mostUsed,
+    toTry,
+    insights,
+  };
 }
 
 export async function refreshCompetitors() {

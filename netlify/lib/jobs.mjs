@@ -162,7 +162,16 @@ export async function collectInsights({ only, platformsOverride } = {}) {
         await setJSON(`ins/${fresh.id}/hist`, hist.slice(-120));
       }
       await setJSON(`bt/${fresh.id}`, model(fresh, snap));
-      if (snap.avatar) fresh.avatar = snap.avatar;
+      if (impl[fresh.platform]?.analysisPosts) {
+        try {
+          const { collectAnalysis } = await import("./analysis.mjs");
+          await collectAnalysis({ account: fresh, settings, impl });
+        } catch (_) { /* analysis is refreshed next run */ }
+      }
+      if (snap.avatar && (snap.avatar !== fresh.avatar || !fresh.avatarCached || Date.now() - new Date(fresh.avatarAt || 0) > 3 * 86400000)) {
+        const { cacheAvatar } = await import("./avatars.mjs");
+        if (!(await cacheAvatar(fresh, snap.avatar))) fresh.avatar = snap.avatar;
+      }
       if (fresh.platform === "pinterest" && impl.pinterest.refreshBoards) {
         try {
           await impl.pinterest.refreshBoards(fresh);

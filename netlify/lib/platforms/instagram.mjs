@@ -537,3 +537,42 @@ export async function privateReply({ settings, account, commentId, message }) {
   });
   return { id: data.message_id || data.id || "" };
 }
+
+// ---------- Analysis: per-post numbers for the last ~60 posts (cached) ----------
+export async function analysisPosts({ settings, account, cache = {}, limit = 60, now = Date.now() }) {
+  const token = tokenOf(account);
+  const list = [];
+  let url = `${base(settings)}/${account.remoteId}/media?${qs({ fields: IG_POST_FIELDS, limit: 50, access_token: token })}`;
+  while (url && list.length < limit) {
+    const { data } = await call(url);
+    list.push(...(data.data || []));
+    url = data.paging?.next && (data.data || []).length ? data.paging.next : null;
+  }
+  const items = list.slice(0, limit).map((m) => ({ ...igItem(m), saves: null, shares: null, reach: null, views: null, interactions: null, watchMs: null }));
+  const todo = items.filter((it) => {
+    const c = cache[it.id];
+    if (!c || !c.fetchedAt) return true;
+    const age = now - new Date(it.at).getTime();
+    return age < 21 * 86400000 && now - new Date(c.fetchedAt).getTime() > 12 * 3600000;
+  });
+  for (const it of items) {
+    const c = cache[it.id];
+    if (c && !todo.includes(it)) Object.assign(it, { reach: c.reach, views: c.views, saves: c.saves, shares: c.shares, interactions: c.interactions, watchMs: c.watchMs, fetchedAt: c.fetchedAt });
+  }
+  for (let i = 0; i < todo.length; i += 6) {
+    await Promise.all(todo.slice(i, i + 6).map(async (it) => {
+      const metrics = it.type === "Reel" ? ["reach", "views", "likes", "comments", "shares", "saved", "total_interactions", "ig_reels_avg_watch_time"] : ["reach", "views", "likes", "comments", "shares", "saved", "total_interactions"];
+      const got = await metaMetrics(`${base(settings)}/${encodeURIComponent(it.id)}/insights`, token, metrics).catch(() => ({}));
+      it.reach = got.reach ?? null;
+      it.views = got.views ?? null;
+      it.saves = got.saved ?? null;
+      it.shares = got.shares ?? null;
+      it.interactions = got.total_interactions ?? null;
+      it.watchMs = got.ig_reels_avg_watch_time ?? null;
+      if (typeof got.likes === "number") it.likes = got.likes;
+      if (typeof got.comments === "number") it.comments = got.comments;
+      it.fetchedAt = new Date(now).toISOString();
+    }));
+  }
+  return items;
+}

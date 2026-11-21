@@ -50,6 +50,7 @@ platforms.instagram.recentComments = async () => [fakeComment("c1", "Price?"), f
 platforms.instagram.comments = async () => [fakeComment("c1", "Price?")];
 platforms.instagram.replyComment = async ({ commentId, message }) => (sent.push([commentId, message]), { id: "new" });
 platforms.instagram.hideComment = async () => ({ ok: true });
+platforms.instagram.analysisPosts = async () => Array.from({ length: 10 }, (_, i) => ({ id: "a" + i, at: new Date(Date.now() - (i + 3) * 86400000).toISOString(), type: i % 2 ? "Photo" : "Reel", caption: i % 2 ? "Photo #factory #a" : "Reel comment DEMO #forklift #a", reach: i % 2 ? 200 : 900, likes: 5, comments: i % 2 ? 0 : 3, shares: 1, saves: 1, url: "https://ig/p/" + i, thumb: "" }));
 platforms.instagram.audience = async () => ({ age: [{ label: "25-34", value: 40 }], gender: [{ label: "Men", value: 60 }, { label: "Women", value: 40 }], city: [{ label: "Delhi, Delhi", value: 30 }], country: [{ label: "IN", value: 90 }], online: { grid: Array.from({ length: 7 }, () => Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : 10))), days: 20 }, note: "" });
 platforms.youtube = { ...platforms.youtube, ensureToken: async ({ account }) => ({ account, changed: false }), profile: async () => { throw new Error("offline"); }, feed: async () => ({ posts: [], next: null }) };
 
@@ -123,7 +124,7 @@ assert.ok(w.document.querySelector("[data-board]"), "pinterest board select");
 console.log("✓ create: Pinterest board picker");
 await visit("#/accounts", "Connect an account");
 await visit("#/accounts?error=instagram%3A%20denied", "denied");
-await visit("#/insights", "Perfect time to post");
+await visit("#/insights", "Best time to post");
 await visit("#/account?id=instagram-1", "Posts on the account");
 await wait(300);
 assert.equal(w.document.querySelectorAll("#pgrid .ptile").length, 2, "first page of posts shows");
@@ -142,6 +143,11 @@ w.document.querySelector(".sheet [data-close]").click();
 assert.equal(w.document.querySelector(".sheet"), null, "post sheet closes");
 console.log("✓ account page: posts grid, load more, post numbers");
 await visit("#/account?id=instagram-1&tab=hq", "Planned in Social HQ");
+await visit("#/account?id=instagram-1&tab=analysis", "What to do next");
+assert.ok(w.document.querySelector("#main").textContent.includes("Reels get about"), "tips show");
+assert.ok(w.document.querySelector("#main").textContent.includes("#forklift"), "hashtags show");
+await visit("#/insights?view=analysis&id=instagram-1", "What to do next");
+console.log("✓ analysis: account tab and insights tab");
 await visit("#/account?id=instagram-1&tab=audience", "When your followers are online");
 assert.ok(w.document.querySelector("#main").textContent.includes("Delhi, Delhi"));
 assert.ok(w.document.querySelector("#main").textContent.includes("9 PM"));

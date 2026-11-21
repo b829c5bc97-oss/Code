@@ -302,3 +302,32 @@ export async function postDetail({ settings, account, postId }) {
   if (!media.length && item.thumb) media.push({ kind: "image", url: item.thumb, thumb: item.thumb });
   return { ...item, media, stats, engagementRate: reach ? inter / reach : null, note: "", linkLabel: "Open on Facebook" };
 }
+
+// ---------- Analysis: per-post numbers (cached) ----------
+export async function analysisPosts({ settings, account, cache = {}, limit = 50, now = Date.now() }) {
+  const token = tokenOf(account);
+  const { data } = await call(`${base(settings)}/${account.remoteId}/published_posts?${qs({ fields: FB_POST_FIELDS, limit, access_token: token })}`);
+  const items = (data.data || []).map((p) => ({ ...fbItem(p), saves: null, reach: null, views: null, interactions: null }));
+  for (const it of items) {
+    const c = cache[it.id];
+    const fresh = c && c.fetchedAt && (now - new Date(it.at).getTime() > 21 * 86400000 || now - new Date(c.fetchedAt).getTime() < 12 * 3600000);
+    if (fresh) {
+      Object.assign(it, { reach: c.reach, views: c.views, fetchedAt: c.fetchedAt });
+      continue;
+    }
+    const got = {};
+    await Promise.all(["post_impressions_unique", "post_total_media_view_unique", "post_media_view", "post_clicks"].map(async (m) => {
+      try {
+        const { data: d } = await call(`${base(settings)}/${encodeURIComponent(it.id)}/insights?${qs({ metric: m, access_token: token })}`);
+        const v = d.data?.[0]?.values?.[0]?.value;
+        if (typeof v === "number") got[m] = v;
+      } catch (_) { /* metric retired by Meta */ }
+    }));
+    it.reach = got.post_impressions_unique ?? got.post_total_media_view_unique ?? null;
+    it.views = got.post_media_view ?? null;
+    it.clicks = got.post_clicks ?? null;
+    it.fetchedAt = new Date(now).toISOString();
+  }
+  for (const it of items) it.interactions = (it.likes || 0) + (it.comments || 0) + (it.shares || 0);
+  return items;
+}
