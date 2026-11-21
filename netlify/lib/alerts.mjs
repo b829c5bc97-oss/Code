@@ -6,6 +6,7 @@
 import { call } from "./platforms/common.mjs";
 import { getJSON, setJSON } from "./store.mjs";
 import { errMessage } from "./util.mjs";
+import { pushAll } from "./push.mjs";
 
 const LOG = "alert/log";
 
@@ -73,6 +74,13 @@ export async function sendAlert(settings, { key, title, text, link = "" }, { fet
   const doCall = fetchImpl || call;
   if (a.whatsappPhone && a.callmebotKey) {
     await go("WhatsApp", () => doCall(`https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(a.whatsappPhone.replace(/[^\d+]/g, ""))}&text=${encodeURIComponent(`*Social HQ* — ${plain}`)}&apikey=${encodeURIComponent(a.callmebotKey)}`, { method: "GET" }));
+  }
+  // Notifications from the Social HQ app on your phone (needs "Turn on notifications" on that phone once).
+  try {
+    const r2 = await pushAll({ title: `Social HQ: ${title}`, body: text, url: link ? new URL(link).hash ? `/${new URL(link).hash}` : "/" : "/", tag: key || "" });
+    if (r2.sent) sent.push(r2.sent > 1 ? `Phone app (${r2.sent} devices)` : "Phone app");
+  } catch (e) {
+    errors.push(`Phone app: ${errMessage(e)}`);
   }
   if (a.ntfyTopic) {
     await go("Phone", () => doCall(`https://ntfy.sh/${encodeURIComponent(a.ntfyTopic)}`, { method: "POST", headers: { Title: `Social HQ: ${title}`.slice(0, 120), ...(link ? { Click: link } : {}), Tags: "warning" }, body: `${text}` }));

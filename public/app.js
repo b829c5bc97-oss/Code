@@ -259,6 +259,7 @@ async function render() {
   }
 }
 window.addEventListener("hashchange", render);
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
 // ---------- Overview ----------
 async function screenOverview(q) {
@@ -1849,10 +1850,74 @@ function growth(hist) {
     <div class="row between muted small"><span>${esc(dayName(hist[0].d + "T12:00:00Z"))}</span><span>${esc(dayName(hist[hist.length - 1].d + "T12:00:00Z"))}</span></div>`;
 }
 
+// ---------- Phone notifications (Web Push) ----------
+function b64ToBytes(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+function deviceName() {
+  const ua = navigator.userAgent;
+  const kind = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android phone" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows PC" : "This device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : /Firefox\//.test(ua) ? "Firefox" : "";
+  const app = window.matchMedia?.("(display-mode: standalone)").matches ? " (app)" : browser ? ` (${browser})` : "";
+  return kind + app;
+}
+async function wirePush() {
+  const btn = $("#push-on");
+  if (!btn) return;
+  const out = $("#push-out");
+  const list = $("#push-devices");
+  const info = await api("GET", "/api/push").catch(() => null);
+  const draw = (devices) => {
+    list.innerHTML = devices?.length ? `Getting notifications: ${devices.map((d) => `${esc(d.device)} <a href="#" data-push-off="${esc(d.id)}">remove</a>`).join(" · ")}` : "No device gets notifications yet.";
+    $$("[data-push-off]").forEach((a) => (a.onclick = async (e) => { e.preventDefault(); await api("DELETE", `/api/push/${a.dataset.pushOff}`); const r = await api("GET", "/api/push"); draw(r.devices); }));
+  };
+  draw(info?.devices);
+  const iOS = /iPhone|iPad/.test(navigator.userAgent);
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    btn.disabled = true;
+    out.textContent = iOS && !standalone ? "On iPhone: add Social HQ to the Home Screen first, then open it from there." : "This browser can't show notifications.";
+    return;
+  }
+  if (Notification.permission === "granted") {
+    const reg = await navigator.serviceWorker.ready;
+    if (await reg.pushManager.getSubscription()) { btn.textContent = "Notifications are on here — send a test"; btn.dataset.on = "1"; }
+  }
+  btn.onclick = async () => {
+    try {
+      if (btn.dataset.on) {
+        const r = await api("POST", "/api/alerts/test");
+        out.textContent = r.sent?.length ? `Sent by ${r.sent.join(", ")}.` : "Test sent.";
+        return;
+      }
+      out.textContent = "Asking…";
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { out.textContent = "Notifications were not allowed. Allow them in this browser's/phone's settings for Social HQ, then try again."; return; }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(info.publicKey) }));
+      await api("POST", "/api/push/subscribe", { subscription: sub.toJSON(), device: deviceName() });
+      btn.textContent = "Notifications are on here — send a test";
+      btn.dataset.on = "1";
+      out.textContent = "Done. This device will get Social HQ alerts.";
+      const r = await api("GET", "/api/push");
+      draw(r.devices);
+    } catch (e) {
+      out.textContent = e.message;
+    }
+  };
+}
+
 // ---------- Settings ----------
 const GUIDE = {
   alerts: `<p class="muted">When a post fails, Social HQ tries once more 10 minutes later. If it still fails, or an account's login is about to end, you get told — on every channel you set up here. Alerts also show on the Overview screen.</p>
-    <ol class="muted"><li><b>Phone notification (free, quickest):</b> install the <b>ntfy</b> app (App Store / Play Store), tap <b>+</b>, and subscribe to a private name only you know (for example <code>socialhq-pratham-7391</code>). Type the same name below in "Phone notification channel", press Save, then "Send a test alert".</li>
+    <div class="note" id="push-box" style="margin:6px 0 10px"><b>Notifications from the Social HQ app (best):</b> on your phone, open Social HQ and add it to the Home Screen (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). Open it from the Home Screen, come to Settings and press the button below. Do this once on every phone or computer that should get alerts.
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm primary" type="button" id="push-on">Turn on notifications on this device</button><span class="muted small" id="push-out"></span></div>
+      <div class="muted small" id="push-devices" style="margin-top:6px"></div></div>
+    <p class="muted small" style="margin:0 0 4px">Other ways (optional):</p>
+    <ol class="muted"><li><b>Phone notification via the ntfy app (free):</b> install the <b>ntfy</b> app (App Store / Play Store), tap <b>+</b>, and subscribe to a private name only you know (for example <code>socialhq-pratham-7391</code>). Type the same name below in "Phone notification channel", press Save, then "Send a test alert".</li>
     <li><b>WhatsApp:</b> uses the free CallMeBot service. Its WhatsApp bot is sometimes full; the current number (if any) is shown on callmebot.com → "Free API WhatsApp". Send it <code>I allow callmebot to send me messages</code>, and put your number and the key it replies with below.</li>
     <li><b>Email:</b> uses the Resend key in "Reminder emails" further down; leave the address empty to use the reminder address.</li></ol>
     <p class="row" style="gap:8px"><button class="btn sm" type="button" id="test-alert">Send a test alert</button><span class="muted small" id="test-alert-out"></span></p>`,
@@ -2031,6 +2096,7 @@ or: POST ${esc(door.api)}/link   {"url":"https://drive.google.com/…","caption"
     toast("New link made");
     render();
   };
+  wirePush();
   const ta = $("#test-alert");
   if (ta) ta.onclick = async () => {
     const out = $("#test-alert-out");

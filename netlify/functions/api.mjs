@@ -19,6 +19,7 @@ import { cacheAvatar, readAvatar, refreshAvatars } from "../lib/avatars.mjs";
 import { analysisFor } from "../lib/analysis.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 import { sendAlert, alertLog } from "../lib/alerts.mjs";
+import { vapidKeys, addSubscription, removeSubscription, listSubscriptions } from "../lib/push.mjs";
 import { countVotes, savedVotes } from "../lib/votes.mjs";
 import { doorKey, rotateDoorKey, checkDoor, addToInbox, listInbox, removeFromInbox, importFromLink } from "../lib/door.mjs";
 import { checkLogins } from "../lib/logincheck.mjs";
@@ -275,6 +276,21 @@ route("POST", "/api/votes/:acc/:media", async ({ req, params }) => {
   const b = await readJSON(req).catch(() => ({}));
   return json(await countVotes(params.acc, params.media, { options: Array.isArray(b?.options) ? b.options : undefined }));
 });
+
+// ---------- Phone notifications (Web Push) ----------
+route("GET", "/api/push", async () => {
+  const k = await vapidKeys();
+  return json({ publicKey: k.publicKey, devices: (await listSubscriptions()).map((s) => ({ id: s.id, device: s.device, at: s.at })) });
+});
+route("POST", "/api/push/subscribe", async ({ req }) => {
+  const b = await readJSON(req);
+  try {
+    return json(await addSubscription(b.subscription, b.device));
+  } catch (e) {
+    throw new HttpError(400, e.message);
+  }
+});
+route("DELETE", "/api/push/:id", async ({ params }) => { await removeSubscription(params.id); return json({ ok: true }); });
 
 // ---------- Alerts ----------
 route("GET", "/api/alerts", async () => json({ alerts: await alertLog() }));
