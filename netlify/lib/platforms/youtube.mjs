@@ -186,6 +186,7 @@ function ytItem(v) {
     url: short ? `https://www.youtube.com/shorts/${v.id}` : `https://www.youtube.com/watch?v=${v.id}`,
     at: v.snippet?.publishedAt,
     thumb: ytThumb(v.snippet),
+    big: ((v.snippet?.thumbnails || {}).high || (v.snippet?.thumbnails || {}).standard || {}).url || "",
     views: Number(s.viewCount || 0),
     likes: s.likeCount === undefined ? null : Number(s.likeCount),
     comments: s.commentCount === undefined ? null : Number(s.commentCount),
@@ -262,5 +263,5 @@ export async function postDetail({ account, postId }) {
     note = "Watch-time numbers come from YouTube Analytics and can take a day or two to appear.";
   }
   const inter = (item.likes || 0) + (item.comments || 0);
-  return { ...item, media: [{ kind: "image", url: item.thumb.replace("mqdefault", "hqdefault"), thumb: item.thumb }], stats, engagementRate: item.views ? inter / item.views : null, note, linkLabel: "Open on YouTube" };
+  return { ...item, media: [{ kind: "image", url: item.big || item.thumb, thumb: item.thumb }], stats, engagementRate: item.views ? inter / item.views : null, note, linkLabel: "Open on YouTube" };
 }

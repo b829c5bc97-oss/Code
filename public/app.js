@@ -986,7 +986,7 @@ async function screenAccount(q) {
   let next = null;
   const tile = (p, i) => `<button type="button" class="ptile" data-i="${i}" aria-label="${esc(p.type)} from ${esc(dayName(p.at))}">
       ${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc((p.caption || p.title || p.type).slice(0, 120))}</span>`}
-      ${POST_ICON[p.type] ? `<span class="ptype">${esc(POST_ICON[p.type])}</span>` : ""}
+      ${POST_ICON[p.type] || (p.privacy && p.privacy !== "public") ? `<span class="ptype">${esc([POST_ICON[p.type], p.privacy && p.privacy !== "public" ? p.privacy[0].toUpperCase() + p.privacy.slice(1) : ""].filter(Boolean).join(" · "))}</span>` : ""}
       <span class="pstat">${p.views !== undefined && p.views !== null && a.platform === "youtube" ? `<span>👁 ${esc(num(p.views))}</span>` : ""}${p.likes !== null && p.likes !== undefined ? `<span>♥ ${esc(num(p.likes))}</span>` : ""}${p.comments !== null && p.comments !== undefined ? `<span>💬 ${esc(num(p.comments))}</span>` : ""}</span>
       <span class="pdate">${esc(dayName(p.at))}</span>
     </button>`;
