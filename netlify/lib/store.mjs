@@ -49,8 +49,10 @@ function memStore(name) {
 // ---------- Supabase ----------
 function sb() {
   const url = (env("SUPABASE_URL") || "").replace(/\/$/, "");
-  const key = env("SUPABASE_SERVICE_KEY");
-  return { url, headers: { apikey: key, Authorization: `Bearer ${key}` } };
+  const key = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_KEY");
+  // New-style secret keys (sb_secret_…) go only in "apikey"; older service_role keys are JWTs.
+  const headers = String(key || "").startsWith("sb_") ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+  return { url, headers };
 }
 async function sbFetch(path, init = {}, tries = 3) {
   const { url, headers } = sb();
@@ -92,6 +94,9 @@ function sbKv() {
     },
     async getMany(keys) {
       return (await rpc("kv_get_many", { ks: keys })) || [];
+    },
+    async setMany(items) {
+      for (let i = 0; i < items.length; i += 200) await rpc("kv_set_many", { items: items.slice(i, i + 200) });
     },
   };
 }
@@ -171,6 +176,13 @@ export async function getMany(keys) {
   }
   const out = await Promise.all(keys.map((k) => getJSON(k).catch(() => null)));
   return out.filter(Boolean);
+}
+
+// Write many records at once (used when importing).
+export async function setMany(items) {
+  const store = db();
+  if (store.setMany) return await store.setMany(items);
+  for (const it of items) await store.setJSON(it.k, it.v);
 }
 
 // Media

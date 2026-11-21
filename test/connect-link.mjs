@@ -75,3 +75,16 @@ assert.equal(cb.status, 302);
 assert.match(cb.headers.get("location"), /#\/accounts\?connected=LIFTLINE/);
 console.log("✓ Normal Connect button still works");
 console.log("All connect-link checks passed.");
+
+// Export for moving hosts: only the logged-in owner can make a code; the code unlocks the export.
+assert.equal((await api("POST", "/api/__export/code", null, { withCookie: false })).status, 401);
+const ec = await (await api("POST", "/api/__export/code")).json();
+assert.ok(ec.code.length >= 20);
+assert.equal((await api("GET", `/api/__export?code=wrongwrongwrongwrongwrong&part=kv&cursor=0`, null, { withCookie: false })).status, 403);
+const ex = await (await api("GET", `/api/__export?code=${ec.code}&part=kv&cursor=0`, null, { withCookie: false })).json();
+assert.ok(ex.items.some((i) => i.k === "auth/owner"));
+assert.equal(ex.secrets.MASTER_KEY, "local-test-master-key-123");
+assert.ok(!ex.items.some((i) => i.k.startsWith("exportcode/")));
+const fin = await (await api("POST", `/api/__export/finalize?code=${ec.code}`, { to: "https://new.example" }, { withCookie: false })).json();
+assert.equal(fin.ok, true);
+console.log("✓ Export for the move: owner-only code, full copy with secrets, old copy made inert");

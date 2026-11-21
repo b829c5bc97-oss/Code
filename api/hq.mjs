@@ -9,8 +9,9 @@ import { runScheduler, publishPost, collectInsights } from "../netlify/lib/jobs.
 import { runAutoReplies } from "../netlify/lib/autoreply.mjs";
 import { safeEqual, internalSecret } from "../netlify/lib/crypto.mjs";
 import { env } from "../netlify/lib/util.mjs";
+import { loadSecrets } from "../netlify/lib/secrets.mjs";
 
-export const config = { maxDuration: 300 };
+if (!process.env.URL && process.env.VERCEL_PROJECT_PRODUCTION_URL) process.env.URL = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
 
 function siteUrl(req) {
   return (env("URL") || new URL(req.url).origin).replace(/\/$/, "");
@@ -65,6 +66,7 @@ async function internal(req, path) {
 }
 
 async function handler(req) {
+  await loadSecrets();
   const r = original(req);
   const path = new URL(r.url).pathname;
   const context = { site: { url: siteUrl(r) } };

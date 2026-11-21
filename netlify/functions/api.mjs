@@ -8,6 +8,7 @@ import { publicSettings, updateSettings, getSettings, configured } from "../lib/
 import { listAccounts, publicAccount, upsertConnected, addReminderAccount, updateAccount, removeAccount, getAccount, saveAccount } from "../lib/accounts.mjs";
 import { listPosts, getPost, createPost, updatePost, deletePost, approvePost, prepareNow, markManualDone, claim } from "../lib/posts.mjs";
 import { initUpload, putPart, completeUpload, mediaMeta, readPart } from "../lib/media.mjs";
+import { listKeys, listMediaKeys, getChunk, putChunk } from "../lib/store.mjs";
 import { platforms } from "../lib/platforms/index.mjs";
 import { sign, verify, randomId, internalSecret } from "../lib/crypto.mjs";
 import { overview, plan, suggestions, insightsList, insightsDetail } from "../lib/views.mjs";
@@ -39,62 +40,106 @@ route("GET", "/m/:file", async ({ params }) => {
   return new Response(Buffer.concat(parts), { headers: { "content-type": meta.mime || "image/jpeg", "cache-control": "public, max-age=86400" } });
 }, { open: true });
 
-// ---------- One-time move to the new host (runs on the old Netlify site, token-protected) ----------
-route("POST", "/api/__migrate", async ({ req }) => {
-  const token = env("MIGRATE_TOKEN");
-  const b = await readJSON(req);
-  if (!token || !b.token || b.token.length < 20 || b.token !== token) throw new HttpError(403, "No.");
-  const target = (env("MIGRATE_SUPABASE_URL") || "").replace(/\/$/, "");
-  const key = env("MIGRATE_SUPABASE_KEY");
-  if (!target || !key) throw new HttpError(400, "Target not set.");
-  const { getStore } = await import("@netlify/blobs");
-  const H = { apikey: key, Authorization: `Bearer ${key}` };
-  const src = getStore({ name: b.store === "hq-media" ? "hq-media" : "hq", consistency: "strong" });
-  if (b.finalize) {
-    // Make the old copy inert so the old timers can't post or reply twice.
-    const hq = getStore({ name: "hq", consistency: "strong" });
-    const rules = (await hq.get("auto/rules", { type: "json" })) || [];
-    for (const r of rules) r.on = false;
-    await hq.setJSON("auto/rules", rules);
-    const { blobs } = await hq.list({ prefix: "post/" });
-    let parked = 0;
-    for (const x of blobs) {
-      const p = await hq.get(x.key, { type: "json" });
-      if (p && ["scheduled", "needs_ok", "failed", "partial"].includes(p.status)) {
-        p.status = "draft";
-        p.note = "Moved to the new Social HQ";
-        await hq.setJSON(x.key, p);
-        parked++;
-      }
-    }
-    await hq.setJSON("meta/moved", { at: new Date().toISOString(), to: b.to || "" });
-    return json({ ok: true, rulesOff: rules.length, parked });
+// ---------- Moving to a new host: the old site exports, the new site imports ----------
+// The owner (logged in) makes a one-time code; the new site uses it to pull everything server-to-server.
+route("POST", "/api/__export/code", async () => {
+  const code = randomId(18);
+  await setJSON(`exportcode/${code}`, { exp: Date.now() + 30 * 60000 });
+  return json({ code });
+});
+async function exportCodeOk(code) {
+  if (!code || !/^[A-Za-z0-9_-]{20,40}$/.test(code)) return false;
+  const rec = await getJSON(`exportcode/${code}`);
+  return !!rec && Date.now() < rec.exp;
+}
+route("GET", "/api/__export", async ({ url }) => {
+  if (!(await exportCodeOk(url.searchParams.get("code")))) throw new HttpError(403, "Export code expired.");
+  const part = url.searchParams.get("part") === "media" ? "media" : "kv";
+  const start = Number(url.searchParams.get("cursor")) || 0;
+  if (part === "media") {
+    const keys = (await listMediaKeys("")).sort();
+    const k = keys[start];
+    if (!k) return json({ total: keys.length, done: true, items: [] });
+    const buf = await getChunk(k);
+    return json({ total: keys.length, next: start + 1, done: start + 1 >= keys.length, items: buf ? [{ k, b64: Buffer.from(buf).toString("base64") }] : [] });
   }
-  const { blobs } = await src.list();
-  const keys = blobs.map((x) => x.key).sort();
-  const start = Number(b.cursor) || 0;
-  if (b.store === "hq-media") {
-    const batch = keys.slice(start, start + 8);
-    for (const k of batch) {
-      const buf = await src.get(k, { type: "arrayBuffer" });
-      if (!buf) continue;
-      const path = k.split("/").map(encodeURIComponent).join("/");
-      const r = await fetch(`${target}/storage/v1/object/media/${path}`, { method: "POST", headers: { ...H, "content-type": "application/octet-stream", "x-upsert": "true" }, body: buf });
-      if (!r.ok) throw new HttpError(502, `Media copy failed for ${k}: ${r.status} ${(await r.text()).slice(0, 120)}`);
-    }
-    return json({ total: keys.length, next: start + batch.length, done: start + batch.length >= keys.length });
-  }
-  const batch = keys.slice(start, start + 120);
+  const keys = (await listKeys("")).filter((k) => !k.startsWith("exportcode/") && !k.startsWith("lock/")).sort();
+  const batch = keys.slice(start, start + 250);
   const items = [];
-  for (let i = 0; i < batch.length; i += 12) {
-    const vals = await Promise.all(batch.slice(i, i + 12).map(async (k) => ({ k, v: await src.get(k, { type: "json" }).catch(() => null) })));
+  for (let i = 0; i < batch.length; i += 25) {
+    const vals = await Promise.all(batch.slice(i, i + 25).map(async (k) => ({ k, v: await getJSON(k).catch(() => null) })));
     for (const it of vals) if (it.v !== null && it.v !== undefined) items.push(it);
   }
-  if (items.length) {
-    const r = await fetch(`${target}/rest/v1/rpc/kv_set_many`, { method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify({ items }) });
-    if (!r.ok) throw new HttpError(502, `Copy failed: ${r.status} ${(await r.text()).slice(0, 200)}`);
+  const out = { total: keys.length, next: start + batch.length, done: start + batch.length >= keys.length, items };
+  if (start === 0) out.secrets = { MASTER_KEY: env("MASTER_KEY") || "", SETUP_CODE: env("SETUP_CODE") || "" };
+  return json(out);
+}, { open: true });
+route("POST", "/api/__export/finalize", async ({ url, req }) => {
+  if (!(await exportCodeOk(url.searchParams.get("code")))) throw new HttpError(403, "Export code expired.");
+  const b = await readJSON(req);
+  // Make the old copy inert so the old site's timers can't post or reply twice.
+  const rules = (await getJSON("auto/rules")) || [];
+  for (const r of rules) r.on = false;
+  await setJSON("auto/rules", rules);
+  let parked = 0;
+  for (const k of await listKeys("post/")) {
+    const p = await getJSON(k);
+    if (p && ["scheduled", "needs_ok", "failed", "partial"].includes(p.status)) {
+      p.status = "draft";
+      p.note = "Moved to the new Social HQ";
+      await setJSON(k, p);
+      parked++;
+    }
   }
-  return json({ total: keys.length, next: start + batch.length, copied: items.length, done: start + batch.length >= keys.length });
+  await setJSON("meta/moved", { at: new Date().toISOString(), to: String(b.to || "").slice(0, 200) });
+  return json({ ok: true, rulesOff: rules.length, parked });
+}, { open: true });
+
+// The new site pulls everything once, from the old site (only allowed until the first import finishes).
+route("POST", "/api/__import", async ({ req }) => {
+  if (await getJSON("meta/imported")) throw new HttpError(403, "Already imported.");
+  const b = await readJSON(req);
+  const from = String(b.from || "").replace(/\/$/, "");
+  if (!/^https:\/\/([a-z0-9-]+--)?socialhq-pratham\.netlify\.app$/.test(from)) throw new HttpError(400, "Import only from the old Social HQ.");
+  const code = String(b.code || "");
+  const pull = async (part, cursor) => {
+    const r = await fetch(`${from}/api/__export?code=${encodeURIComponent(code)}&part=${part}&cursor=${cursor}`);
+    const d = await r.json();
+    if (!r.ok) throw new HttpError(502, d.error || `Export answered ${r.status}`);
+    return d;
+  };
+  const { setMany } = await import("../lib/store.mjs");
+  let cursor = 0, kvCount = 0, mediaCount = 0, secrets = null;
+  for (let guard = 0; guard < 200; guard++) {
+    const d = await pull("kv", cursor);
+    if (d.secrets) secrets = d.secrets;
+    if (d.items.length) await setMany(d.items);
+    kvCount += d.items.length;
+    if (d.done) break;
+    cursor = d.next;
+  }
+  if (b.media !== false) {
+    cursor = 0;
+    for (let guard = 0; guard < 2000; guard++) {
+      const d = await pull("media", cursor);
+      for (const it of d.items) await putChunk(it.k, Buffer.from(it.b64, "base64"));
+      mediaCount += d.items.length;
+      if (d.done) break;
+      cursor = d.next;
+    }
+  }
+  if (secrets?.MASTER_KEY) await setJSON("secret/MASTER_KEY", { v: secrets.MASTER_KEY });
+  if (secrets?.SETUP_CODE) await setJSON("secret/SETUP_CODE", { v: secrets.SETUP_CODE });
+  if (!(await getJSON("secret/CRON_SECRET"))) await setJSON("secret/CRON_SECRET", { v: randomId(24) });
+  let finalized = null;
+  try {
+    const r = await fetch(`${from}/api/__export/finalize?code=${encodeURIComponent(code)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: new URL(req.url).origin }) });
+    finalized = await r.json();
+  } catch (e) {
+    finalized = { error: errMessage(e) };
+  }
+  await setJSON("meta/imported", { at: new Date().toISOString(), from, kv: kvCount, media: mediaCount });
+  return json({ ok: true, kv: kvCount, media: mediaCount, finalized });
 }, { open: true });
 
 // ---------- Saved profile pictures ----------
