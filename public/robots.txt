@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /buy/
+Sitemap: https://deskcrew.netlify.app/sitemap.xml
