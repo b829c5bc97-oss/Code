@@ -197,6 +197,13 @@ a.chip.on { color: #fff; }
 }
 
 /* Account page */
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.acc-tile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); background: #fff; min-height: 64px; }
+.acc-tile:hover { border-color: var(--blue); background: #F7F9FF; color: var(--ink); }
+.acc-tile b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-tile .av { width: 42px; height: 42px; }
+.acc-tile .go { font-size: 22px; color: var(--quiet); }
+.badge.xs { width: 16px; height: 16px; border-radius: 4px; font-size: 8px; vertical-align: -3px; }
 .acc-open { text-decoration: none; color: inherit; min-width: 0; }
 .acc-open:hover b { color: var(--blue); }
 .av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--ground); flex: 0 0 auto; }

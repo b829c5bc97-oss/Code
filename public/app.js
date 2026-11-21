@@ -850,7 +850,8 @@ async function toJpeg(file) {
 
 // ---------- Accounts ----------
 async function screenAccounts(q) {
-  const d = await accounts(true);
+  const [d, il] = await Promise.all([accounts(true), api("GET", "/api/insights").catch(() => ({ accounts: [] }))]);
+  const fol = Object.fromEntries((il.accounts || []).map((x) => [x.id, x]));
   const msg = q.get("connected") ? `<p class="note good">Connected: ${esc(q.get("connected"))}</p>` : q.get("error") ? `<p class="note bad">${esc(q.get("error"))}</p>` : "";
   const connectBtn = (p, label) => d.configured[p]
     ? `<a class="btn" href="/api/oauth/${p}/start" style="padding-left:8px">${badge(p)}${esc(label)}</a>`
@@ -860,9 +861,19 @@ async function screenAccounts(q) {
   const brands = [...new Set([...Object.keys(groups), "LIFTLINE", "MM Spares", "KAIU", "AdmitX", "Coinwise Kids", "Wrong Door", "The Backstory", "Personal"])];
   const statusOf = (a) => (a.platform === "manual" ? pill("reminder", "Reminder only") : a.platform === "pinterest" && d.pinterestSandbox ? pill("waiting", "Pins visible only to you") : pill(a.status));
   main(`
-    <header class="head"><div><p class="sub">${d.accounts.length} account${d.accounts.length === 1 ? "" : "s"}</p><h1>Accounts</h1></div></header>
+    <header class="head"><div><p class="sub">${d.accounts.length} account${d.accounts.length === 1 ? "" : "s"}</p><h1>Accounts</h1></div><a class="btn" href="#connect" id="go-connect">+ Connect an account</a></header>
     ${msg}
-    <section class="card"><div class="stack" style="gap:4px"><h2>Connect an account</h2><p class="muted">You log in on the platform's own page. Social HQ never sees your password. On Meta's screen you can tick several Instagram accounts or Facebook Pages at once. If one is missing, press Connect again and pick it.</p></div>
+    <section class="card"><div class="row between"><h2>Your accounts</h2><span class="muted small">Tap an account to see all its posts and how each one did</span></div>
+      <div class="acc-grid">${d.accounts.filter((a) => a.platform !== "manual").sort((x, y) => x.platform.localeCompare(y.platform) || x.name.localeCompare(y.name)).map((a) => {
+        const f = fol[a.id];
+        return `<a class="acc-tile" href="#/account?id=${encodeURIComponent(a.id)}">
+          ${a.avatar ? `<img class="av" src="${esc(a.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge(a.platform)}
+          <span class="stack" style="gap:2px;min-width:0;flex:1"><b>${esc(a.name)}</b><span class="muted small">${badge(a.platform, true).replace('class="badge', 'class="badge xs')} ${esc(a.handle || PLATFORM[a.platform].name)}</span>
+          <span class="small" style="font-weight:600">${f && f.followers !== null ? `${esc(num(f.followers))} ${esc((f.followersLabel || "Followers").toLowerCase())}` : ""}${a.status !== "ok" ? ` ${pill(a.status)}` : ""}</span></span>
+          <span class="go" aria-hidden="true">›</span></a>`;
+      }).join("") || '<p class="muted">No accounts yet. Connect one below.</p>'}</div>
+    </section>
+    <section class="card" id="connect"><div class="stack" style="gap:4px"><h2>Connect an account</h2><p class="muted">You log in on the platform's own page. Social HQ never sees your password. On Meta's screen you can tick several Instagram accounts or Facebook Pages at once. If one is missing, press Connect again and pick it.</p></div>
       <div class="row">${connectBtn("instagram", "Instagram")}${connectBtn("facebook", "Facebook Pages")}${connectBtn("linkedin", "LinkedIn")}${connectBtn("youtube", "YouTube")}${connectBtn("pinterest", "Pinterest")}</div>
       <form class="row" id="link-form" style="border-top:1px solid var(--line-2);padding-top:14px"><b style="font-size:13px">Account signed in on another browser or phone?</b>
         <select name="p" style="max-width:180px">${["instagram", "facebook", "linkedin", "youtube", "pinterest"].filter((p) => d.configured[p]).map((p) => `<option value="${p}">${esc(PLATFORM[p].name)}</option>`).join("")}</select>
@@ -877,6 +888,7 @@ async function screenAccounts(q) {
       <div class="card tight">${pill("reminder", "Reminder only")}<b style="font-size:14px">You get a nudge with everything ready</b><span class="muted">Facebook personal profiles. Facebook lets no app post there.</span></div>
       <div class="card tight">${pill("waiting", "Waiting for approval")}<b style="font-size:14px">Works fully once the platform says yes</b><span class="muted">YouTube (uploads Private till then), Pinterest (pins only you see), LinkedIn company pages.</span></div>
     </section>
+    <h2 style="margin-top:6px">Manage accounts</h2><p class="muted" style="margin-top:-12px">Brand, weekly target, reconnect or remove.</p>
     <datalist id="brand-list">${brands.map((b) => `<option value="${esc(b)}">`).join("")}</datalist>
     <section class="grid g-2">${Object.entries(groups).map(([brand, list]) => `<div class="card"><div class="row between"><h2>${esc(brand)}</h2><span class="muted small">${list.length} account${list.length === 1 ? "" : "s"}</span></div>
       ${list.map((a) => `<div class="stack" style="gap:8px;border-top:1px solid var(--line-2);padding-top:12px">
@@ -889,6 +901,7 @@ async function screenAccounts(q) {
         </div>
         <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm primary" href="#/account?id=${encodeURIComponent(a.id)}">Open account · posts &amp; insights</a><a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
       </div>`).join("")}</div>`).join("") || `<p class="muted">No accounts yet.</p>`}</section>`);
+  $("#go-connect").onclick = (e) => { e.preventDefault(); $("#connect").scrollIntoView({ behavior: "smooth" }); };
   $("#link-form").onsubmit = async (e) => {
     e.preventDefault();
     const p = new FormData(e.target).get("p");
@@ -989,6 +1002,7 @@ async function screenAccount(q) {
       msg.textContent = all.length ? "" : "No posts on this account yet.";
       if (r.saved && all.length) { msg.hidden = false; msg.textContent = "These are the latest posts Social HQ saved. Full browsing for this platform comes soon."; }
       more.hidden = !next;
+      if (!r.posts.length && start > 0) { msg.hidden = false; msg.className = "muted"; msg.textContent = "That's every post the platform shares for this account."; }
       $$("#pgrid .ptile").forEach((b) => (b.onclick = () => openPost(all[+b.dataset.i])));
     } catch (e) {
       msg.hidden = false;
