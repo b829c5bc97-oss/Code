@@ -309,5 +309,8 @@ i.st-needs_ok { background: var(--amber); } i.st-done, i.st-posted { background:
   .mdots { display: flex; }
 }
 
+.you-row td { background: #F5F8FF; }
+a.ptile { text-decoration: none; }
+
 /* The hidden attribute must win over display rules on classes like .f and .note */
 [hidden] { display: none !important; }

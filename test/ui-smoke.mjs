@@ -53,6 +53,15 @@ platforms.instagram.hideComment = async () => ({ ok: true });
 platforms.instagram.audience = async () => ({ age: [{ label: "25-34", value: 40 }], gender: [{ label: "Men", value: 60 }, { label: "Women", value: 40 }], city: [{ label: "Delhi, Delhi", value: 30 }], country: [{ label: "IN", value: 90 }], online: { grid: Array.from({ length: 7 }, () => Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : 10))), days: 20 }, note: "" });
 platforms.youtube = { ...platforms.youtube, ensureToken: async ({ account }) => ({ account, changed: false }), profile: async () => { throw new Error("offline"); }, feed: async () => ({ posts: [], next: null }) };
 
+// Fake Business Discovery for the competitors screen.
+const nodeFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  const u = new URL(String(url));
+  const m = /business_discovery\.username\(([^)]+)\)/.exec(u.searchParams.get("fields") || "");
+  if (u.host === "graph.facebook.com" && m) return new Response(JSON.stringify({ business_discovery: { username: m[1], name: m[1], followers_count: m[1] === "rival_lifts" ? 900 : 100, media_count: 5, media: { data: [{ id: "a", caption: "Big lift", like_count: 40, comments_count: 2, timestamp: new Date().toISOString(), permalink: "https://ig/p/a", media_type: "IMAGE", media_url: "https://x.test/a.jpg" }] } } }), { status: 200, headers: { "content-type": "application/json" } });
+  return nodeFetch(url, init);
+};
+
 const errors = [];
 const vc = new VirtualConsole();
 vc.on("jsdomError", (e) => errors.push(e.message));
@@ -122,6 +131,9 @@ assert.ok(w.document.querySelector("#main").textContent.includes("Compact electr
 w.document.querySelector("#more").click();
 await wait(500);
 assert.equal(w.document.querySelectorAll("#pgrid .ptile").length, 4, "older posts load");
+w.document.querySelector("#psort").value = "likes";
+w.document.querySelector("#psort").dispatchEvent(new w.Event("change"));
+assert.ok(w.document.querySelector("#pgrid .ptile").textContent.includes("12"), "most liked first");
 w.document.querySelector("#pgrid .ptile").click();
 await wait(500);
 assert.ok(w.document.querySelector(".sheet").textContent.includes("Accounts reached"), "post numbers show");
@@ -133,6 +145,15 @@ await visit("#/account?id=instagram-1&tab=hq", "Planned in Social HQ");
 await visit("#/account?id=instagram-1&tab=audience", "When your followers are online");
 assert.ok(w.document.querySelector("#main").textContent.includes("Delhi, Delhi"));
 assert.ok(w.document.querySelector("#main").textContent.includes("9 PM"));
+await visit("#/competitors", "Side by side");
+w.document.querySelector('#comp-form input[name="username"]').value = "@Rival_Lifts";
+w.document.querySelector("#comp-form").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+await wait(900);
+assert.ok(w.location.hash.includes("u=rival_lifts"), "goes to the new competitor");
+await wait(900);
+assert.ok(w.document.querySelector("#main").textContent.includes("Their best recent posts"));
+assert.ok(w.document.querySelector("#main").textContent.includes("rival_lifts"));
+console.log("✓ competitors: add, table, detail");
 await visit("#/inbox", "2 comments");
 assert.ok(w.document.querySelector("#cm-list").textContent.includes("1 not replied"));
 await visit("#/inbox?show=todo", "1 comment");

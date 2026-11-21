@@ -13,6 +13,7 @@ import { sign, verify, randomId, internalSecret } from "../lib/crypto.mjs";
 import { overview, plan, suggestions, insightsList, insightsDetail } from "../lib/views.mjs";
 import { triggerPublish } from "../lib/jobs.mjs";
 import { getJSON, setJSON, del } from "../lib/store.mjs";
+import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 
 function siteUrl(req, context) {
   return (env("URL") || context?.site?.url || new URL(req.url).origin).replace(/\/$/, "");
@@ -185,6 +186,21 @@ route("GET", "/api/accounts/:id/feed/:postId", async ({ params }) => {
   const { account, settings, p } = await liveAccount(params.id);
   if (!p?.postDetail) throw new HttpError(400, "Post details for this platform come soon.");
   return json(await p.postDetail({ settings, account, postId: params.postId }));
+});
+
+// ---------- Competitors ----------
+route("GET", "/api/competitors", async ({ url }) => json(await competitorTable({ force: url.searchParams.get("fresh") === "1" })));
+route("POST", "/api/competitors", async ({ req }) => {
+  const b = await readJSON(req);
+  const row = await addCompetitor(b.username);
+  await logEvent("settings", `Started tracking @${row.username}`, req);
+  return json(row);
+});
+route("GET", "/api/competitors/:u", async ({ params }) => json(await competitorDetail(params.u)));
+route("DELETE", "/api/competitors/:u", async ({ req, params }) => {
+  await removeCompetitor(params.u);
+  await logEvent("settings", `Stopped tracking @${params.u}`, req);
+  return json({ ok: true });
 });
 
 // ---------- Comments inbox ----------

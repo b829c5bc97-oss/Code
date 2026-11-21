@@ -92,6 +92,7 @@ const ICON = {
   chart: '<path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
 };
@@ -150,6 +151,7 @@ const NAV = [
   ["/inbox", "Comments", "chat"],
   ["/accounts", "Accounts", "link"],
   ["/insights", "Insights", "chart"],
+  ["/competitors", "Competitors", "users"],
   ["/settings", "Settings", "gear"],
 ];
 function shell(active) {
@@ -242,7 +244,7 @@ async function render() {
     }
   }
   const { path, q } = parseHash();
-  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/inbox": screenInbox, "/insights": screenInsights, "/settings": screenSettings };
+  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/inbox": screenInbox, "/competitors": screenCompetitors, "/insights": screenInsights, "/settings": screenSettings };
   const fn = screens[path] || screenOverview;
   shell(path === "/account" ? "/accounts" : screens[path] ? path : "/overview");
   try {
@@ -525,7 +527,7 @@ async function screenMonth(q) {
       ${list.map((p) => { const accs = (p.accountIds || []).map((id) => byId[id]).filter(Boolean); return `<a class="list-row" style="grid-template-columns:70px minmax(0,1fr) auto;text-decoration:none;color:inherit" href="#/create?id=${esc(p.id)}"><span class="t">${esc(time(p.scheduledAt))}</span><div style="min-width:0"><div style="font-weight:600;font-size:14px">${esc(accs.map((a) => a.name).join(", "))}</div><div class="what">${esc(typeLabel(p.type))} · ${esc(p.caption || p.title || "(no caption)")}</div></div>${pill(p.status)}</a>`; }).join("") || '<p class="muted">Nothing planned this day.</p>'}`;
     $$(".mcell.sel").forEach((x) => x.classList.remove("sel"));
     cell.classList.add("sel");
-    if (window.innerWidth < 760) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (window.innerWidth < 760) box.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
   });
 }
 
@@ -1020,7 +1022,7 @@ async function screenAccounts(q) {
         </div>
         <div class="row" style="gap:8px">${a.platform !== "manual" ? `<a class="btn sm primary" href="#/account?id=${encodeURIComponent(a.id)}">Open account · posts &amp; insights</a><a class="btn sm" href="/api/oauth/${a.platform}/start">Reconnect</a>` : ""}${a.platform === "pinterest" ? `<button class="btn sm" data-refresh="${esc(a.id)}" type="button">Refresh boards</button>` : ""}<button class="btn sm danger" data-del="${esc(a.id)}" data-name="${esc(a.name)}" type="button">Remove</button></div>
       </div>`).join("")}</div>`).join("") || `<p class="muted">No accounts yet.</p>`}</section>`);
-  $("#go-connect").onclick = (e) => { e.preventDefault(); $("#connect").scrollIntoView({ behavior: "smooth" }); };
+  $("#go-connect").onclick = (e) => { e.preventDefault(); $("#connect").scrollIntoView?.({ behavior: "smooth" }); };
   $("#link-form").onsubmit = async (e) => {
     e.preventDefault();
     const p = new FormData(e.target).get("p");
@@ -1110,9 +1112,39 @@ async function screenAccount(q) {
       : `<div class="card"><p class="muted">Nothing planned for this account in Social HQ yet.</p><a class="btn primary" style="align-self:flex-start" href="#/create?account=${encodeURIComponent(a.id)}">+ Create a post</a></div>`;
     return;
   }
-  body.innerHTML = `<div class="pgrid" id="pgrid"></div><p class="muted" id="feed-msg">Loading posts…</p><div class="row" style="justify-content:center"><button class="btn" id="more" type="button" hidden>Load older posts</button></div>`;
+  // "What works": average results per post type, from the posts Social HQ measured.
+  const measured = (L?.posts || []).filter((p) => p.type);
+  let works = "";
+  if (measured.length >= 3) {
+    const by = {};
+    for (const p of measured) {
+      const k = p.type;
+      by[k] = by[k] || { n: 0, reach: 0, views: 0, inter: 0 };
+      by[k].n++;
+      by[k].reach += p.reach || 0;
+      by[k].views += p.views || 0;
+      by[k].inter += p.interactions || 0;
+    }
+    const useReach = measured.some((p) => p.reach > 0);
+    const useViews = !useReach && measured.some((p) => p.views > 0);
+    const metric = useReach ? "reach" : useViews ? "views" : "inter";
+    const label = useReach ? "accounts reached" : useViews ? "views" : "interactions";
+    const list = Object.entries(by).map(([t, v]) => ({ t, n: v.n, avg: v[metric] / v.n, inter: v.inter / v.n })).sort((x, y) => y.avg - x.avg);
+    const best = list[0];
+    works = `<section class="card tight"><div class="row between"><h3>What works on this account</h3><span class="muted small">Last ${measured.length} posts</span></div>
+      ${list.length > 1 ? `<p style="font-size:14px"><b>${esc(best.t)}s</b> do best here: about <b>${esc(num(Math.round(best.avg)))}</b> ${label} each${list[1].avg > 0 ? `, ${esc((best.avg / list[1].avg).toFixed(1))}× ${esc(list[1].t.toLowerCase())}s` : ""}.</p>` : ""}
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">${list.map((x) => `<div class="pst"><span class="v">${esc(num(Math.round(x.avg)))}</span><span class="l">${esc(x.t)} · avg ${esc(label)} (${x.n} post${x.n === 1 ? "" : "s"})</span><span class="l">${esc(num(Math.round(x.inter)))} interactions each</span></div>`).join("")}</div></section>`;
+  }
+  body.innerHTML = `${works}<div class="row between" style="margin:4px 0 10px"><span class="muted small" id="feed-count"></span><label class="row" style="gap:6px;font-size:13px;font-weight:600">Sort<select id="psort" style="width:auto;min-height:36px"><option value="new">Newest first</option><option value="likes">Most liked</option><option value="comments">Most comments</option>${a.platform === "youtube" ? '<option value="views">Most views</option>' : ""}</select></label></div><div class="pgrid" id="pgrid"></div><p class="muted" id="feed-msg">Loading posts…</p><div class="row" style="justify-content:center"><button class="btn" id="more" type="button" hidden>Load older posts</button></div>`;
   const all = [];
   let next = null;
+  const sorters = { new: (x, y) => String(y.at).localeCompare(String(x.at)), likes: (x, y) => (y.likes || 0) - (x.likes || 0), comments: (x, y) => (y.comments || 0) - (x.comments || 0), views: (x, y) => (y.views || 0) - (x.views || 0) };
+  function draw() {
+    const order = [...all.keys()].sort((i, j) => sorters[$("#psort").value](all[i], all[j]));
+    $("#pgrid").innerHTML = order.map((i) => tile(all[i], i)).join("");
+    $$("#pgrid .ptile").forEach((b) => (b.onclick = () => openPost(all[+b.dataset.i])));
+    $("#feed-count").textContent = `${all.length} post${all.length === 1 ? "" : "s"} loaded`;
+  }
   const tile = (p, i) => `<button type="button" class="ptile" data-i="${i}" aria-label="${esc(p.type)} from ${esc(dayName(p.at))}">
       ${p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc((p.caption || p.title || p.type).slice(0, 120))}</span>`}
       ${POST_ICON[p.type] || (p.privacy && p.privacy !== "public") ? `<span class="ptype">${esc([POST_ICON[p.type], p.privacy && p.privacy !== "public" ? p.privacy[0].toUpperCase() + p.privacy.slice(1) : ""].filter(Boolean).join(" · "))}</span>` : ""}
@@ -1126,19 +1158,19 @@ async function screenAccount(q) {
       const start = all.length;
       all.push(...r.posts);
       next = r.next;
-      $("#pgrid").insertAdjacentHTML("beforeend", r.posts.map((p, k) => tile(p, start + k)).join(""));
+      draw();
       msg.hidden = all.length > 0;
       msg.textContent = all.length ? "" : "No posts on this account yet.";
       if (r.saved && all.length) { msg.hidden = false; msg.textContent = "These are the latest posts Social HQ saved. Full browsing for this platform comes soon."; }
       more.hidden = !next;
       if (!r.posts.length && start > 0) { msg.hidden = false; msg.className = "muted"; msg.textContent = "That's every post the platform shares for this account."; }
-      $$("#pgrid .ptile").forEach((b) => (b.onclick = () => openPost(all[+b.dataset.i])));
     } catch (e) {
       msg.hidden = false;
       msg.className = "note bad";
       msg.textContent = `Could not load posts: ${e.message}`;
     }
   }
+  $("#psort").onchange = draw;
   $("#more").onclick = async (e) => {
     e.target.disabled = true;
     e.target.textContent = "Loading…";
@@ -1357,6 +1389,78 @@ async function screenInbox(q) {
   wireComments(box, () => render());
   // Mark as seen a moment after showing, so "New" badges stay visible on this visit.
   setTimeout(() => api("POST", "/api/inbox/seen", { ids: targets.map((a) => a.id) }).catch(() => {}), 1500);
+}
+
+// ---------- Competitors ----------
+async function screenCompetitors(q) {
+  main(`<header class="head"><div><p class="sub">Public numbers of any business Instagram, next to yours</p><h1>Competitors</h1></div></header><p class="muted">Loading…</p>`);
+  const d = await api("GET", `/api/competitors${q.get("fresh") ? "?fresh=1" : ""}`);
+  const sortKey = q.get("sort") || "followers";
+  const rows = d.rows.filter((r) => !r.error).sort((a, b) => (b[sortKey] ?? -1) - (a[sortKey] ?? -1));
+  const bad = d.rows.filter((r) => r.error);
+  const th = (k, label) => `<th><a href="#/competitors?sort=${k}" style="color:inherit;text-decoration:${sortKey === k ? "underline" : "none"}">${label}</a></th>`;
+  main(`
+    <header class="head"><div><p class="sub">Public numbers of any business Instagram, next to yours</p><h1>Competitors</h1></div><a class="btn" href="#/competitors?fresh=1">Refresh numbers</a></header>
+    <section class="card"><h2>Track an account</h2>
+      <form class="row" id="comp-form"><input type="text" name="username" placeholder="Instagram username, e.g. some_forklift_brand" required style="max-width:340px" autocomplete="off"><button class="btn primary" type="submit">Start tracking</button></form>
+      <p class="muted small">Works for public business and creator accounts. Numbers refresh every 6 hours and a growth history builds up day by day.</p></section>
+    ${bad.length ? `<p class="note bad">${bad.map((r) => `@${esc(r.username)}: ${esc(r.error)}`).join("<br>")}</p>` : ""}
+    <section class="card"><div class="row between"><h2>Side by side</h2><span class="muted small">${d.tracked} tracked · your accounts are marked “You”</span></div>
+      <div class="tbl"><table><thead><tr><th>Account</th>${th("followers", "Followers")}${th("change28", "28-day change")}${th("postsPerWeek", "Posts / week")}${th("avgLikes", "Avg. likes")}${th("avgComments", "Avg. comments")}${th("engagement", "Engagement")}<th>Mix (last 12)</th><th></th></tr></thead><tbody>
+      ${rows.map((r) => `<tr class="${r.you ? "you-row" : ""}">
+        <td><a class="acc-cell" style="text-decoration:none;color:inherit" href="#/competitors?u=${encodeURIComponent(r.username)}">${r.avatar ? `<img class="av" src="${esc(r.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : badge("instagram", true)}<div><div class="n">${esc(r.name)} ${r.you ? pill("ok", "You") : ""}</div><div class="h">@${esc(r.username)}</div></div></a></td>
+        <td><b>${esc(num(r.followers))}</b></td>
+        <td class="${r.change28 > 0 ? "up" : r.change28 < 0 ? "down" : ""}">${r.change28 === null ? '<span class="muted small">builds up</span>' : esc(signed(r.change28))}</td>
+        <td>${esc(String(r.postsPerWeek))}</td>
+        <td>${esc(num(r.avgLikes))}</td>
+        <td>${esc(r.avgComments === null ? "—" : String(r.avgComments))}</td>
+        <td>${esc(pct(r.engagement))}</td>
+        <td class="muted small">${Object.entries(r.types || {}).map(([t, n]) => `${n} ${t.toLowerCase()}${n === 1 ? "" : "s"}`).join(", ")}</td>
+        <td>${r.you ? "" : `<button class="btn sm danger" type="button" data-untrack="${esc(r.username)}">Stop</button>`}</td>
+      </tr>`).join("")}</tbody></table></div>
+      <p class="muted small">Engagement = average likes + comments per post ÷ followers. Click an account to see its best posts.</p></section>
+    <section id="comp-detail"></section>`);
+  $("#comp-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const r = await api("POST", "/api/competitors", { username: new FormData(e.target).get("username") });
+      toast(`Now tracking @${r.username}`);
+      location.hash = `#/competitors?u=${encodeURIComponent(r.username)}`;
+    } catch (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+      btn.textContent = "Start tracking";
+    }
+  };
+  $$("[data-untrack]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Stop tracking @${b.dataset.untrack}?`)) return;
+    await api("DELETE", `/api/competitors/${encodeURIComponent(b.dataset.untrack)}`);
+    toast("Stopped tracking");
+    location.hash = "#/competitors";
+  }));
+  const u = q.get("u");
+  if (!u) return;
+  const box = $("#comp-detail");
+  box.innerHTML = `<p class="muted">Loading @${esc(u)}…</p>`;
+  try {
+    const c = await api("GET", `/api/competitors/${encodeURIComponent(u)}`);
+    const top = [...c.media].filter((m) => m.likes !== null).sort((a, b) => b.likes + b.comments - (a.likes + a.comments)).slice(0, 12);
+    box.innerHTML = `<section class="card">
+      <div class="prof-top">${c.avatar ? `<img class="prof-av" src="${esc(c.avatar)}" alt="" referrerpolicy="no-referrer">` : ""}
+        <div class="stack" style="gap:8px;flex:1 1 260px;min-width:0"><div class="row"><h2 style="font-size:22px">${esc(c.name)}</h2><a class="btn sm" href="https://www.instagram.com/${esc(c.username)}/" target="_blank" rel="noopener">Open on Instagram ↗</a></div>
+          <div class="prof-counts"><div><b>${esc(num(c.posts))}</b><span>Posts</span></div><div><b>${esc(num(c.followers))}</b><span>Followers</span></div><div><b>${esc(String(c.postsPerWeek))}</b><span>Posts a week</span></div><div><b>${esc(num(c.avgLikes))}</b><span>Avg. likes</span></div><div><b>${esc(pct(c.engagement))}</b><span>Engagement</span></div></div>
+          ${c.bio ? `<p class="prof-bio">${esc(c.bio)}</p>` : ""}</div></div>
+      <h3>Their best recent posts</h3>
+      <div class="pgrid">${top.map((m) => `<a class="ptile" href="${esc(m.url)}" target="_blank" rel="noopener" title="${esc(m.caption)}">${m.thumb ? `<img src="${esc(m.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ptxt">${esc(m.caption.slice(0, 120))}</span>`}<span class="ptype">${esc(POST_ICON[m.type] || m.type)}</span><span class="pstat"><span>♥ ${esc(num(m.likes))}</span><span>💬 ${esc(num(m.comments))}</span></span><span class="pdate">${esc(dayName(m.at))}</span></a>`).join("") || '<p class="muted">No posts yet.</p>'}</div>
+      ${c.hist.length > 1 ? `<h3>Followers over time</h3>${growth(c.hist)}` : '<p class="muted small">The follower chart starts after two days of tracking.</p>'}
+    </section>`;
+    box.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    box.innerHTML = `<p class="note bad">${esc(e.message)}</p>`;
+  }
 }
 
 // ---------- Insights ----------

@@ -181,6 +181,12 @@ export async function collectInsights({ only, platformsOverride } = {}) {
       results.push({ id: account.id, ok: false, error: errMessage(e) });
     }
   }
+  if (!only && !platformsOverride) {
+    try {
+      const { refreshCompetitors } = await import("./competitors.mjs");
+      await refreshCompetitors();
+    } catch (_) { /* competitor numbers are a bonus; never fail the run */ }
+  }
   await setJSON("meta/insights-run", { at: new Date().toISOString(), results });
   return results;
 }
