@@ -36,7 +36,10 @@ assert.equal((await api("GET", "/api/oauth/youtube/start?link=1", null, { withCo
 const r = await api("GET", "/api/oauth/youtube/start?link=1");
 assert.equal(r.status, 200);
 const { url } = await r.json();
-const state = new URL(url).searchParams.get("state");
+assert.match(url, /^https:\/\/hq\.test\/api\/oauth\/go\/[A-Za-z0-9_-]+$/);
+const go = await api("GET", new URL(url).pathname, null, { withCookie: false });
+assert.equal(go.status, 302);
+const state = new URL(go.headers.get("location")).searchParams.get("state");
 assert.ok(state);
 console.log("✓ Logged-in owner gets a connect link");
 
@@ -56,6 +59,8 @@ page = await cb.text();
 assert.match(page, /Not connected/);
 assert.match(page, /already used/);
 console.log("✓ A link works only once");
+const goAgain = await api("GET", new URL(url).pathname, null, { withCookie: false });
+assert.match(await goAgain.text(), /expired or was already used/);
 
 // A made-up state is refused.
 cb = await api("GET", `/api/oauth/youtube/callback?state=abc.def&code=C`, null, { withCookie: false });

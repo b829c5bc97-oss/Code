@@ -201,12 +201,19 @@ route("GET", "/api/oauth/:platform/start", async ({ req, params, context, url })
   // so the link can also be opened in another browser or phone that is signed in to the account.
   const n = randomId(12);
   const exp = Date.now() + 15 * 60000;
-  await setJSON(`oauthstate/${n}`, { p: params.platform, exp });
   const state = sign({ p: params.platform, n, exp }, "oauth");
   const target = p.authUrl({ settings, redirectUri: `${siteUrl(req, context)}/api/oauth/${params.platform}/callback`, state });
-  if (asLink) return json({ url: target, expiresAt: new Date(exp).toISOString() });
+  await setJSON(`oauthstate/${n}`, { p: params.platform, exp, url: asLink ? target : "" });
+  if (asLink) return json({ url: `${siteUrl(req, context)}/api/oauth/go/${n}`, expiresAt: new Date(exp).toISOString() });
   return redirect(target);
 });
+
+// Short connect link (for another browser or a phone): sends you on to the platform's login.
+route("GET", "/api/oauth/go/:n", async ({ params }) => {
+  const rec = /^[A-Za-z0-9_-]{8,40}$/.test(params.n) ? await getJSON(`oauthstate/${params.n}`) : null;
+  if (!rec || !rec.url || Date.now() > rec.exp) return doneHtml(false, "This connect link has expired or was already used. Make a new one on the Accounts screen.");
+  return redirect(rec.url);
+}, { open: true });
 
 function doneHtml(ok, text) {
   const safe = String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
