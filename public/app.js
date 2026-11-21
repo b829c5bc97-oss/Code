@@ -722,7 +722,8 @@ async function screenCreate(q) {
   function renderOpts() {
     const plats = platformsSel();
     let h = "";
-    if (plats.includes("instagram") && C.type !== "story") h += `<label class="check"><input type="checkbox" id="o-story" ${C.alsoStory ? "checked" : ""}> Also post it to the Instagram Story</label>`;
+    const storyPlats = ["instagram", "facebook"].filter((p) => plats.includes(p));
+    if (storyPlats.length && C.type !== "story" && C.type !== "pin") h += `<label class="check"><input type="checkbox" id="o-story" ${C.alsoStory ? "checked" : ""}> Also share it to the ${storyPlats.map((p) => (p === "instagram" ? "Instagram" : "Facebook")).join(" and ")} Story <span class="muted small">(${C.media.length > 1 ? "the first photo or video" : "same photo or video"}, posted right after)</span></label>`;
     if (plats.some((p) => ["instagram", "facebook"].includes(p))) h += `<label class="f" style="grid-column:1/-1">First comment (Instagram and Facebook)<input type="text" id="o-comment" value="${esc(C.firstComment)}" placeholder="e.g. Get a quote at liftline.in"></label>`;
     if (plats.includes("youtube")) h += `<label class="check"><input type="checkbox" id="o-ai" ${C.aiGenerated ? "checked" : ""}> Video has realistic AI-made content (YouTube label)</label>`;
     $("#c-opts").innerHTML = h;

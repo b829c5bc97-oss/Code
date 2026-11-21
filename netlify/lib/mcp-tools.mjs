@@ -83,7 +83,7 @@ const POST_FIELDS = {
   title: { type: "string", description: "YouTube title (needed for YouTube)." },
   link: { type: "string", description: "Link for Pinterest pins or Facebook link posts." },
   first_comment: { type: "string", description: "Posted as the first comment (Instagram, Facebook)." },
-  also_story: { type: "boolean", description: "Also post the same photo/video to the Instagram Story." },
+  also_story: { type: "boolean", description: "Also share the same photo/video (first one of a carousel) to the Instagram and Facebook Page Story." },
   media_urls: { type: "array", items: { type: "string" }, description: "Public https links to photos/videos to attach, in order. Instagram photos must be JPEG. Max 80 MB each." },
   media_ids: { type: "array", items: { type: "string" }, description: "Ids of media already in Social HQ (from get_post), to reuse." },
   when: { type: "string", description: "When to post: \"YYYY-MM-DD HH:mm\" in India time (IST). Leave empty to save as a draft. Use best_times to pick a good slot." },

@@ -89,6 +89,17 @@ async function phasedVideo(settings, account, item, ctx, edge, finishFields) {
   return { videoId: start.video_id, postId: fin.post_id || fin.id || "" };
 }
 
+// A Page Story from one photo or video (the same 3-step upload as Reels for video).
+async function postStory(settings, account, item, ctx) {
+  if (item.kind === "video") {
+    const r = await phasedVideo(settings, account, item, ctx, "video_stories", {});
+    return r.postId || r.videoId;
+  }
+  const photo = await uploadPhoto(settings, account, item, ctx, { published: false });
+  const { data } = await call(`${base(settings)}/${account.remoteId}/photo_stories`, { method: "POST", form: { photo_id: photo.id, access_token: tokenOf(account) } });
+  return data.post_id || photo.id;
+}
+
 async function permalink(settings, account, id) {
   try {
     const { data } = await call(`${base(settings)}/${id}?${qs({ fields: "permalink_url", access_token: tokenOf(account) })}`);
@@ -108,14 +119,7 @@ export async function publish({ settings, account, post, ctx }) {
   if (post.type === "story") {
     const item = media[0];
     if (!item) throw new PlatformError("A Facebook Story needs a photo or video.");
-    if (item.kind === "video") {
-      const r = await phasedVideo(settings, account, item, ctx, "video_stories", {});
-      postId = r.postId || r.videoId;
-    } else {
-      const photo = await uploadPhoto(settings, account, item, ctx, { published: false });
-      const { data } = await call(`${base(settings)}/${account.remoteId}/photo_stories`, { method: "POST", form: { photo_id: photo.id, access_token: token } });
-      postId = data.post_id || photo.id;
-    }
+    postId = await postStory(settings, account, item, ctx);
     url = `https://www.facebook.com/${account.remoteId}`;
     return { remoteId: postId, url };
   }
@@ -153,15 +157,23 @@ export async function publish({ settings, account, post, ctx }) {
     url = await permalink(settings, account, postId);
   }
 
-  let note = "";
+  const notes = [];
   if (post.firstComment && postId) {
     try {
       await call(`${base(settings)}/${postId}/comments`, { method: "POST", form: { message: post.firstComment, access_token: token } });
     } catch (e) {
-      note = `First comment failed: ${e.message}`;
+      notes.push(`First comment failed: ${e.message}`);
     }
   }
-  return { remoteId: postId, url, note };
+  // "Also share to Story": the same photo or video (the first one of a carousel) goes up as a Page Story.
+  if (post.alsoStory && media.length) {
+    try {
+      await postStory(settings, account, video || media[0], ctx);
+    } catch (e) {
+      notes.push(`Story copy failed: ${e.message}`);
+    }
+  }
+  return { remoteId: postId, url, note: notes.join(" ") };
 }
 
 async function series(settings, account, metric, days) {

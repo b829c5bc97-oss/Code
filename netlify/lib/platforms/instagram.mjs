@@ -180,8 +180,8 @@ export async function publish({ settings, account, post, ctx }) {
       notes.push(`First comment failed: ${e.message}`);
     }
   }
-  // Instagram's API has no "share Reel to Story" button, so the same file is posted as a Story.
-  if (post.alsoStory && !isStory && media.length === 1) {
+  // Instagram's API has no "share Reel to Story" button, so the same file (the first one of a carousel) is posted as a Story.
+  if (post.alsoStory && !isStory && media.length >= 1) {
     try {
       const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES" });
       await waitReady(settings, account, c.id);
