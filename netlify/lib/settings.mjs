@@ -9,8 +9,8 @@ const KEY = "settings/apps";
 
 // Field definitions per section. secret: true -> encrypted, never sent back to the browser.
 export const SECTIONS = {
-  instagram: { label: "Instagram (Instagram Login)", fields: { appId: {}, appSecret: { secret: true } } },
-  facebook: { label: "Facebook Pages (Facebook Login)", fields: { appId: {}, appSecret: { secret: true } } },
+  instagram: { label: "Instagram (Meta app, Unified login)", fields: { appId: {}, appSecret: { secret: true }, configId: {} } },
+  facebook: { label: "Facebook Pages (same Meta app)", fields: { appId: {}, appSecret: { secret: true }, configId: {} } },
   linkedin: {
     label: "LinkedIn",
     fields: { clientId: {}, clientSecret: { secret: true }, orgAccess: { bool: true }, version: {} },
@@ -24,7 +24,7 @@ export const SECTIONS = {
 const DEFAULTS = {
   linkedin: { version: "202608", orgAccess: false },
   pinterest: { sandbox: true },
-  general: { graphVersion: "v23.0" },
+  general: { graphVersion: "v25.0" },
 };
 
 async function raw() {
@@ -91,8 +91,25 @@ export async function updateSettings(patch) {
   await setJSON(KEY, r);
 }
 
+// Instagram and Facebook Pages run on the same Meta app, so the App ID and secret only
+// need typing once: whichever section is empty borrows them from the other.
+export function metaKeys(settings, platform) {
+  const own = settings[platform] || {};
+  const other = settings[platform === "instagram" ? "facebook" : "instagram"] || {};
+  const shared = own.appId && own.appSecret ? own : other.appId && other.appSecret ? other : own;
+  return { appId: shared.appId || "", appSecret: shared.appSecret || "", configId: own.configId || "" };
+}
+
 export function configured(settings, platform) {
   const s = settings[platform] || {};
   if (platform === "linkedin" || platform === "youtube") return !!(s.clientId && s.clientSecret);
+  if (platform === "instagram") {
+    const k = metaKeys(settings, "instagram");
+    return !!(k.appId && k.appSecret && k.configId);
+  }
+  if (platform === "facebook") {
+    const k = metaKeys(settings, "facebook");
+    return !!(k.appId && k.appSecret);
+  }
   return !!(s.appId && s.appSecret);
 }

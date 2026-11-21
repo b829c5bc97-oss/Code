@@ -1,67 +1,88 @@
-// Instagram API with Instagram Login (graph.instagram.com).
-// Works for Instagram business/creator accounts. Each account connects with its own login.
+// Instagram API with Unified Login (graph.facebook.com).
+// Meta's only Instagram option for apps made after Oct 2026. You log in with Instagram or
+// Facebook, tick the Instagram accounts to share, and Meta returns one "system user" key
+// that never expires and works for every account you ticked.
 
 import { call, qs, captionFor, waitFor, PlatformError } from "./common.mjs";
-import { tokenOf, setTokens } from "../accounts.mjs";
+import { tokenOf } from "../accounts.mjs";
+import { metaKeys } from "../settings.mjs";
 
-const SCOPES = [
-  "instagram_business_basic",
-  "instagram_business_content_publish",
-  "instagram_business_manage_insights",
-  "instagram_business_manage_comments",
-];
-
+function version(settings) {
+  return settings.general.graphVersion || "v25.0";
+}
 function base(settings) {
-  return `https://graph.instagram.com/${settings.general.graphVersion || "v23.0"}`;
+  return `https://graph.facebook.com/${version(settings)}`;
 }
 
 export function authUrl({ settings, redirectUri, state }) {
-  const s = settings.instagram;
-  return `https://www.instagram.com/oauth/authorize?${qs({
-    client_id: s.appId,
+  const k = metaKeys(settings, "instagram");
+  return `https://www.facebook.com/${version(settings)}/dialog/oauth?${qs({
+    client_id: k.appId,
+    config_id: k.configId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: SCOPES.join(","),
+    override_default_response_type: "true",
+    display: "page",
     state,
-    force_reauth: "true",
   })}`;
 }
 
-export async function callback({ settings, redirectUri, code }) {
-  const s = settings.instagram;
-  const { data: short } = await call("https://api.instagram.com/oauth/access_token", {
-    method: "POST",
-    form: { client_id: s.appId, client_secret: s.appSecret, grant_type: "authorization_code", redirect_uri: redirectUri, code: String(code).replace(/#_$/, "") },
-  });
-  const shortToken = short.access_token || short.data?.[0]?.access_token;
-  if (!shortToken) throw new PlatformError("Instagram did not return a login key.");
-  const { data: long } = await call(`https://graph.instagram.com/access_token?${qs({ grant_type: "ig_exchange_token", client_secret: s.appSecret, access_token: shortToken })}`);
-  const token = long.access_token;
-  const { data: me } = await call(`${base(settings)}/me?${qs({ fields: "user_id,username,name,profile_picture_url,account_type", access_token: token })}`);
-  const igId = me.user_id || me.id;
-  return [
-    {
-      platform: "instagram",
-      kind: "ig_business",
-      remoteId: igId,
-      name: me.name || me.username,
-      handle: "@" + me.username,
-      avatar: me.profile_picture_url || "",
-      token,
-      tokenExpiresAt: new Date(Date.now() + (long.expires_in || 5184000) * 1000).toISOString(),
-      meta: { username: me.username, accountType: me.account_type || "" },
-    },
-  ];
+// Every Instagram account the login key can use. Meta's docs list a few ways to find them,
+// so try each and merge what comes back.
+async function grantedAccountIds(settings, token, k) {
+  const ids = new Set();
+  try {
+    const { data } = await call(`${base(settings)}/debug_token?${qs({ input_token: token, access_token: `${k.appId}|${k.appSecret}` })}`);
+    for (const g of data.data?.granular_scopes || []) {
+      if (String(g.scope).startsWith("instagram_")) for (const id of g.target_ids || []) ids.add(String(id));
+    }
+  } catch (_) { /* fall through to the other ways */ }
+  for (const edge of ["assigned_instagram_accounts", "instagram_accounts"]) {
+    try {
+      const { data } = await call(`${base(settings)}/me/${edge}?${qs({ fields: "id", limit: 100, access_token: token })}`);
+      for (const a of data.data || []) ids.add(String(a.id));
+    } catch (_) { /* edge not available for this kind of key */ }
+  }
+  if (!ids.size) {
+    try {
+      const { data } = await call(`${base(settings)}/me/accounts?${qs({ fields: "instagram_business_account", limit: 100, access_token: token })}`);
+      for (const p of data.data || []) if (p.instagram_business_account?.id) ids.add(String(p.instagram_business_account.id));
+    } catch (_) { /* no Pages */ }
+  }
+  return [...ids];
 }
 
-// Long-lived tokens last 60 days and can be renewed once they are a day old.
+export async function callback({ settings, redirectUri, code }) {
+  const k = metaKeys(settings, "instagram");
+  const { data: tok } = await call(`${base(settings)}/oauth/access_token?${qs({ client_id: k.appId, client_secret: k.appSecret, redirect_uri: redirectUri, code })}`);
+  const token = tok.access_token;
+  if (!token) throw new PlatformError("Meta did not return a login key.");
+  const ids = await grantedAccountIds(settings, token, k);
+  if (!ids.length) throw new PlatformError("No Instagram account came back. On Meta's screen, tick the Instagram accounts you want to add.");
+  const out = [];
+  for (const id of ids) {
+    let p = {};
+    try {
+      ({ data: p } = await call(`${base(settings)}/${id}?${qs({ fields: "id,username,name,profile_picture_url", access_token: token })}`));
+    } catch (_) { /* keep the id; details fill in on the next insights run */ }
+    out.push({
+      platform: "instagram",
+      kind: "ig_business",
+      remoteId: id,
+      name: p.name || p.username || `Instagram ${id}`,
+      handle: p.username ? "@" + p.username : "",
+      avatar: p.profile_picture_url || "",
+      token,
+      tokenExpiresAt: tok.expires_in ? new Date(Date.now() + tok.expires_in * 1000).toISOString() : null,
+      meta: { username: p.username || "", login: "unified" },
+    });
+  }
+  return out;
+}
+
+// Unified Login keys don't expire, so there is nothing to renew.
 export async function ensureToken({ account }) {
-  const exp = account.tokenExpiresAt ? new Date(account.tokenExpiresAt).getTime() : 0;
-  const daysLeft = (exp - Date.now()) / 86400000;
-  if (exp && daysLeft > 45) return { account, changed: false };
-  const { data } = await call(`https://graph.instagram.com/refresh_access_token?${qs({ grant_type: "ig_refresh_token", access_token: tokenOf(account) })}`);
-  setTokens(account, { token: data.access_token, tokenExpiresAt: new Date(Date.now() + (data.expires_in || 5184000) * 1000).toISOString() });
-  return { account, changed: true };
+  return { account, changed: false };
 }
 
 async function createContainer(settings, account, params) {
@@ -72,9 +93,9 @@ async function createContainer(settings, account, params) {
   return data;
 }
 
-async function uploadVideo(container, account, bytes) {
-  if (!container.uri) throw new PlatformError("Instagram did not give an upload address for the video.");
-  await call(container.uri, {
+async function uploadVideo(settings, container, account, bytes) {
+  const uri = container.uri || `https://rupload.facebook.com/ig-api-upload/${version(settings)}/${container.id}`;
+  await call(uri, {
     method: "POST",
     headers: { Authorization: `OAuth ${tokenOf(account)}`, offset: "0", file_size: String(bytes.length) },
     body: bytes,
@@ -97,7 +118,7 @@ async function mediaContainer(settings, account, item, ctx, extra) {
     return await createContainer(settings, account, { image_url: ctx.publicUrl(item.id), ...extra });
   }
   const c = await createContainer(settings, account, { upload_type: "resumable", ...extra });
-  await uploadVideo(c, account, await ctx.bytes(item.id));
+  await uploadVideo(settings, c, account, await ctx.bytes(item.id));
   return c;
 }
 
@@ -122,11 +143,10 @@ export async function publish({ settings, account, post, ctx }) {
   const caption = captionFor(post, "instagram");
   const media = post.media;
   let creationId;
-  let isStory = post.type === "story";
+  const isStory = post.type === "story";
 
   if (isStory) {
-    const item = media[0];
-    const c = await mediaContainer(settings, account, item, ctx, { media_type: "STORIES" });
+    const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES" });
     await waitReady(settings, account, c.id);
     creationId = c.id;
   } else if (post.type === "carousel" || media.length > 1) {
@@ -160,7 +180,7 @@ export async function publish({ settings, account, post, ctx }) {
       notes.push(`First comment failed: ${e.message}`);
     }
   }
-  // Instagram's API has no "share Reel to Story" button, so the same video is posted as a Story.
+  // Instagram's API has no "share Reel to Story" button, so the same file is posted as a Story.
   if (post.alsoStory && !isStory && media.length === 1) {
     try {
       const c = await mediaContainer(settings, account, media[0], ctx, { media_type: "STORIES" });
@@ -195,7 +215,7 @@ async function totals(settings, account, metrics, sinceDays) {
 
 export async function insights({ settings, account }) {
   const token = tokenOf(account);
-  const { data: me } = await call(`${base(settings)}/me?${qs({ fields: "user_id,username,name,profile_picture_url,followers_count,follows_count,media_count", access_token: token })}`);
+  const { data: me } = await call(`${base(settings)}/${account.remoteId}?${qs({ fields: "id,username,name,profile_picture_url,followers_count,follows_count,media_count", access_token: token })}`);
   const t28 = await totals(settings, account, ["reach", "views", "accounts_engaged", "total_interactions"], 28);
   const t7 = await totals(settings, account, ["reach", "views", "total_interactions"], 7);
 
@@ -233,7 +253,7 @@ export async function insights({ settings, account }) {
   const inter28 = t28.total_interactions || 0;
   return {
     name: me.name || me.username,
-    handle: "@" + me.username,
+    handle: me.username ? "@" + me.username : "",
     avatar: me.profile_picture_url || "",
     followers: me.followers_count || 0,
     followersLabel: "Followers",

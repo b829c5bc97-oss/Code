@@ -1,30 +1,42 @@
-// Facebook Pages via Facebook Login. One login brings in every Page you manage.
+// Facebook Pages via Facebook Login for Business. One login brings in every Page you tick.
 // (Personal profiles can't be posted to by any app; those are reminder-only accounts.)
 
 import { call, qs, captionFor, waitFor, PlatformError } from "./common.mjs";
 import { tokenOf } from "../accounts.mjs";
+import { metaKeys } from "../settings.mjs";
 
 const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "read_insights", "business_management"];
 
+function version(settings) {
+  return settings.general.graphVersion || "v25.0";
+}
 function base(settings) {
-  return `https://graph.facebook.com/${settings.general.graphVersion || "v23.0"}`;
+  return `https://graph.facebook.com/${version(settings)}`;
 }
 
 export function authUrl({ settings, redirectUri, state }) {
-  return `https://www.facebook.com/${settings.general.graphVersion || "v23.0"}/dialog/oauth?${qs({
-    client_id: settings.facebook.appId,
+  const k = metaKeys(settings, "facebook");
+  // Business-type Meta apps use a login "configuration" (config_id) instead of a scope list.
+  const ask = k.configId ? { config_id: k.configId, override_default_response_type: "true" } : { scope: SCOPES.join(",") };
+  return `https://www.facebook.com/${version(settings)}/dialog/oauth?${qs({
+    client_id: k.appId,
     redirect_uri: redirectUri,
     state,
     response_type: "code",
-    scope: SCOPES.join(","),
+    display: "page",
+    ...ask,
   })}`;
 }
 
 export async function callback({ settings, redirectUri, code }) {
-  const s = settings.facebook;
+  const s = metaKeys(settings, "facebook");
   const { data: short } = await call(`${base(settings)}/oauth/access_token?${qs({ client_id: s.appId, client_secret: s.appSecret, redirect_uri: redirectUri, code })}`);
-  const { data: long } = await call(`${base(settings)}/oauth/access_token?${qs({ grant_type: "fb_exchange_token", client_id: s.appId, client_secret: s.appSecret, fb_exchange_token: short.access_token })}`);
-  const { data: pages } = await call(`${base(settings)}/me/accounts?${qs({ fields: "id,name,access_token,picture{url},username", limit: 100, access_token: long.access_token })}`);
+  let userToken = short.access_token;
+  try {
+    const { data: long } = await call(`${base(settings)}/oauth/access_token?${qs({ grant_type: "fb_exchange_token", client_id: s.appId, client_secret: s.appSecret, fb_exchange_token: short.access_token })}`);
+    if (long.access_token) userToken = long.access_token;
+  } catch (_) { /* already a long-lived key */ }
+  const { data: pages } = await call(`${base(settings)}/me/accounts?${qs({ fields: "id,name,access_token,picture{url},username", limit: 100, access_token: userToken })}`);
   const list = pages.data || [];
   if (!list.length) throw new PlatformError("No Facebook Pages came back. Make sure you ticked your Pages on Facebook's screen.");
   return list.map((p) => ({
@@ -64,7 +76,7 @@ async function phasedVideo(settings, account, item, ctx, edge, finishFields) {
   const token = tokenOf(account);
   const { data: start } = await call(`${base(settings)}/${account.remoteId}/${edge}`, { method: "POST", form: { upload_phase: "start", access_token: token } });
   const bytes = await ctx.bytes(item.id);
-  await call(start.upload_url || `https://rupload.facebook.com/video-upload/${settings.general.graphVersion || "v23.0"}/${start.video_id}`, {
+  await call(start.upload_url || `https://rupload.facebook.com/video-upload/${version(settings)}/${start.video_id}`, {
     method: "POST",
     headers: { Authorization: `OAuth ${token}`, offset: "0", file_size: String(bytes.length) },
     body: bytes,
