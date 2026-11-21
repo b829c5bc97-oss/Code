@@ -97,6 +97,8 @@ p { margin: 0; }
 .seg { display: flex; flex-wrap: wrap; gap: 2px; background: #E7E9EE; border-radius: 10px; padding: 3px; }
 .seg button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
 .seg button.on { background: #fff; color: var(--ink); }
+.seg a { min-height: 36px; padding: 0 14px; border-radius: 8px; color: var(--ink-2); font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; }
+.seg a:hover { background: rgba(255,255,255,.6); color: var(--ink); }
 
 /* Badges & pills */
 .badge { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
@@ -311,6 +313,17 @@ i.st-needs_ok { background: var(--amber); } i.st-done, i.st-posted { background:
 
 .you-row td { background: #F5F8FF; }
 a.ptile { text-decoration: none; }
+
+/* Auto-replies */
+.rule.on { border-color: #B9E3CB; }
+.kw { display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--blue-soft); color: #1D3FD0; }
+.switch { position: relative; width: 42px; height: 24px; flex: 0 0 auto; }
+.switch input { opacity: 0; width: 42px; height: 24px; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+.switch span { position: absolute; inset: 0; background: #C9CED9; border-radius: 999px; transition: background .15s; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch input:checked + span { background: var(--green); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* The hidden attribute must win over display rules on classes like .f and .note */
 [hidden] { display: none !important; }

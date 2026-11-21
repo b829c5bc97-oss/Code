@@ -522,3 +522,18 @@ export async function audience({ settings, account }) {
   if (errs.length === 4 || (!out.age.length && !out.city.length)) out.note = "Instagram shows follower details (age, gender, cities) only once an account has 100 followers.";
   return out;
 }
+
+// For auto-replies: recent posts with their comment counts (one cheap call per check).
+export async function recentMediaCounts({ settings, account }) {
+  const { data } = await call(`${base(settings)}/${account.remoteId}/media?${qs({ fields: "id,comments_count,timestamp", limit: 15, access_token: tokenOf(account) })}`);
+  return (data.data || []).map((m) => ({ id: m.id, comments: m.comments_count || 0, at: m.timestamp }));
+}
+
+// A private message to the person who left a comment (Instagram allows one, within 7 days).
+export async function privateReply({ settings, account, commentId, message }) {
+  const { data } = await call(`${base(settings)}/${account.remoteId}/messages?${qs({ access_token: tokenOf(account) })}`, {
+    method: "POST",
+    json: { recipient: { comment_id: commentId }, message: { text: message } },
+  });
+  return { id: data.message_id || data.id || "" };
+}

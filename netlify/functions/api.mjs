@@ -13,6 +13,7 @@ import { sign, verify, randomId, internalSecret } from "../lib/crypto.mjs";
 import { overview, plan, suggestions, insightsList, insightsDetail } from "../lib/views.mjs";
 import { triggerPublish } from "../lib/jobs.mjs";
 import { getJSON, setJSON, del } from "../lib/store.mjs";
+import { listRules, createRule, updateRule, deleteRule, getLog, testComment, runAutoReplies } from "../lib/autoreply.mjs";
 import { competitorTable, addCompetitor, removeCompetitor, competitorDetail } from "../lib/competitors.mjs";
 
 function siteUrl(req, context) {
@@ -186,6 +187,29 @@ route("GET", "/api/accounts/:id/feed/:postId", async ({ params }) => {
   const { account, settings, p } = await liveAccount(params.id);
   if (!p?.postDetail) throw new HttpError(400, "Post details for this platform come soon.");
   return json(await p.postDetail({ settings, account, postId: params.postId }));
+});
+
+// ---------- Auto-replies ----------
+route("GET", "/api/autoreplies", async () => json({ rules: await listRules(), log: await getLog(), lastRun: await getJSON("auto/run") }));
+route("POST", "/api/autoreplies", async ({ req }) => {
+  const r = await createRule(await readJSON(req));
+  await logEvent("settings", `Auto-reply “${r.name}” created (${r.on ? "on" : "off"})`, req);
+  return json(r);
+});
+route("PUT", "/api/autoreplies/:id", async ({ req, params }) => {
+  const r = await updateRule(params.id, await readJSON(req));
+  await logEvent("settings", `Auto-reply “${r.name}” saved (${r.on ? "on" : "off"})`, req);
+  return json(r);
+});
+route("DELETE", "/api/autoreplies/:id", async ({ req, params }) => {
+  await deleteRule(params.id);
+  await logEvent("settings", "Auto-reply removed", req);
+  return json({ ok: true });
+});
+route("POST", "/api/autoreplies/test", async ({ req }) => json(await testComment(await readJSON(req))));
+route("POST", "/api/autoreplies/run", async () => {
+  const r = await runAutoReplies();
+  return json({ checked: r.checked, replied: r.replied });
 });
 
 // ---------- Competitors ----------

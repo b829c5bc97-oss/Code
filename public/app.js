@@ -244,9 +244,9 @@ async function render() {
     }
   }
   const { path, q } = parseHash();
-  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/inbox": screenInbox, "/competitors": screenCompetitors, "/insights": screenInsights, "/settings": screenSettings };
+  const screens = { "/overview": screenOverview, "/plan": screenPlan, "/create": screenCreate, "/accounts": screenAccounts, "/account": screenAccount, "/inbox": screenInbox, "/autoreplies": screenAutoReplies, "/competitors": screenCompetitors, "/insights": screenInsights, "/settings": screenSettings };
   const fn = screens[path] || screenOverview;
-  shell(path === "/account" ? "/accounts" : screens[path] ? path : "/overview");
+  shell(path === "/account" ? "/accounts" : path === "/autoreplies" ? "/inbox" : screens[path] ? path : "/overview");
   try {
     await fn(q);
   } catch (e) {
@@ -1361,7 +1361,7 @@ async function screenInbox(q) {
   const filter = q.get("show") || "all";
   const link = (k, v) => { const p = new URLSearchParams(q); v ? p.set(k, v) : p.delete(k); return `#/inbox?${p}`; };
   main(`
-    <header class="head"><div><p class="sub">Newest comments on your recent posts</p><h1>Comments</h1></div><button class="btn" id="cm-refresh" type="button">Refresh</button></header>
+    <header class="head"><div><p class="sub">Newest comments on your recent posts</p><h1>Comments</h1></div><div class="row"><div class="seg"><button type="button" class="on">Inbox</button><a href="#/autoreplies">Auto-replies</a></div><button class="btn" id="cm-refresh" type="button">Refresh</button></div></header>
     <div class="row" role="group" aria-label="Show">
       <a class="chip ${filter === "all" ? "on" : ""}" href="${link("show", "")}">All</a>
       <a class="chip ${filter === "todo" ? "on" : ""}" href="${link("show", "todo")}">Not replied yet</a>
@@ -1389,6 +1389,99 @@ async function screenInbox(q) {
   wireComments(box, () => render());
   // Mark as seen a moment after showing, so "New" badges stay visible on this visit.
   setTimeout(() => api("POST", "/api/inbox/seen", { ids: targets.map((a) => a.id) }).catch(() => {}), 1500);
+}
+
+// ---------- Auto-replies ----------
+async function screenAutoReplies(q) {
+  const [d, acc] = await Promise.all([api("GET", "/api/autoreplies"), accounts()]);
+  const ig = acc.accounts.filter((a) => a.platform === "instagram");
+  const byId = Object.fromEntries(acc.accounts.map((a) => [a.id, a]));
+  const editing = q.get("edit") ? d.rules.find((r) => r.id === q.get("edit")) : q.get("new") ? {} : null;
+  const ruleCard = (r) => `<div class="card tight rule ${r.on ? "on" : ""}">
+    <div class="row between"><div class="row" style="gap:10px"><label class="switch" title="${r.on ? "On" : "Off"}"><input type="checkbox" data-toggle="${esc(r.id)}" ${r.on ? "checked" : ""}><span></span></label><b style="font-size:15px">${esc(r.name)}</b>${r.on ? pill("ok", "On") : pill("draft", "Off")}</div>
+      <div class="row" style="gap:6px"><a class="btn sm" href="#/autoreplies?edit=${esc(r.id)}">Edit</a><button class="btn sm danger" type="button" data-delrule="${esc(r.id)}" data-name="${esc(r.name)}">Delete</button></div></div>
+    <div class="muted small">${r.accountIds.map((id) => esc(byId[id]?.handle || byId[id]?.name || "removed account")).join(", ")}</div>
+    <div class="row" style="gap:6px">${r.everyComment ? '<span class="kw">Every comment</span>' : r.keywords.map((k) => `<span class="kw">${esc(k)}</span>`).join("")}</div>
+    ${r.replies.map((t, i) => `<div class="cm-reply"><span class="muted small">Reply${r.replies.length > 1 ? ` ${i + 1}` : ""}</span><div class="cm-text">${esc(t)}</div></div>`).join("")}
+    ${r.dm ? `<div class="cm-reply" style="background:#F3EFFF"><span class="muted small">DM</span><div class="cm-text">${esc(r.dm)}</div></div>` : ""}
+    <span class="muted small">${r.stats?.replies || 0} replies · ${r.stats?.dms || 0} DMs sent${r.stats?.lastAt ? ` · last ${esc(ago(r.stats.lastAt))}` : ""}${r.on && r.onSince ? ` · answering comments since ${esc(whenText(r.onSince))}` : ""}</span>
+  </div>`;
+  const e = editing || {};
+  const form = editing ? `<section class="card" id="rule-form-card"><h2>${e.id ? "Edit auto-reply" : "New auto-reply"}</h2>
+    <form class="stack" id="rule-form">
+      <label class="f">Name (just for you)<input type="text" name="rname" value="${esc(e.name || "")}" placeholder="e.g. DEMO requests"></label>
+      <div class="stack" style="gap:6px"><b style="font-size:12px;color:var(--ink-2)">On which accounts</b><div class="row">${ig.map((a) => `<label class="check" style="border:1px solid var(--line);border-radius:10px;padding:0 10px"><input type="checkbox" name="acc" value="${esc(a.id)}" ${(e.accountIds || []).includes(a.id) ? "checked" : ""}>${esc(a.handle || a.name)}</label>`).join("")}</div></div>
+      <label class="f">Reply when a comment has any of these words (comma between them)<input type="text" name="keywords" value="${esc((e.keywords || []).join(", "))}" placeholder="demo, price, details, kitna"></label>
+      <label class="check"><input type="checkbox" name="everyComment" ${e.everyComment ? "checked" : ""}> Reply to every comment (ignore the words)</label>
+      <label class="f">Reply 1<textarea name="r0" rows="3" maxlength="900" placeholder="Hi {username}! Sent you the details in DM 🙌">${esc(e.replies?.[0] || "")}</textarea></label>
+      <label class="f">Reply 2 (optional, picked at random so replies don't look copy-pasted)<textarea name="r1" rows="2" maxlength="900">${esc(e.replies?.[1] || "")}</textarea></label>
+      <label class="f">Reply 3 (optional)<textarea name="r2" rows="2" maxlength="900">${esc(e.replies?.[2] || "")}</textarea></label>
+      <label class="f">Also send a DM (optional)<textarea name="dm" rows="3" maxlength="900" placeholder="Thanks for asking! Here are the details…">${esc(e.dm || "")}</textarea></label>
+      <p class="muted small">Write <b>{username}</b> to mention the person. A DM can only go out within 7 days of the comment, and Meta may hold DMs until the app is approved. The activity list below will show if one fails.</p>
+      <label class="check"><input type="checkbox" name="on" ${e.on ? "checked" : ""}> Switch on now</label>
+      ${e.on ? "" : '<label class="check"><input type="checkbox" name="lookBack24h"> Also answer matching comments from the last 24 hours</label>'}
+      <div class="row"><button class="btn primary" type="submit">Save</button><a class="btn" href="#/autoreplies">Cancel</a></div>
+    </form></section>` : "";
+  const log = d.log.slice(0, 40).map((l) => `<div class="list-row" style="grid-template-columns:110px minmax(0,1fr)"><span class="muted small">${esc(ago(l.at))}</span><div style="min-width:0">${l.username ? `<b>${esc(l.account)}</b> · <b>${esc(l.username)}</b>: <span class="muted">${esc(l.comment || "")}</span>` : `<b>${esc(l.account)}</b>`}${l.reply ? `<div class="small">↳ Replied: ${esc(l.reply)}</div>` : ""}${l.dm ? `<div class="small">✉ DM sent</div>` : ""}${l.error ? `<div class="small" style="color:var(--red)">${esc(l.error)}</div>` : ""}</div></div>`).join("");
+  main(`
+    <header class="head"><div><p class="sub">When someone comments a keyword, Social HQ answers for you within about 3 minutes</p><h1>Comments</h1></div><div class="row"><div class="seg"><a href="#/inbox">Inbox</a><button type="button" class="on">Auto-replies</button></div><a class="btn primary" href="#/autoreplies?new=1">+ New auto-reply</a></div></header>
+    ${form}
+    <section class="stack" style="gap:12px">${d.rules.map(ruleCard).join("") || `<div class="card"><p class="muted">No auto-replies yet.</p><a class="btn primary" style="align-self:flex-start" href="#/autoreplies?new=1">+ New auto-reply</a></div>`}</section>
+    <section class="card"><h2>Try it</h2><p class="muted small">Type a comment someone might write. Social HQ shows which rule would answer and what it would say. Nothing is sent.</p>
+      <form class="row" id="try-form"><input type="text" name="text" placeholder="e.g. Price kya hai? DEMO please" style="flex:1 1 260px" required><button class="btn" type="submit">Check</button></form><div id="try-out"></div></section>
+    <section class="card"><div class="row between"><h2>Activity</h2><span class="row" style="gap:8px"><span class="muted small">${d.lastRun ? `Last check ${esc(ago(d.lastRun.at))}` : "Not checked yet"}</span><button class="btn sm" type="button" id="run-now">Check now</button></span></div>${log || '<p class="muted">Nothing yet. Replies show here as they go out.</p>'}</section>`);
+  if (editing) $("#rule-form-card").scrollIntoView?.({ behavior: "smooth", block: "start" });
+  $$("[data-toggle]").forEach((t) => (t.onchange = async () => {
+    try {
+      await api("PUT", `/api/autoreplies/${t.dataset.toggle}`, { on: t.checked });
+      toast(t.checked ? "Auto-reply on" : "Auto-reply off");
+      render();
+    } catch (err) { toast(err.message, true); t.checked = !t.checked; }
+  }));
+  $$("[data-delrule]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Delete the auto-reply “${b.dataset.name}”?`)) return;
+    await api("DELETE", `/api/autoreplies/${b.dataset.delrule}`);
+    toast("Deleted");
+    render();
+  }));
+  $("#try-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const r = await api("POST", "/api/autoreplies/test", { text: new FormData(ev.target).get("text") });
+    $("#try-out").innerHTML = r.match
+      ? `<div class="note good" style="margin-top:10px">Rule <b>${esc(r.rule)}</b>${r.on ? "" : " (switched off right now)"} would answer${r.keyword ? ` because of “${esc(r.keyword)}”` : ""}.${r.reply ? `<br>Reply: ${esc(r.reply)}` : ""}${r.dm ? `<br>DM: ${esc(r.dm)}` : ""}</div>`
+      : `<p class="note" style="margin-top:10px">No rule matches this comment, so no reply would go out.</p>`;
+  };
+  $("#run-now").onclick = async (ev) => {
+    ev.target.disabled = true;
+    ev.target.textContent = "Checking…";
+    try {
+      const r = await api("POST", "/api/autoreplies/run");
+      toast(r.replied ? `Sent ${r.replied} repl${r.replied === 1 ? "y" : "ies"}` : "Checked: nothing new to answer");
+      render();
+    } catch (err) { toast(err.message, true); ev.target.disabled = false; ev.target.textContent = "Check now"; }
+  };
+  if (editing) {
+    $("#rule-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      const el = (n) => f.elements.namedItem(n);
+      const body = {
+        name: el("rname").value,
+        accountIds: $$('input[name="acc"]:checked', f).map((x) => x.value),
+        keywords: el("keywords").value,
+        everyComment: el("everyComment").checked,
+        replies: [el("r0").value, el("r1").value, el("r2").value],
+        dm: el("dm").value,
+        on: el("on").checked,
+        lookBack24h: !!el("lookBack24h")?.checked,
+      };
+      try {
+        await api(e.id ? "PUT" : "POST", e.id ? `/api/autoreplies/${e.id}` : "/api/autoreplies", body);
+        toast(body.on ? "Saved and switched on" : "Saved (switched off)");
+        location.hash = "#/autoreplies";
+      } catch (err) { toast(err.message, true); }
+    };
+  }
 }
 
 // ---------- Competitors ----------

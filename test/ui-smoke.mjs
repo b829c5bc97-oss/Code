@@ -154,6 +154,25 @@ await wait(900);
 assert.ok(w.document.querySelector("#main").textContent.includes("Their best recent posts"));
 assert.ok(w.document.querySelector("#main").textContent.includes("rival_lifts"));
 console.log("✓ competitors: add, table, detail");
+await visit("#/autoreplies?new=1", "New auto-reply");
+{
+  const f = w.document.querySelector("#rule-form");
+  const el = (n) => f.elements.namedItem(n);
+  el("rname").value = "DEMO";
+  w.document.querySelector('#rule-form input[name="acc"]').checked = true;
+  el("keywords").value = "demo, price";
+  el("r0").value = "Hi {username}! Details on liftline.in";
+  f.dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(700);
+  assert.ok(w.document.querySelector("#main").textContent.includes("Details on liftline.in"), "rule saved and listed");
+  assert.ok(w.document.querySelector("#main").textContent.includes("Off"), "new rule stays off unless switched on");
+  const tf = w.document.querySelector("#try-form");
+  tf.elements.namedItem("text").value = "PRICE please";
+  tf.dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(400);
+  assert.ok(w.document.querySelector("#try-out").textContent.includes("would answer"));
+  console.log("✓ auto-replies: create rule, try-it box");
+}
 await visit("#/inbox", "2 comments");
 assert.ok(w.document.querySelector("#cm-list").textContent.includes("1 not replied"));
 await visit("#/inbox?show=todo", "1 comment");
