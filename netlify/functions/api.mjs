@@ -111,28 +111,36 @@ route("POST", "/api/__import", async ({ req }) => {
     return d;
   };
   const { setMany } = await import("../lib/store.mjs");
-  let cursor = 0, kvCount = 0, mediaCount = 0, secrets = null;
-  for (let guard = 0; guard < 200; guard++) {
-    const d = await pull("kv", cursor);
-    if (d.secrets) secrets = d.secrets;
-    if (d.items.length) await setMany(d.items);
-    kvCount += d.items.length;
-    if (d.done) break;
-    cursor = d.next;
-  }
-  if (b.media !== false) {
-    cursor = 0;
-    for (let guard = 0; guard < 2000; guard++) {
-      const d = await pull("media", cursor);
-      for (const it of d.items) await putChunk(it.k, Buffer.from(it.b64, "base64"));
-      mediaCount += d.items.length;
+  // Resumable: records and secrets first, then pictures/videos 4 at a time. If time runs short the
+  // answer says where to continue (mediaFrom), and the old site is only switched off at the very end.
+  const started = Date.now();
+  const budget = Number(b.budgetMs) > 0 ? Math.min(Number(b.budgetMs), 250000) : 230000;
+  let cursor = 0, kvCount = 0, mediaCount = 0, secrets = null, total = 0;
+  if (!b.mediaFrom) {
+    for (let guard = 0; guard < 200; guard++) {
+      const d = await pull("kv", cursor);
+      if (d.secrets) secrets = d.secrets;
+      if (d.items.length) await setMany(d.items);
+      kvCount += d.items.length;
       if (d.done) break;
       cursor = d.next;
     }
+    if (secrets?.MASTER_KEY) await setJSON("secret/MASTER_KEY", { v: secrets.MASTER_KEY });
+    if (secrets?.SETUP_CODE) await setJSON("secret/SETUP_CODE", { v: secrets.SETUP_CODE });
+    if (!(await getJSON("secret/CRON_SECRET"))) await setJSON("secret/CRON_SECRET", { v: randomId(24) });
   }
-  if (secrets?.MASTER_KEY) await setJSON("secret/MASTER_KEY", { v: secrets.MASTER_KEY });
-  if (secrets?.SETUP_CODE) await setJSON("secret/SETUP_CODE", { v: secrets.SETUP_CODE });
-  if (!(await getJSON("secret/CRON_SECRET"))) await setJSON("secret/CRON_SECRET", { v: randomId(24) });
+  if (b.media !== false) {
+    cursor = Number(b.mediaFrom) || 0;
+    for (let guard = 0; guard < 2000; guard++) {
+      if (Date.now() - started > budget) return json({ ok: true, partial: true, next: cursor, total, kv: kvCount, media: mediaCount });
+      const batch = await Promise.all([0, 1, 2, 3].map((i) => pull("media", cursor + i)));
+      total = batch[0].total;
+      for (const d of batch) for (const it of d.items) await putChunk(it.k, Buffer.from(it.b64, "base64"));
+      mediaCount += batch.reduce((n, d) => n + d.items.length, 0);
+      cursor += 4;
+      if (cursor >= total) break;
+    }
+  }
   let finalized = null;
   try {
     const r = await fetch(`${from}/api/__export/finalize?code=${encodeURIComponent(code)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: new URL(req.url).origin }) });
