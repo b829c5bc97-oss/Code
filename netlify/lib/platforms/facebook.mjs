@@ -71,6 +71,21 @@ async function uploadPhoto(settings, account, item, ctx, { published, message })
   return data;
 }
 
+// True once Facebook has finished processing and publishing a Reel's video.
+export async function reelReady(settings, token, videoId, { tries = 24, every = 5000 } = {}) {
+  return !!(await waitFor(async () => {
+    try {
+      const { data } = await call(`${base(settings)}/${videoId}?${qs({ fields: "status", access_token: token })}`);
+      const st = data.status || {};
+      if (st.video_status === "error" || st.processing_phase?.status === "error") return "error";
+      const published = !st.publishing_phase || st.publishing_phase.status === "complete";
+      return st.video_status === "ready" && published ? "ready" : null;
+    } catch (_) {
+      return null;
+    }
+  }, { tries, every }));
+}
+
 // Reels and video Stories share the same 3-step upload.
 async function phasedVideo(settings, account, item, ctx, edge, finishFields) {
   const token = tokenOf(account);
@@ -169,8 +184,10 @@ export async function publish({ settings, account, post, ctx }) {
 
   const notes = coverNote ? [coverNote] : [];
   if (post.firstComment && postId) {
-    // A Reel's comments live on its video, not on the feed id Facebook returns for it.
-    const targets = [...new Set([reelVideoId, postId].filter(Boolean))];
+    // A Reel's comments live on its video. Facebook answers "(#12) singular statuses API"
+    // until the video has finished processing, so wait for that first (up to ~2 minutes).
+    if (reelVideoId) await reelReady(settings, token, reelVideoId);
+    const targets = [...new Set([reelVideoId, postId, reelVideoId && `${account.remoteId}_${reelVideoId}`].filter(Boolean))];
     let lastErr = null;
     for (const id of targets) {
       try {
