@@ -130,7 +130,9 @@ export function forAccount(post, account) {
     if (!base.includes(ending)) out.captions[platform] = base ? `${base}\n\n${ending}` : ending;
   }
   if (d.aiLabel) out.aiGenerated = true;
-  out.trial = post.trial === "off" ? "" : post.trial || (post.type === "reel" && platform === "instagram" ? d.trial || "" : "");
+  // A Short also goes to Instagram as a Reel, so the account's Trial Reel default covers it too.
+  const reelLike = (post.type === "reel" || post.type === "short") && (post.media || []).filter((m) => m.kind === "video").length === 1 && (post.media || []).length === 1;
+  out.trial = post.trial === "off" ? "" : post.trial || (reelLike && platform === "instagram" ? d.trial || "" : "");
   return out;
 }
 
@@ -153,7 +155,7 @@ export function problems(post, accountsById) {
         if (post.type === "reel" && videos.length !== 1) out.push(`${name}: a Reel needs exactly one video.`);
         if (post.type === "story" && post.media.length !== 1) out.push(`${name}: a Story needs exactly one photo or video.`);
         if ((post.type === "post" || post.type === "text") && post.media.length > 1) out.push(`${name}: pick "Carousel" to post more than one photo.`);
-        if (["manual", "auto"].includes(post.trial) && !(post.type === "reel" && videos.length === 1)) out.push(`${name}: a Trial Reel must be a Reel with one video.`);
+        if (["manual", "auto"].includes(post.trial) && !(["reel", "short"].includes(post.type) && videos.length === 1)) out.push(`${name}: a Trial Reel must be a Reel with one video.`);
         break;
       case "youtube":
         if (videos.length !== 1) out.push(`${name}: YouTube needs exactly one video.`);

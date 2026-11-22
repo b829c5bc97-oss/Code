@@ -42,6 +42,9 @@ const again = forAccount({ ...base, caption: p.captions.instagram }, account);
 assert.equal((again.captions.instagram || again.caption).match(/Follow @/g).length, 1, "ending is not added twice");
 assert.equal(forAccount({ ...base, trial: "off" }, account).trial, "", "a post can switch the trial off");
 assert.equal(forAccount({ ...base, type: "post" }, account).trial, "", "photos are never trials");
+assert.equal(forAccount({ ...base, type: "short" }, account).trial, "manual", "a Short goes to Instagram as a Reel, so the default covers it");
+assert.equal(forAccount({ ...base, type: "carousel", media: [...base.media, { id: "v2", kind: "video", name: "b.mp4" }] }, account).trial, "", "carousels are never trials");
+assert.equal(forAccount(base, { ...account, platform: "facebook" }).trial, "", "only Instagram has Trial Reels");
 console.log("✓ caption ending, AI label and Trial Reel defaults applied per account (never twice)");
 
 // 2. What Instagram receives for a Reel
