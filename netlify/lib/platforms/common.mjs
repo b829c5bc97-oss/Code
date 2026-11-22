@@ -17,6 +17,9 @@ function pickMessage(data, fallback) {
     if (typeof e === "string") return data.error_description || data.message || e;
     return e.error_user_msg || e.message || e.code || fallback;
   }
+  // Instagram's video upload server answers with debug_info instead of error.
+  const d = data.debug_info;
+  if (d && (d.message || d.type)) return [d.type, d.message].filter(Boolean).join(": ");
   return data.message || data.error_description || data.serviceErrorCode || fallback;
 }
 
