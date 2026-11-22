@@ -202,3 +202,24 @@ export async function listMediaKeys(prefix) {
   const { blobs } = await mediaDb().list({ prefix });
   return blobs.map((b) => b.key);
 }
+
+// A short-lived public link to one whole file, for platforms that fetch a video themselves
+// (Instagram's video_url). Only on Supabase; elsewhere returns null.
+export async function tempPublicUrl(name, data, mime = "video/mp4", seconds = 7200) {
+  if (env("HQ_LOCAL") || !env("SUPABASE_URL")) return null;
+  const path = `tmp/${name}`;
+  const up = await sbFetch(`/storage/v1/object/media/${objPath(path)}`, { method: "POST", headers: { "content-type": mime, "x-upsert": "true", "cache-control": "no-cache" }, body: data });
+  if (!up.ok) throw new Error(`Could not make a temporary copy of the video (${up.status}): ${(await up.text()).slice(0, 160)}`);
+  const signed = await sbFetch(`/storage/v1/object/sign/media/${objPath(path)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ expiresIn: seconds }) });
+  if (!signed.ok) throw new Error(`Could not make a link to the video (${signed.status})`);
+  const j = await signed.json();
+  const rel = j.signedURL || j.signedUrl;
+  if (!rel) throw new Error("Could not make a link to the video");
+  return `${sb().url}/storage/v1${rel.startsWith("/") ? "" : "/"}${rel}`;
+}
+
+export async function delTemp(name) {
+  if (env("HQ_LOCAL") || !env("SUPABASE_URL")) return;
+  await delMedia(`tmp/${name}`);
+}
+

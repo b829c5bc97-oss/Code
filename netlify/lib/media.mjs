@@ -1,7 +1,7 @@
 // Photo and video uploads. The browser sends files in 3 MB pieces (Netlify functions take
 // about 4.5 MB per request), we keep the pieces in Blobs and join them when posting.
 
-import { getJSON, setJSON, del, putChunk, getChunk, delMedia, listMediaKeys } from "./store.mjs";
+import { getJSON, setJSON, del, putChunk, getChunk, delMedia, listMediaKeys, tempPublicUrl, delTemp } from "./store.mjs";
 import { randomId } from "./crypto.mjs";
 import { HttpError, clean } from "./util.mjs";
 
@@ -61,7 +61,16 @@ export async function readAll(id) {
   return Buffer.concat(parts);
 }
 
+// A public link (valid 2 hours) to the whole video, for Instagram to fetch when its upload server fails.
+export async function publicVideoLink(id, bytes) {
+  const meta = await mediaMeta(id);
+  return await tempPublicUrl(`${id}.mp4`, bytes || (await readAll(id)), meta.mime || "video/mp4");
+}
+
 export async function deleteMedia(id) {
+  try {
+    await delTemp(`${id}.mp4`);
+  } catch (_) { /* no temporary copy */ }
   const keys = await listMediaKeys(`c/${id}/`);
   for (const k of keys) await delMedia(k);
   await del(`media/${id}`);

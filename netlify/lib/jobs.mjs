@@ -6,7 +6,7 @@ const RETRY_MINUTES = 10;
 export const TRIAL_REFUSED_NOTE = "Posted as a normal Reel: Instagram says this account doesn't have enough followers for Trial Reels yet, so Trial Reels are now off for it.";
 import { getAccount, saveAccount, listAccounts } from "./accounts.mjs";
 import { getSettings } from "./settings.mjs";
-import { readAll, deleteMedia } from "./media.mjs";
+import { readAll, deleteMedia, publicVideoLink } from "./media.mjs";
 import { platforms } from "./platforms/index.mjs";
 import { sendReminder } from "./notify.mjs";
 import { explain, alertPostFailed, alertPostRetrying, sendAlert } from "./alerts.mjs";
@@ -17,13 +17,15 @@ import { errMessage, istDateKey } from "./util.mjs";
 
 export function makeCtx(siteUrl) {
   const cache = new Map();
+  const bytes = async (id) => {
+    if (!cache.has(id)) cache.set(id, await readAll(id));
+    return cache.get(id);
+  };
   return {
     siteUrl,
     publicUrl: (id) => `${siteUrl}/m/${id}.jpg`,
-    async bytes(id) {
-      if (!cache.has(id)) cache.set(id, await readAll(id));
-      return cache.get(id);
-    },
+    bytes,
+    videoUrl: async (id) => await publicVideoLink(id, await bytes(id)),
   };
 }
 

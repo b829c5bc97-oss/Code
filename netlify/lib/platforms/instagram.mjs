@@ -118,8 +118,26 @@ async function mediaContainer(settings, account, item, ctx, extra) {
     return await createContainer(settings, account, { image_url: ctx.publicUrl(item.id), ...extra });
   }
   const c = await createContainer(settings, account, { upload_type: "resumable", ...extra });
-  await uploadVideo(settings, c, account, await ctx.bytes(item.id));
-  return c;
+  try {
+    await uploadVideo(settings, c, account, await ctx.bytes(item.id));
+    return c;
+  } catch (e) {
+    // Instagram's upload server sometimes refuses files it then happily fetches by link.
+    // Try once more that way before giving up, and say what Instagram reported.
+    const why = await containerProblem(settings, account, c.id);
+    const url = /ProcessingFailedError/i.test(e.message) && ctx.videoUrl ? await ctx.videoUrl(item.id).catch(() => null) : null;
+    if (!url) throw new PlatformError(`${e.message}${why ? ` (Instagram says: ${why})` : ""}`, { status: e.status, data: e.data });
+    return await createContainer(settings, account, { video_url: url, ...extra });
+  }
+}
+
+async function containerProblem(settings, account, containerId) {
+  try {
+    const { data } = await call(`${base(settings)}/${containerId}?${qs({ fields: "status_code,status", access_token: tokenOf(account) })}`);
+    return [data.status_code, data.status].filter(Boolean).join(" – ");
+  } catch (_) {
+    return "";
+  }
 }
 
 async function publishContainer(settings, account, creationId) {
