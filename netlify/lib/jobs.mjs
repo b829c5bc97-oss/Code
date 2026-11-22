@@ -3,6 +3,7 @@
 import { getPost, savePost, overallStatus, duePosts, claim, releaseClaim, listPosts, forAccount } from "./posts.mjs";
 
 const RETRY_MINUTES = 10;
+export const TRIAL_REFUSED_NOTE = "Posted as a normal Reel: Instagram says this account doesn't have enough followers for Trial Reels yet, so Trial Reels are now off for it.";
 import { getAccount, saveAccount, listAccounts } from "./accounts.mjs";
 import { getSettings } from "./settings.mjs";
 import { readAll, deleteMedia } from "./media.mjs";
@@ -65,7 +66,19 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
     try {
       const { account: fresh, changed } = await p.ensureToken({ account, settings });
       if (changed) await saveAccount(fresh);
-      const res = await p.publish({ settings, account: fresh, post: forAccount(post, fresh), ctx });
+      const shaped = forAccount(post, fresh);
+      let res;
+      try {
+        res = await p.publish({ settings, account: fresh, post: shaped, ctx });
+      } catch (e) {
+        // Instagram refuses Trial Reels on smaller accounts. Never lose the post over it:
+        // send it as a normal Reel straight away and stop asking for trials on that account.
+        if (!(shaped.trial && account.platform === "instagram" && /trial reel/i.test(errMessage(e)))) throw e;
+        res = await p.publish({ settings, account: fresh, post: { ...shaped, trial: "" }, ctx });
+        res = { ...res, note: [res.note, TRIAL_REFUSED_NOTE].filter(Boolean).join(" ") };
+        fresh.defaults = { ...(fresh.defaults || {}), trial: "", trialRefusedAt: new Date().toISOString() };
+        await saveAccount(fresh);
+      }
       post.targets[accId] = { status: "posted", remoteId: res.remoteId || "", url: res.url || "", note: res.note || "", at: new Date().toISOString() };
       if (fresh.status !== "ok" && fresh.status !== "reminder") {
         fresh.status = "ok";

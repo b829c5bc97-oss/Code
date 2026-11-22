@@ -115,6 +115,7 @@ export async function publish({ settings, account, post, ctx }) {
   const token = tokenOf(account);
   let postId = "";
   let url = "";
+  let reelVideoId = "";
 
   if (post.type === "story") {
     const item = media[0];
@@ -131,6 +132,7 @@ export async function publish({ settings, account, post, ctx }) {
   if (video && (post.type === "reel" || post.type === "short")) {
     const r = await phasedVideo(settings, account, video, ctx, "video_reels", { video_state: "PUBLISHED", description: message });
     postId = r.postId || r.videoId;
+    reelVideoId = r.videoId;
     url = `https://www.facebook.com/reel/${r.videoId}`;
     if (post.cover?.mediaId) {
       try {
@@ -167,11 +169,19 @@ export async function publish({ settings, account, post, ctx }) {
 
   const notes = coverNote ? [coverNote] : [];
   if (post.firstComment && postId) {
-    try {
-      await call(`${base(settings)}/${postId}/comments`, { method: "POST", form: { message: post.firstComment, access_token: token } });
-    } catch (e) {
-      notes.push(`First comment failed: ${e.message}`);
+    // A Reel's comments live on its video, not on the feed id Facebook returns for it.
+    const targets = [...new Set([reelVideoId, postId].filter(Boolean))];
+    let lastErr = null;
+    for (const id of targets) {
+      try {
+        await call(`${base(settings)}/${id}/comments`, { method: "POST", form: { message: post.firstComment, access_token: token } });
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
     }
+    if (lastErr) notes.push(`First comment failed: ${lastErr.message}`);
   }
   // "Also share to Story": the same photo or video (the first one of a carousel) goes up as a Page Story.
   if (post.alsoStory && media.length) {
