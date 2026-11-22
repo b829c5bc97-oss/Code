@@ -7,6 +7,7 @@ export const TRIAL_REFUSED_NOTE = "Posted as a normal Reel: Instagram says this 
 import { getAccount, saveAccount, listAccounts } from "./accounts.mjs";
 import { getSettings } from "./settings.mjs";
 import { readAll, deleteMedia, publicVideoLink } from "./media.mjs";
+import { mixSong, mixKey } from "./music.mjs";
 import { platforms } from "./platforms/index.mjs";
 import { sendReminder } from "./notify.mjs";
 import { explain, alertPostFailed, alertPostRetrying, sendAlert } from "./alerts.mjs";
@@ -25,11 +26,30 @@ export function makeCtx(siteUrl) {
     siteUrl,
     publicUrl: (id) => `${siteUrl}/m/${id}.jpg`,
     bytes,
+    // Swap a file's bytes for this posting run only (e.g. the video with its song mixed in).
+    put: (id, buf) => cache.set(id, buf),
     videoUrl: async (id) => await publicVideoLink(id, await bytes(id)),
   };
 }
 
-export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
+// Puts the song into the post's video for this posting run: reuses the mix made in the editor if
+// nothing changed since, otherwise mixes it now.
+export async function applySong(post, ctx, { mix = mixSong } = {}) {
+  const m = post.music;
+  const video = (post.media || []).find((x) => x.kind === "video");
+  if (!m || m.mode !== "mix" || !video) return false;
+  if (m.mixedId && m.mixedKey === mixKey(video.id, m)) {
+    try {
+      ctx.put(video.id, await readAll(m.mixedId));
+      return true;
+    } catch (_) { /* the ready-made mix is gone: make it again */ }
+  }
+  const r = await mix({ video: await ctx.bytes(video.id), song: await readAll(m.mediaId), startSec: m.startSec, musicVol: m.musicVol, voiceVol: m.voiceVol, duck: m.duck, fade: m.fade });
+  ctx.put(video.id, r.buf);
+  return true;
+}
+
+export async function publishPost(postId, siteUrl, { platformsOverride, mix } = {}) {
   const impl = platformsOverride || platforms;
   let post = await getPost(postId);
   if (!["scheduled", "publishing"].includes(post.status)) return post;
@@ -40,6 +60,16 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
   const ctx = makeCtx(siteUrl);
   const failures = [];
   const retrying = [];
+  const music = post.music || null;
+  let songError = "";
+  const autoTargets = post.accountIds.filter((id) => (post.targets[id] || { status: "pending" }).status === "pending");
+  if (music?.mode === "mix" && autoTargets.length) {
+    try {
+      await applySong(post, ctx, mix ? { mix } : {});
+    } catch (e) {
+      songError = `The song could not be added, so nothing was posted with a missing song: ${errMessage(e)}`;
+    }
+  }
 
   for (const accId of post.accountIds) {
     const target = post.targets[accId] || { status: "pending" };
@@ -64,8 +94,23 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
       await savePost(post);
       continue;
     }
+    if (music?.mode === "app" && account.platform === "instagram") {
+      // Instagram's songs can only be added inside the Instagram app.
+      let note = "Add the song in the Instagram app, then mark it as posted.";
+      try {
+        const r = await sendReminder({ settings, post, account, siteUrl, song: music });
+        if (r.sent) note += " Reminder email sent.";
+      } catch (_) { /* the reminder is on the Overview screen anyway */ }
+      try {
+        await sendAlert(settings, { key: `song-${post.id}-${accId}`, title: `Post now on ${account.name}: add the song in Instagram`, text: `Song: ${music.name}${music.part ? ` (${music.part})` : ""}\nOpen Social HQ on your phone, download the video, copy the caption, post it in Instagram with this song, then tap "Mark as posted".`, link: `${siteUrl}/#/overview?reminders=1` });
+      } catch (_) { /* alerts never block publishing */ }
+      post.targets[accId] = { status: "reminder", note, song: true, at: new Date().toISOString() };
+      await savePost(post);
+      continue;
+    }
     const p = impl[account.platform];
     try {
+      if (songError) throw new Error(songError);
       const { account: fresh, changed } = await p.ensureToken({ account, settings });
       if (changed) await saveAccount(fresh);
       const shaped = forAccount(post, fresh);
@@ -144,7 +189,7 @@ export async function publishPost(postId, siteUrl, { platformsOverride } = {}) {
   // Free storage once everything is out and nothing needs a manual repost.
   const allPosted = Object.values(post.targets).every((t) => t.status === "posted");
   if (allPosted) {
-    for (const m of post.media) {
+    for (const m of [...post.media, ...(post.music?.mediaId ? [{ id: post.music.mediaId }] : []), ...(post.music?.mixedId ? [{ id: post.music.mixedId }] : [])]) {
       try {
         await deleteMedia(m.id);
       } catch (_) { /* already gone */ }

@@ -46,6 +46,7 @@ function postView(p, byId) {
     captions: Object.keys(p.captions || {}).length ? p.captions : undefined,
     title: p.title || undefined,
     media: (p.media || []).map((m) => ({ id: m.id, kind: m.kind, name: m.name })),
+    music: p.music ? (p.music.mode === "app" ? `Song added in the Instagram app by Pratham: ${p.music.name}${p.music.part ? ` (${p.music.part})` : ""}` : `Song mixed into the video${p.music.name ? `: ${p.music.name}` : ""}, from ${p.music.startSec}s`) : undefined,
     needsYourOk: p.status === "needs_ok" || undefined,
     note: p.note || undefined,
   };
@@ -99,7 +100,31 @@ const POST_FIELDS = {
   media_ids: { type: "array", items: { type: "string" }, description: "Ids of files already in Social HQ — from inbox_files (files sent through the private upload door), import_link, or get_post." },
   when: { type: "string", description: "When to post: \"YYYY-MM-DD HH:mm\" in India time (IST). Leave empty to save as a draft. Use best_times to pick a good slot." },
   note: { type: "string", description: "Private note shown in Social HQ." },
+  music: {
+    type: "object",
+    description: "A song for a one-video post. mode \"mix\" mixes a song file into the video before posting (works on Instagram, Facebook and YouTube) from start_sec; give song_url (MP3/M4A/WAV or a video link, Google Drive/Dropbox ok) or song_media_id. Only use songs Pratham may use (royalty-free or his own): popular film/pop songs mixed into the file can get the reel muted or blocked. mode \"app\" = use a song from Instagram's own library: Instagram can't take those through any app, so at post time Pratham gets a reminder with the video, caption, song name and part to add in the Instagram app (other platforms still post automatically, without the song). mode \"none\" removes the song.",
+    properties: {
+      mode: { type: "string", enum: ["mix", "app", "none"] },
+      song_url: { type: "string", description: "mix: link to the song file." },
+      song_media_id: { type: "string", description: "mix: id of a song already in Social HQ (from inbox_files or import_link)." },
+      name: { type: "string", description: "Song name (needed for app mode, e.g. 'Kesariya – Arijit Singh')." },
+      start_sec: { type: "number", description: "Second of the song to start from (the part to use)." },
+      part: { type: "string", description: "app mode: which part to pick in Instagram, e.g. 'from 0:45 (chorus)'." },
+      music_volume: { type: "number", description: "mix: song loudness, 0–2 (default 0.7)." },
+      voice_volume: { type: "number", description: "mix: the video's own sound, 0–2 (default 1; 0 = song only)." },
+      duck: { type: "boolean", description: "mix: lower the song while someone talks (default true)." },
+      fade: { type: "boolean", description: "mix: fade the song in and out (default true)." },
+    },
+  },
 };
+
+async function buildMusic(m) {
+  if (m === undefined) return undefined;
+  if (!m || m.mode === "none") return null;
+  let mediaId = clean(m.song_media_id, 60);
+  if (m.mode === "mix" && !mediaId && m.song_url) mediaId = (await importFromLink(String(m.song_url))).id;
+  return { mode: m.mode, mediaId, name: m.name, startSec: m.start_sec, part: m.part, musicVol: m.music_volume, voiceVol: m.voice_volume, duck: m.duck, fade: m.fade };
+}
 
 export const TOOLS = [
   {
@@ -243,6 +268,7 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
         trial: args.trial || "",
         cover: args.cover_media_id || args.cover_at_sec ? { mediaId: args.cover_media_id || "", atSec: Number(args.cover_at_sec) || 0 } : null,
         media,
+        music: await buildMusic(args.music),
         scheduledAt,
         needsApproval: !!settings.claude?.requireApproval,
         note: args.note || `Added by ${who}`,
@@ -267,6 +293,7 @@ export async function callTool(name, args = {}, { req, grant } = {}) {
         patch.media = media;
         patch._warnings = warnings;
       }
+      if (args.music !== undefined) patch.music = await buildMusic(args.music);
       if (args.when !== undefined) patch.scheduledAt = args.when === "" ? null : parseWhen(args.when);
       const warnings = patch._warnings;
       delete patch._warnings;

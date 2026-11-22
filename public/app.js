@@ -311,9 +311,9 @@ async function screenOverview(q) {
     ? d.attention.map((a) => `<div class="alert"><div class="ic">${icon("alert", 16, 2.2)}</div><div class="stack" style="gap:4px;min-width:0"><b style="font-size:14px">${esc(a.title)}</b>${a.detail ? `<span class="muted">${esc(a.detail)}</span>` : ""}<a href="${esc(a.href)}" style="font-size:13px;font-weight:700;text-decoration:none">${esc(a.action)} →</a></div></div>`).join("")
     : `<p class="muted">All clear.</p>`;
   const reminders = d.reminders.length
-    ? `<section class="card" id="reminders"><h2>Post these by hand</h2><p class="muted">Facebook doesn't let any app post to personal profiles. Copy the caption, download the photo or video, post it, then tick it off.</p>
+    ? `<section class="card" id="reminders"><h2>Post these by hand</h2><p class="muted">Posts Social HQ can't send by itself: Facebook personal profiles, and Reels with a song from Instagram's library. Copy the caption, download the photo or video, post it, then tick it off.</p>
       ${d.reminders.map((r, i) => `<div class="file-row" style="align-items:flex-start;flex-wrap:wrap">
-        <div class="stack" style="gap:6px;flex:1 1 260px;min-width:0"><b>${esc(r.accountName)} · ${esc(whenText(r.post.scheduledAt))}</b><span class="muted" style="white-space:pre-wrap">${esc(r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || "")}</span></div>
+        <div class="stack" style="gap:6px;flex:1 1 260px;min-width:0"><b>${esc(r.accountName)} · ${esc(whenText(r.post.scheduledAt))}</b>${r.song ? `<span class="note good" style="font-weight:600">🎵 In Instagram, add the song: ${esc(r.song.name)}${r.song.part ? ` · ${esc(r.song.part)}` : ""}</span>` : ""}<span class="muted" style="white-space:pre-wrap">${esc(r.caption ?? (r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || ""))}</span></div>
         <div class="row"><button class="btn sm" data-copy="${i}" type="button">Copy caption</button>${r.post.mediaDeleted ? "" : r.post.media.map((m) => `<button class="btn sm" data-dl="${esc(m.id)}" data-name="${esc(m.name)}" type="button">Download ${esc(m.kind)}</button>`).join("")}<button class="btn sm primary" data-done="${esc(r.post.id)}" data-acc="${esc(r.accountId)}" type="button">Mark as posted</button></div>
       </div>`).join("")}</section>`
     : "";
@@ -355,7 +355,7 @@ function spark(arr) {
 function bindReminders(list) {
   $$("[data-copy]").forEach((b) => (b.onclick = async () => {
     const r = list[Number(b.dataset.copy)];
-    await navigator.clipboard.writeText(r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || "");
+    await navigator.clipboard.writeText(r.caption ?? (r.post.captions?.manual || r.post.captions?.facebook || r.post.caption || ""));
     toast("Caption copied");
   }));
   $$("[data-dl]").forEach((b) => (b.onclick = () => download(b.dataset.dl, b.dataset.name, b)));
@@ -572,7 +572,56 @@ async function screenMonth(q) {
 // ---------- Create / edit post ----------
 let C = null;
 function blankPost() {
-  return { id: null, accountIds: [], type: "post", caption: "", captions: {}, title: "", link: "", boardIds: {}, firstComment: "", alsoStory: false, aiGenerated: false, trial: "", cover: null, ytPrivacy: "public", ytMadeForKids: false, media: [], needsApproval: false, date: "", time: "", slot: -1, suggestions: [], tab: "all", status: null, targets: {}, uploading: 0 };
+  return { id: null, accountIds: [], type: "post", caption: "", captions: {}, title: "", link: "", boardIds: {}, firstComment: "", alsoStory: false, aiGenerated: false, trial: "", cover: null, ytPrivacy: "public", ytMadeForKids: false, media: [], music: null, needsApproval: false, date: "", time: "", slot: -1, suggestions: [], tab: "all", status: null, targets: {}, uploading: 0 };
+}
+
+// ---------- songs on Reels ----------
+const MUSIC_DEFAULTS = { mode: "mix", mediaId: "", name: "", startSec: 0, musicVol: 0.7, voiceVol: 1, duck: true, fade: true };
+// Same key the server uses to know whether a mix made here still matches the settings.
+function musicKey(videoId, m) {
+  return [videoId, m.mediaId, m.startSec, m.musicVol, m.voiceVol, m.duck ? 1 : 0, m.fade ? 1 : 0].join("|");
+}
+function musicForSave(m) {
+  if (!m || !m.mode) return null;
+  const { mode, mediaId, name, startSec, musicVol, voiceVol, duck, fade, part, mixedId, mixedKey, videoSec, songSec } = m;
+  return mode === "app" ? { mode, name, part, startSec: 0 } : { mode, mediaId, name, startSec: Math.round((Number(startSec) || 0) * 10) / 10, musicVol, voiceVol, duck, fade, mixedId, mixedKey, videoSec, songSec };
+}
+function fmtSec(s) {
+  s = Math.max(0, Math.round(Number(s) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+async function fetchMediaBlob(id) {
+  const meta = await api("GET", `/api/media/${id}`);
+  const parts = [];
+  for (let i = 0; i < meta.chunks; i++) {
+    const r = await fetch(`/api/media/${id}/part/${i}`, { credentials: "same-origin" });
+    if (!r.ok) throw new Error("Could not load the file");
+    parts.push(await r.blob());
+  }
+  return new Blob(parts, { type: meta.mime });
+}
+// Loudness of the song in 240 slices, for drawing it.
+async function songPeaks(blob) {
+  if (blob.size > 40 * 1048576) return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = new AC();
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const ch = buf.getChannelData(0);
+    const bins = 240, step = Math.floor(ch.length / bins) || 1, peaks = [];
+    for (let i = 0; i < bins; i++) {
+      let max = 0;
+      for (let j = i * step; j < Math.min(ch.length, (i + 1) * step); j += 16) max = Math.max(max, Math.abs(ch[j]));
+      peaks.push(max);
+    }
+    const top = Math.max(...peaks) || 1;
+    return { peaks: peaks.map((p) => p / top), duration: buf.duration };
+  } catch (_) {
+    return null;
+  } finally {
+    ctx.close?.();
+  }
 }
 
 async function screenCreate(q) {
@@ -585,7 +634,7 @@ async function screenCreate(q) {
     Object.assign(C, {
       id: p.id, accountIds: p.accountIds, type: p.type, caption: p.caption, captions: p.captions || {}, title: p.title, link: p.link, boardIds: p.boardIds || {},
       firstComment: p.firstComment, alsoStory: p.alsoStory, aiGenerated: p.aiGenerated, trial: p.trial || "", cover: p.cover ? { ...p.cover, preview: p.cover.mediaId ? `/m/${p.cover.mediaId}.jpg` : "" } : null, ytPrivacy: p.ytPrivacy, ytMadeForKids: p.ytMadeForKids,
-      media: p.media, needsApproval: p.needsApproval && !p.approvedAt, status: p.status, targets: p.targets || {}, mediaDeleted: p.mediaDeleted,
+      media: p.media, music: p.music ? { ...MUSIC_DEFAULTS, ...p.music } : null, needsApproval: p.needsApproval && !p.approvedAt, status: p.status, targets: p.targets || {}, mediaDeleted: p.mediaDeleted,
       date: p.scheduledAt ? istKey(p.scheduledAt) : "", time: p.scheduledAt ? istHM(p.scheduledAt) : "",
     });
     readOnly = ["publishing", "done", "reminder"].includes(p.status);
@@ -771,7 +820,11 @@ async function screenCreate(q) {
           <span class="muted small">seconds</span>
           ${C.cover ? `<button class="btn sm" type="button" id="o-cover-clear">No cover (first frame)</button>` : ""}
         </div><span class="muted small">Without a cover, Instagram uses the first frame. A 9:16 photo works best.</span></div>`;
+    const songOk = hasVideo && C.media.length === 1 && !["carousel", "pin"].includes(C.type) && plats.some((p) => ["instagram", "facebook", "youtube"].includes(p));
+    if (songOk || C.music) h += `<div class="f" id="o-music" style="grid-column:1/-1"></div>`;
+    stopPreview();
     $("#c-opts").innerHTML = h;
+    if ($("#o-music")) renderMusic();
     const tr = $("#o-trial");
     if (tr) tr.onchange = () => (C.trial = tr.value);
     const cf = $("#o-cover");
@@ -805,6 +858,238 @@ async function screenCreate(q) {
     if (c) c.oninput = () => (C.firstComment = c.value);
     const ai = $("#o-ai");
     if (ai) ai.onchange = () => (C.aiGenerated = ai.checked);
+  }
+  function renderMusic() {
+    const box = $("#o-music");
+    if (!box) return;
+    const M = C.music;
+    const plats = platformsSel();
+    const video = C.media.find((m) => m.kind === "video");
+    const mode = M?.mode || "";
+    const others = [...new Set(plats.filter((p) => p !== "instagram"))].map((p) => PLATFORM[p]?.name || p);
+    let h = `<span>Song</span>
+      <div class="seg" role="group" aria-label="Song" style="align-self:flex-start">
+        <button type="button" data-mmode="" class="${!mode ? "on" : ""}">No song</button>
+        <button type="button" data-mmode="mix" class="${mode === "mix" ? "on" : ""}">Mix a song into the video</button>
+        ${plats.includes("instagram") ? `<button type="button" data-mmode="app" class="${mode === "app" ? "on" : ""}">Use an Instagram song</button>` : ""}
+      </div>`;
+    if (mode === "mix") {
+      if (!M.mediaId) {
+        h += `<div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn sm primary">${M._uploading ? `Uploading ${Math.round((M._progress || 0) * 100)}%…` : "Choose the song"}<input type="file" id="m-file" accept="audio/*,video/*" class="sr" ${M._uploading ? "disabled" : ""}></label>
+          <span class="muted small">MP3, M4A or WAV, or a video whose sound you want to use.</span></div>`;
+      } else {
+        const songSec = M.songSec || M._peaks?.duration || 0;
+        const vidSec = M.videoSec || M._videoSec || 0;
+        const stale = M.mixedId && M.mixedKey !== musicKey(video?.id, M);
+        h += `<div class="row between" style="gap:8px;flex-wrap:wrap"><b style="font-size:14px">🎵 ${esc(M.name || "Song")}${songSec ? ` <span class="muted small">· ${fmtSec(songSec)}</span>` : ""}</b>
+            <label class="btn sm">Change song<input type="file" id="m-file" accept="audio/*,video/*" class="sr"></label></div>
+          <canvas id="m-wave" width="720" height="72" style="width:100%;height:72px;border-radius:8px;background:#EEF0F4;cursor:pointer;touch-action:none" aria-label="The song. Tap or drag to pick where it starts."></canvas>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+            <span class="small" style="font-weight:600">Start the song at</span>
+            <input type="number" id="m-start" min="0" step="0.5" value="${M.startSec || 0}" style="width:90px"> <span class="muted small">seconds (${fmtSec(M.startSec)})${vidSec ? ` · uses ${fmtSec(M.startSec)}–${fmtSec((Number(M.startSec) || 0) + vidSec)}` : ""}</span>
+            <button class="btn sm" type="button" id="m-play">${M._playing ? "■ Stop" : "▶ Preview"}</button>
+          </div>
+          <video id="m-pv" playsinline style="display:${M._playing ? "block" : "none"};width:120px;max-height:214px;border-radius:8px;background:#000"></video>
+          <div class="row" style="gap:16px;flex-wrap:wrap">
+            <label class="small" style="display:flex;flex-direction:column;gap:4px;flex:1 1 180px;font-weight:600">Song volume <span class="muted" id="m-mvol-t">${Math.round(M.musicVol * 100)}%</span><input type="range" id="m-mvol" min="0" max="150" step="5" value="${Math.round(M.musicVol * 100)}"></label>
+            <label class="small" style="display:flex;flex-direction:column;gap:4px;flex:1 1 180px;font-weight:600">Video's own sound <span class="muted" id="m-vvol-t">${M.voiceVol ? `${Math.round(M.voiceVol * 100)}%` : "Off (song only)"}</span><input type="range" id="m-vvol" min="0" max="150" step="5" value="${Math.round(M.voiceVol * 100)}"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="m-duck" ${M.duck ? "checked" : ""}> Lower the song while someone talks</label>
+          <label class="check"><input type="checkbox" id="m-fade" ${M.fade ? "checked" : ""}> Fade the song in and out</label>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm primary" type="button" id="m-make" ${M._making ? "disabled" : ""}>${M._making ? "Making the video…" : M.mixedId && !stale ? "Make it again" : "Make the final video"}</button>
+            <span class="muted small">${M.mixedId && !stale ? "Final video ready. Play it below." : stale ? "Settings changed since the last final video. It's made again when posting, or press the button to hear it." : "Optional: hear the exact result. Otherwise it's made when posting."}</span>
+          </div>
+          ${M._finalUrl && !stale ? `<div><video controls playsinline src="${esc(M._finalUrl)}" style="display:block;width:160px;max-height:285px;border-radius:8px;background:#000"></video></div>` : ""}`;
+      }
+      const goesTo = [...(plats.includes("instagram") ? ["Instagram"] : []), ...others];
+      h += `<span class="muted small">${M.mediaId && goesTo.length > 1 ? `The same video with the song goes to ${goesTo.slice(0, -1).join(", ")} and ${goesTo[goesTo.length - 1]}. ` : ""}Use songs you're allowed to use: royalty-free (YouTube Audio Library, Pixabay Music) or your own. A popular film or pop song mixed into the file can get the reel muted or blocked, and repeated strikes can disable the account. For those, pick "Use an Instagram song".</span>`;
+    } else if (mode === "app") {
+      h += `<div class="row" style="gap:10px;flex-wrap:wrap">
+          <label class="f" style="flex:2 1 220px">Song name<input type="text" id="m-name" value="${esc(M.name || "")}" placeholder="e.g. Kesariya – Arijit Singh"></label>
+          <label class="f" style="flex:1 1 160px">Part to use<input type="text" id="m-part" value="${esc(M.part || "")}" placeholder="e.g. from 0:45 (chorus)"></label>
+        </div>
+        <span class="muted small">Instagram only lets you add songs from its own library inside the Instagram app. At post time you get a reminder (Overview, phone and email) with the video and caption ready: open Instagram, upload the video, pick this song and part, post, then tap "Mark as posted".${others.length ? ` ${others.join(" and ")} in this post still ${others.length > 1 ? "go" : "goes"} out automatically, without the song.` : ""}</span>`;
+    }
+    box.innerHTML = h;
+    if (readOnly) { $$("#o-music input, #o-music button").forEach((el) => (el.disabled = true)); return; }
+
+    $$("[data-mmode]").forEach((b) => (b.onclick = () => {
+      stopPreview();
+      const m = b.dataset.mmode;
+      // Each way keeps its own settings, so switching back and forth loses nothing.
+      C._musicModes = C._musicModes || {};
+      if (C.music?.mode) C._musicModes[C.music.mode] = C.music;
+      C.music = !m ? null : C._musicModes[m] || (m === "app" ? { mode: "app", name: "", part: "", startSec: 0 } : { ...MUSIC_DEFAULTS });
+      renderMusic();
+    }));
+    const f = $("#m-file");
+    if (f) f.onchange = async () => {
+      const file = f.files[0];
+      if (!file) return;
+      if (!/^(audio|video)\//.test(file.type)) return toast("Pick a song (audio) file or a video.", true);
+      stopPreview();
+      Object.assign(C.music, { _uploading: true, _progress: 0, mediaId: "", mixedId: C.music.mixedId, _finalUrl: "", _peaks: null, songSec: 0 });
+      C.uploading++;
+      renderMusic();
+      try {
+        const up = await uploadFile(file, (p) => { C.music._progress = p; const lb = $("#o-music label.btn"); if (lb && lb.firstChild) lb.firstChild.textContent = `Uploading ${Math.round(p * 100)}%…`; }, {});
+        Object.assign(C.music, { mediaId: up.id, name: file.name.replace(/\.[^.]+$/, ""), startSec: 0, _songUrl: URL.createObjectURL(file) });
+        C.music._peaks = await songPeaks(file);
+        if (C.music._peaks) C.music.songSec = Math.round(C.music._peaks.duration * 10) / 10;
+        toast("Song added. Pick the part to use.");
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        C.music._uploading = false;
+        C.uploading--;
+        renderMusic();
+      }
+    };
+    const nm = $("#m-name");
+    if (nm) nm.oninput = () => (C.music.name = nm.value);
+    const pt = $("#m-part");
+    if (pt) pt.oninput = () => (C.music.part = pt.value);
+    if (mode !== "mix" || !M.mediaId) return;
+
+    // Lengths and the drawing of the song (loaded once).
+    if (!M._videoSec && video) loadVideoLength(video);
+    if (!M._peaks && !M._peaksLoading) {
+      M._peaksLoading = true;
+      (async () => {
+        try {
+          const blob = M._songBlob || (await fetchMediaBlob(M.mediaId));
+          M._songBlob = blob;
+          if (!M._songUrl) M._songUrl = URL.createObjectURL(blob);
+          M._peaks = await songPeaks(blob);
+          if (M._peaks && !M.songSec) M.songSec = Math.round(M._peaks.duration * 10) / 10;
+        } catch (_) { /* drawing is optional */ }
+        if (C.music === M) renderMusic();
+      })();
+    }
+    drawWave();
+    const cv = $("#m-wave");
+    let dragging = false;
+    const pick = (ev) => {
+      const r = cv.getBoundingClientRect();
+      const songSec = M.songSec || M._peaks?.duration || 0;
+      if (!songSec) return;
+      const vidSec = M.videoSec || M._videoSec || 0;
+      const x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      M.startSec = Math.round(Math.max(0, Math.min(x * songSec, Math.max(0, songSec - vidSec))) * 2) / 2;
+      const st = $("#m-start");
+      if (st) st.value = M.startSec;
+      drawWave();
+    };
+    cv.onpointerdown = (ev) => { dragging = true; cv.setPointerCapture?.(ev.pointerId); pick(ev); };
+    cv.onpointermove = (ev) => { if (dragging) pick(ev); };
+    cv.onpointerup = () => { if (dragging) { dragging = false; stopPreview(); renderMusic(); } };
+    const st = $("#m-start");
+    st.onchange = () => { M.startSec = Math.max(0, Math.round((Number(st.value) || 0) * 2) / 2); stopPreview(); renderMusic(); };
+    const mv = $("#m-mvol");
+    mv.oninput = () => { M.musicVol = Number(mv.value) / 100; $("#m-mvol-t").textContent = `${mv.value}%`; if (M._audio) M._audio.volume = Math.min(1, M.musicVol); };
+    mv.onchange = () => { if (!M._playing) renderMusic(); };
+    const vv = $("#m-vvol");
+    vv.oninput = () => { M.voiceVol = Number(vv.value) / 100; $("#m-vvol-t").textContent = M.voiceVol ? `${vv.value}%` : "Off (song only)"; const pv = $("#m-pv"); if (pv) { pv.volume = Math.min(1, M.voiceVol); pv.muted = !M.voiceVol; } };
+    vv.onchange = () => { if (!M._playing) renderMusic(); };
+    $("#m-duck").onchange = (e) => { M.duck = e.target.checked; stopPreview(); renderMusic(); };
+    $("#m-fade").onchange = (e) => { M.fade = e.target.checked; stopPreview(); renderMusic(); };
+    $("#m-play").onclick = () => (M._playing ? stopPreview(true) : startPreview());
+    $("#m-make").onclick = makeFinal;
+  }
+  function drawWave() {
+    const M = C.music, cv = $("#m-wave");
+    if (!cv || !M) return;
+    const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    const songSec = M.songSec || M._peaks?.duration || 0;
+    const vidSec = M.videoSec || M._videoSec || 0;
+    const a = songSec ? (M.startSec / songSec) * W : 0;
+    const b = songSec ? Math.min(W, ((M.startSec + (vidSec || 15)) / songSec) * W) : W;
+    g.fillStyle = "rgba(38,99,235,.14)";
+    g.fillRect(a, 0, Math.max(2, b - a), H);
+    const peaks = M._peaks?.peaks;
+    const n = peaks ? peaks.length : 120;
+    const bw = W / n;
+    for (let i = 0; i < n; i++) {
+      const v = peaks ? Math.max(0.04, peaks[i]) : 0.12;
+      const x = i * bw;
+      g.fillStyle = x + bw >= a && x <= b ? "#2663EB" : "#A9AFBC";
+      const bh = v * (H - 10);
+      g.fillRect(x + bw * 0.15, (H - bh) / 2, Math.max(1, bw * 0.7), bh);
+    }
+    g.fillStyle = "#14161A";
+    g.fillRect(a, 0, 2, H);
+    if (!peaks) { g.fillStyle = "#6B7280"; g.font = "22px system-ui"; g.fillText(M._peaksLoading ? "Loading the song…" : "Tap to pick where the song starts", 14, H / 2 + 8); }
+  }
+  async function videoBlobUrl(video) {
+    if (video.preview) return video.preview;
+    if (!C._videoUrl) C._videoUrl = URL.createObjectURL(await fetchMediaBlob(video.id));
+    return C._videoUrl;
+  }
+  function loadVideoLength(video) {
+    if (!video.preview) return; // known after "Make the final video" or a preview
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.onloadedmetadata = () => { if (C.music) { C.music._videoSec = Math.round(v.duration * 10) / 10; C.music.videoSec = C.music._videoSec; drawWave(); } };
+    v.src = video.preview;
+  }
+  async function startPreview() {
+    const M = C.music;
+    const video = C.media.find((m) => m.kind === "video");
+    if (!M?.mediaId || !video) return;
+    const btn = $("#m-play");
+    if (btn) btn.textContent = "Loading…";
+    try {
+      const [vUrl, sUrl] = await Promise.all([videoBlobUrl(video), M._songUrl || URL.createObjectURL(M._songBlob || (M._songBlob = await fetchMediaBlob(M.mediaId)))]);
+      M._songUrl = sUrl;
+      M._playing = true;
+      renderMusic();
+      const pv = $("#m-pv");
+      const au = new Audio(sUrl);
+      M._audio = au;
+      pv.src = vUrl;
+      pv.muted = !M.voiceVol;
+      pv.volume = Math.min(1, M.voiceVol || 0);
+      au.volume = Math.min(1, M.musicVol);
+      pv.onloadedmetadata = () => { if (!M._videoSec) { M._videoSec = Math.round(pv.duration * 10) / 10; M.videoSec = M._videoSec; drawWave(); } };
+      pv.currentTime = 0;
+      au.currentTime = Number(M.startSec) || 0;
+      pv.onended = () => stopPreview(true);
+      await Promise.all([pv.play(), au.play()]);
+    } catch (e) {
+      toast(`Preview could not play: ${e.message}`, true);
+      stopPreview(true);
+    }
+  }
+  function stopPreview(redraw) {
+    const M = C.music;
+    if (!M || !M._playing) return;
+    M._playing = false;
+    try { M._audio?.pause(); } catch (_) { /* ignore */ }
+    try { $("#m-pv")?.pause(); } catch (_) { /* ignore */ }
+    M._audio = null;
+    if (redraw) renderMusic();
+  }
+  async function makeFinal() {
+    const M = C.music;
+    const video = C.media.find((m) => m.kind === "video");
+    if (!video?.id) return toast("Wait for the video to finish uploading.", true);
+    stopPreview();
+    M._making = true;
+    renderMusic();
+    try {
+      const r = await api("POST", "/api/music/mix", { videoId: video.id, music: musicForSave(M), previousId: M.mixedId || "" });
+      Object.assign(M, { mixedId: r.id, mixedKey: r.key, videoSec: Math.round(r.duration * 10) / 10, _videoSec: Math.round(r.duration * 10) / 10 });
+      if (r.songDuration) M.songSec = Math.round(r.songDuration * 10) / 10;
+      M._finalUrl = URL.createObjectURL(await fetchMediaBlob(r.id));
+      toast(r.hadVoice ? "Final video ready" : "Final video ready (the video had no sound of its own, so it's the song only)");
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      M._making = false;
+      if (C.music === M) renderMusic();
+    }
   }
   function renderMedia() {
     $("#c-media").innerHTML = C.media.map((m, i) => `<div class="file-row">
@@ -923,6 +1208,7 @@ async function screenCreate(q) {
       firstComment: C.firstComment, alsoStory: C.alsoStory, aiGenerated: C.aiGenerated, ytPrivacy: C.ytPrivacy, ytMadeForKids: C.ytMadeForKids,
       trial: C.trial || "", cover: C.cover ? { mediaId: C.cover.mediaId || "", atSec: C.cover.atSec || 0 } : null,
       media: C.media.filter((m) => m.id).map(({ id, kind, name, size, mime }) => ({ id, kind, name, size, mime })),
+      music: musicForSave(C.music),
       needsApproval: C.needsApproval,
     };
     if (mode === "schedule") {

@@ -1,7 +1,7 @@
 // Read-only views the screens need: overview, weekly plan, insights, suggestions.
 
 import { listAccounts, publicAccount } from "./accounts.mjs";
-import { listPosts } from "./posts.mjs";
+import { listPosts, forAccount } from "./posts.mjs";
 import { getJSON } from "./store.mjs";
 import { alertLog } from "./alerts.mjs";
 import { timingOf } from "./posts.mjs";
@@ -79,7 +79,12 @@ export async function overview() {
   const reminders = [];
   for (const p of recent) {
     for (const [accId, t] of Object.entries(p.targets || {})) {
-      if (t.status === "reminder") reminders.push({ post: publicPost(p, byId), accountId: accId, accountName: byId[accId]?.name || "Account" });
+      if (t.status !== "reminder") continue;
+      const acc = byId[accId];
+      const song = t.song && p.music ? { name: p.music.name, part: p.music.part || "" } : null;
+      const shaped = acc ? forAccount(p, acc) : p;
+      const caption = song ? shaped.captions?.instagram || shaped.caption || "" : p.captions?.manual || p.captions?.facebook || p.caption || "";
+      reminders.push({ post: publicPost(p, byId), accountId: accId, accountName: acc?.name || "Account", song, caption });
     }
   }
   const attention = [];
@@ -91,7 +96,7 @@ export async function overview() {
   if (overdue.length) attention.push({ kind: "failed", title: `${overdue.length} post${overdue.length > 1 ? "s are" : " is"} overdue — not posted yet`, detail: "Its time has passed and it hasn't gone out. Social HQ keeps trying; open it to see why.", action: "Open", href: `#/create?id=${overdue[0].id}` });
   if (needsOk.length) attention.push({ kind: "ok", title: `${needsOk.length} post${needsOk.length > 1 ? "s" : ""} need your OK`, detail: "Approve them and they go out at their set time.", action: "Review", href: "#/plan" });
   if (failed.length) attention.push({ kind: "failed", title: `${failed.length} post${failed.length > 1 ? "s" : ""} didn't go out`, detail: failed[0] ? firstError(failed[0]) : "", action: "See what happened", href: `#/create?id=${failed[0].id}` });
-  if (reminders.length) attention.push({ kind: "reminder", title: `${reminders.length} reminder post${reminders.length > 1 ? "s" : ""} to do by hand`, detail: "Facebook doesn't let any app post to personal profiles. Copy the caption, download the media, post, then tick it off.", action: "Open reminders", href: "#/overview?reminders=1" });
+  if (reminders.length) attention.push({ kind: "reminder", title: `${reminders.length} reminder post${reminders.length > 1 ? "s" : ""} to do by hand`, detail: "Posts Social HQ can't send by itself (Facebook personal profiles, or Reels with an Instagram song). Copy the caption, download the media, post, then tick it off.", action: "Open reminders", href: "#/overview?reminders=1" });
   for (const a of accounts.map(publicAccount)) {
     if (["error", "expired"].includes(a.status)) attention.push({ kind: "login", title: `${a.name}: reconnect needed`, detail: a.lastError || a.loginNote, action: "Reconnect", href: "#/accounts" });
     else if (a.status === "expiring") attention.push({ kind: "login", title: `${a.name}: login ends soon`, detail: a.loginNote, action: "Reconnect", href: "#/accounts" });

@@ -13,8 +13,8 @@ export async function initUpload({ name, size, mime }) {
   if (!size) throw new HttpError(400, "That file is empty.");
   if (size > MAX_SIZE) throw new HttpError(400, "That file is bigger than 500 MB.");
   mime = clean(mime, 80) || "application/octet-stream";
-  const kind = mime.startsWith("video/") ? "video" : mime.startsWith("image/") ? "image" : null;
-  if (!kind) throw new HttpError(400, "Only photos and videos can be uploaded.");
+  const kind = mime.startsWith("video/") ? "video" : mime.startsWith("image/") ? "image" : mime.startsWith("audio/") ? "audio" : null;
+  if (!kind) throw new HttpError(400, "Only photos, videos and songs (audio files) can be uploaded.");
   const id = randomId(18);
   const meta = { id, name: clean(name, 200), size, mime, kind, chunks: Math.ceil(size / CHUNK_SIZE), complete: false, createdAt: new Date().toISOString() };
   await setJSON(`media/${id}`, meta);
@@ -59,6 +59,17 @@ export async function readAll(id) {
   const parts = [];
   for (let i = 0; i < meta.chunks; i++) parts.push(await readPart(id, i));
   return Buffer.concat(parts);
+}
+
+// Stores a whole file made on the server (for example a video with a song mixed in).
+export async function saveBuffer({ name, mime, buf }) {
+  const kind = String(mime).startsWith("video/") ? "video" : String(mime).startsWith("audio/") ? "audio" : "image";
+  const id = randomId(18);
+  const chunks = Math.max(1, Math.ceil(buf.length / CHUNK_SIZE));
+  for (let i = 0; i < chunks; i++) await putChunk(`c/${id}/${String(i).padStart(5, "0")}`, buf.subarray(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+  const meta = { id, name: clean(name, 200), size: buf.length, mime, kind, chunks, complete: true, createdAt: new Date().toISOString() };
+  await setJSON(`media/${id}`, meta);
+  return meta;
 }
 
 // A public link (valid 2 hours) to the whole video, for Instagram to fetch when its upload server fails.

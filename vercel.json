@@ -10,7 +10,8 @@
   "functions": {
     "api/hq.mjs": {
       "maxDuration": 300,
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     }
   },
   "rewrites": [

@@ -5,6 +5,7 @@ import { getJSON, setJSON, del, listKeys, getMany } from "./store.mjs";
 import { randomId } from "./crypto.mjs";
 import { listAccounts } from "./accounts.mjs";
 import { HttpError, clean, istDateKey, dateKeysBetween } from "./util.mjs";
+import { normaliseMusic, musicProblems } from "./music.mjs";
 
 const TYPES = ["post", "reel", "carousel", "story", "short", "pin", "text"];
 const EDITABLE = ["draft", "needs_ok", "scheduled", "failed", "partial"];
@@ -88,6 +89,7 @@ function normalise(input, accountsById) {
       ? { mediaId: clean(input.cover.mediaId, 60) || "", atSec: Math.max(0, Math.min(Number(input.cover.atSec) || 0, 900)) }
       : null,
     media,
+    music: normaliseMusic(input.music),
     scheduledAt,
     needsApproval: !!input.needsApproval,
     note: clean(input.note, 300),
@@ -177,6 +179,7 @@ export function problems(post, accountsById) {
         break;
     }
   }
+  out.push(...musicProblems(post, accountsById));
   return out;
 }
 
@@ -209,7 +212,7 @@ export async function createPost(input) {
 
 // Files used in a post leave the Inbox.
 async function clearInbox(post) {
-  for (const m of [...(post.media || []), ...(post.cover?.mediaId ? [{ id: post.cover.mediaId }] : [])]) {
+  for (const m of [...(post.media || []), ...(post.cover?.mediaId ? [{ id: post.cover.mediaId }] : []), ...(post.music?.mediaId ? [{ id: post.music.mediaId }] : [])]) {
     try {
       await del(`inbox/${m.id}`);
     } catch (_) { /* not from the Inbox */ }

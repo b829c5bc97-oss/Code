@@ -7,7 +7,8 @@ import { listConnections, revokeConnection } from "../lib/oauth.mjs";
 import { publicSettings, updateSettings, getSettings, configured } from "../lib/settings.mjs";
 import { listAccounts, publicAccount, upsertConnected, addReminderAccount, updateAccount, removeAccount, getAccount, saveAccount } from "../lib/accounts.mjs";
 import { listPosts, getPost, createPost, updatePost, deletePost, approvePost, prepareNow, markManualDone, claim } from "../lib/posts.mjs";
-import { initUpload, putPart, completeUpload, mediaMeta, readPart } from "../lib/media.mjs";
+import { initUpload, putPart, completeUpload, mediaMeta, readPart, readAll, saveBuffer, deleteMedia } from "../lib/media.mjs";
+import { mixSong, mixKey, normaliseMusic } from "../lib/music.mjs";
 import { listKeys, listMediaKeys, getChunk, putChunk } from "../lib/store.mjs";
 import { platforms } from "../lib/platforms/index.mjs";
 import { sign, verify, randomId, internalSecret } from "../lib/crypto.mjs";
@@ -631,6 +632,26 @@ route("POST", "/api/media", async ({ req }) => json(await initUpload(await readJ
 route("PUT", "/api/media/:id/part/:index", async ({ req, params }) => json(await putPart(params.id, params.index, await req.arrayBuffer())));
 route("POST", "/api/media/:id/complete", async ({ params }) => json(await completeUpload(params.id)));
 route("GET", "/api/media/:id", async ({ params }) => json(await mediaMeta(params.id)));
+// Makes the final video with the song mixed in, so it can be played back before scheduling.
+// Posting reuses it if the settings haven't changed since.
+route("POST", "/api/music/mix", async ({ req }) => {
+  const body = await readJSON(req);
+  const music = normaliseMusic({ ...(body.music || {}), mode: "mix" });
+  if (!music.mediaId) throw new HttpError(400, "Pick the song first.");
+  const video = await mediaMeta(String(body.videoId || ""));
+  if (video.kind !== "video") throw new HttpError(400, "A song can only be added to a video.");
+  const r = await mixSong({ video: await readAll(video.id), song: await readAll(music.mediaId), startSec: music.startSec, musicVol: music.musicVol, voiceVol: music.voiceVol, duck: music.duck, fade: music.fade });
+  // keep: false = only check that the mix works (nothing is stored).
+  if (body.keep === false) return json({ ok: true, size: r.buf.length, duration: r.duration, songDuration: r.songDuration, hadVoice: r.hadVoice });
+  const saved = await saveBuffer({ name: video.name.replace(/(\.[^.]+)?$/, " (with song).mp4"), mime: "video/mp4", buf: r.buf });
+  if (body.previousId && body.previousId !== saved.id) {
+    try {
+      const prev = await mediaMeta(String(body.previousId));
+      if (/\(with song\)/.test(prev.name)) await deleteMedia(prev.id);
+    } catch (_) { /* already gone */ }
+  }
+  return json({ id: saved.id, size: saved.size, mime: saved.mime, chunks: saved.chunks, key: mixKey(video.id, music), duration: r.duration, songDuration: r.songDuration, hadVoice: r.hadVoice });
+});
 route("GET", "/api/media/:id/part/:index", async ({ params }) => {
   const meta = await mediaMeta(params.id);
   return new Response(await readPart(params.id, params.index), { headers: { "content-type": meta.mime, "cache-control": "private, max-age=3600" } });

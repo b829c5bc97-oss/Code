@@ -82,7 +82,7 @@ export function directLink(url) {
   return { url: u.toString() };
 }
 
-const EXT = { mp4: "video/mp4", mov: "video/quicktime", m4v: "video/mp4", webm: "video/webm", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const EXT = { mp4: "video/mp4", mov: "video/quicktime", m4v: "video/mp4", webm: "video/webm", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg" };
 
 function nameFrom(res, url, fallback) {
   const cd = res.headers.get("content-disposition") || "";
@@ -99,11 +99,11 @@ export async function importFromLink(rawUrl, { name: wantName = "", fetchImpl = 
   if (!res.ok) throw new HttpError(400, `Could not download the file (HTTP ${res.status}).${drive ? " In Google Drive, set sharing to 'Anyone with the link'." : ""}`);
   let mime = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
   const name = nameFrom(res, url, clean(wantName, 160));
-  if (!/^(image|video)\//.test(mime)) {
+  if (!/^(image|video|audio)\//.test(mime)) {
     const byExt = EXT[(name.split(".").pop() || "").toLowerCase()];
     if (byExt && (mime === "application/octet-stream" || mime === "binary/octet-stream" || !mime)) mime = byExt;
     else if (mime === "text/html") throw new HttpError(400, drive ? "Google Drive sent a web page instead of the file. Set sharing to 'Anyone with the link' and try again." : "That link opens a web page, not a photo or video.");
-    else throw new HttpError(400, `That link is not a photo or video (it is ${mime || "unknown"}).`);
+    else throw new HttpError(400, `That link is not a photo, video or song (it is ${mime || "unknown"}).`);
   }
   const len = Number(res.headers.get("content-length") || 0);
   if (len > MAX_LINK) throw new HttpError(400, "That file is over 500 MB.");
